@@ -1,0 +1,246 @@
+/* تنسيقات الجدول المحسنة */
+.table-responsive {
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+}
+
+#invoicesTable {
+    font-size: 13px;
+    margin: 0;
+}
+
+#invoicesTable thead th {
+    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+    color: white;
+    font-weight: 600;
+    border: none;
+    padding: 12px 8px;
+    font-size: 12px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+#invoicesTable tbody td {
+    padding: 10px 8px;
+    vertical-align: middle;
+    border-color: #e9ecef;
+    font-size: 12px;
+}
+
+#invoicesTable tbody tr {
+    transition: all 0.2s ease;
+}
+
+#invoicesTable tbody tr:hover {
+    background-color: #f8f9fa;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+/* تنسيقات الأزرار المحسنة */
+.btn-sm {
+    font-size: 11px;
+    padding: 5px 10px;
+    border-radius: 20px;
+}
+
+.dropdown-menu {
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    border: none;
+    padding: 8px 0;
+}
+
+.dropdown-item {
+    font-size: 12px;
+    padding: 8px 16px;
+    transition: all 0.2s ease;
+}
+
+.dropdown-item:hover {
+    background-color: #f8f9fa;
+    color: #495057;
+    transform: translateX(5px);
+}
+
+.dropdown-item i {
+    width: 16px;
+}
+
+/* تنسيقات الشارات المحسنة */
+.badge {
+    font-size: 10px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+}
+
+.my_badge {
+    display: inline-block;
+    margin-bottom: 5px;
+}
+
+/* تنسيقات البحث والتصفية */
+#searchInput {
+    border-radius: 25px;
+    border: 2px solid #e9ecef;
+    transition: all 0.3s ease;
+    font-size: 13px;
+}
+
+#searchInput:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+#entriesPerPage {
+    border-radius: 8px;
+    border: 1px solid #ced4da;
+    font-size: 12px;
+}
+
+/* تنسيقات التنبيهات المحسنة */
+.alert {
+    border-radius: 10px;
+    border: none;
+    font-size: 14px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.alert-danger {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    color: white;
+}
+
+/* تنسيقات الكارد المحسنة */
+.card {
+    border: none;
+    border-radius: 15px;
+    overflow: hidden;
+}
+
+.card-header {
+    border: none;
+    background: linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%);
+    padding: 20px;
+}
+
+/* تحسينات الاستجابة */
+@media (max-width: 768px) {
+    #invoicesTable {
+        font-size: 11px;
+    }
+    
+    #invoicesTable thead th,
+    #invoicesTable tbody td {
+        padding: 6px 4px;
+    }
+    
+    .btn-sm {
+        font-size: 10px;
+        padding: 4px 8px;
+    }
+    
+    .badge {
+        font-size: 9px;
+        padding: 4px 8px;
+    }
+}
+
+/* تأثيرات التحميل */
+.loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.8);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+/* تحسينات التنقل */
+.pagination {
+    justify-content: center;
+    margin-top: 20px;
+}
+
+.page-link {
+    border-radius: 20px;
+    margin: 0 2px;
+    border: 1px solid #dee2e6;
+    color: #495057;
+    font-size: 12px;
+    transition: all 0.2s ease;
+}
+
+.page-link:hover {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+    color: white;
+    transform: translateY(-1px);
+}
+
+.page-item.active .page-link {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+/* تنسيقات النصوص */
+.profit-positive {
+    color: #198754;
+    font-weight: bold;
+}
+
+.profit-negative {
+    color: #dc3545;
+    font-weight: bold;
+}
+
+.profit-zero {
+    color: #6c757d;
+}
+
+/* تحسينات الأيقونات */
+.ri-more-fill {
+    font-size: 16px;
+}
+
+.dropdown-toggle::after {
+    display: none;
+}
+
+/* تنسيقات خاصة للغة العربية */
+.text-arabic {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    direction: rtl;
+    text-align: right;
+}
+
+/* تأثيرات التفاعل */
+.clickable {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.clickable:hover {
+    opacity: 0.8;
+    transform: scale(1.02);
+}
+
+/* تنسيقات الروابط */
+a.file-link {
+    color: #0d6efd;
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s ease;
+}
+
+a.file-link:hover {
+    color: #0b5ed7;
+    text-decoration: underline;
+}

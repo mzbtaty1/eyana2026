@@ -1,0 +1,14 @@
+.env
+/vendor/
+storage/
+public/storage
+*.sql
+error_log
+import_error.log
+phpinfo.php
+error_log
+import_error.log
+phpinfo.php
+.ftpquota
+.well-known/
+php.ini

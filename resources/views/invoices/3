@@ -1,0 +1,619 @@
+@extends('layouts.app')
+@section('content')
+@section('title', "إدارة الفواتير المحسنة")
+
+<!-- Add CSRF token meta tag -->
+<meta name="csrf-token" content="{{ csrf_token() }}">
+
+<style>
+/* Hide broken images */
+img[src*="logo-sm.png"], 
+img[src*="logo-dark.png"], 
+img[src*="logo-light.png"],
+img[src*="avatar-"] {
+    display: none !important;
+}
+
+.invoice-card {
+    transition: all 0.3s ease;
+    border: 1px solid #e5e7eb;
+}
+
+.invoice-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.status-badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.status-0 { background: #fef3c7; color: #92400e; }
+.status-1 { background: #dbeafe; color: #1e40af; }
+.status-2 { background: #d1fae5; color: #065f46; }
+
+.search-container {
+    position: relative;
+    margin-bottom: 20px;
+}
+
+.search-input {
+    width: 100%;
+    padding: 12px 45px 12px 15px;
+    border: 2px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 16px;
+    transition: border-color 0.3s;
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+}
+
+.search-input.searching {
+    border-color: #f59e0b;
+    background-color: #fffbeb;
+}
+
+.search-icon {
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #6b7280;
+}
+
+.search-spinner {
+    position: absolute;
+    right: 45px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: none;
+}
+
+.filter-panel {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.stat-card {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    text-align: center;
+}
+
+.stat-number {
+    font-size: 2rem;
+    font-weight: bold;
+    margin: 10px 0;
+}
+
+.loading {
+    display: none;
+    text-align: center;
+    padding: 20px;
+}
+
+.no-results {
+    text-align: center;
+    padding: 40px;
+    color: #6b7280;
+}
+
+.search-highlight {
+    background-color: #fef3c7;
+    padding: 2px 4px;
+    border-radius: 3px;
+}
+
+/* DataTables styling improvements */
+.dataTables_wrapper {
+    padding: 20px;
+}
+
+.dataTables_filter input {
+    padding: 8px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    margin-left: 8px;
+}
+
+.dataTables_length select {
+    padding: 6px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    margin-left: 8px;
+    margin-right: 8px;
+}
+
+.dataTables_info {
+    padding-top: 12px;
+    color: #6b7280;
+}
+
+.dataTables_paginate {
+    padding-top: 12px;
+}
+
+.dataTables_paginate .paginate_button {
+    padding: 6px 12px;
+    margin: 0 2px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    color: #374151;
+    text-decoration: none;
+}
+
+.dataTables_paginate .paginate_button:hover {
+    background: #f3f4f6;
+    border-color: #d1d5db;
+}
+
+.dataTables_paginate .paginate_button.current {
+    background: #3b82f6;
+    color: white;
+    border-color: #3b82f6;
+}
+
+.actions-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.actions-btn {
+    background: #3b82f6;
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.3s ease;
+}
+
+.actions-btn:hover {
+    background: #2563eb;
+}
+
+.dropdown-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    min-width: 200px;
+    z-index: 1000;
+    display: none;
+    overflow: hidden;
+}
+
+.dropdown-menu.show {
+    display: block;
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 15px;
+    color: #374151;
+    text-decoration: none;
+    transition: all 0.2s;
+    cursor: pointer;
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: right;
+    font-size: 14px;
+}
+
+.dropdown-item:hover {
+    background: #f3f4f6;
+    color: #111827;
+}
+
+.dropdown-item.text-danger {
+    color: #dc2626;
+}
+
+.confirm-status-btn {
+    border: none;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.confirm-status-btn.confirmed {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.confirm-status-btn.unconfirmed {
+    background: #fef3c7;
+    color: #92400e;
+}
+</style>
+
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h2 class="mb-1">إدارة الفواتير المحسنة</h2>
+                    <p class="text-muted">إدارة ومتابعة جميع الفواتير بكفاءة عالية</p>
+                </div>
+                <div>
+                    <a href="{{route('site.invoices_create')}}" class="btn btn-primary me-2">
+                        <i class="ri-add-line"></i> فاتورة جديدة
+                    </a>
+                    <button class="btn btn-outline-secondary">
+                        <i class="ri-download-line"></i> تصدير
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="filter-panel">
+                <div class="row">
+                    <div class="col-md-3">
+                        <label for="periodFilter" class="form-label">الفترة الزمنية</label>
+                        <select id="periodFilter" class="form-select">
+                            <option value="15days" selected>آخر 15 يوم</option>
+                            <option value="1month">الشهر الماضي</option>
+                            <option value="3months">آخر 3 شهور</option>
+                            <option value="6months">آخر 6 شهور</option>
+                            <option value="1year">السنة الماضية</option>
+                            <option value="all">جميع الفواتير</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="statusFilter" class="form-label">حالة السداد</label>
+                        <select id="statusFilter" class="form-select">
+                            <option value="all">جميع الحالات</option>
+                            <option value="0">غير مدفوعة</option>
+                            <option value="1">مدفوعة جزئياً</option>
+                            <option value="2">مدفوعة بالكامل</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="sectionFilter" class="form-label">نوع الفاتورة</label>
+                        <select id="sectionFilter" class="form-select">
+                            <option value="all">جميع الأنواع</option>
+                            <option value="1">فواتير الطيران</option>
+                            <option value="2">فواتير تأشيرات</option>
+                            <option value="3">سياحة داخلية</option>
+                            <option value="4">سياحة خارجية</option>
+                            <option value="5">سياحة دينية</option>
+                            <option value="6">تأمينات السفر</option>
+                            <option value="7">تحاليل السفر</option>
+                            <option value="8">نقل سياحي</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button id="refreshBtn" class="btn btn-outline-primary w-100">
+                            <i class="ri-refresh-line"></i> تحديث البيانات
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="stats-grid" id="statsGrid">
+        <div class="stat-card">
+            <i class="ri-file-list-3-line" style="font-size: 2rem; color: #3b82f6;"></i>
+            <div class="stat-number" id="totalInvoices">0</div>
+            <div>إجمالي الفواتير</div>
+        </div>
+        <div class="stat-card">
+            <i class="ri-time-line" style="font-size: 2rem; color: #f59e0b;"></i>
+            <div class="stat-number" id="unpaidInvoices">0</div>
+            <div>غير مدفوعة</div>
+        </div>
+        <div class="stat-card">
+            <i class="ri-wallet-3-line" style="font-size: 2rem; color: #3b82f6;"></i>
+            <div class="stat-number" id="partialInvoices">0</div>
+            <div>مدفوعة جزئياً</div>
+        </div>
+        <div class="stat-card">
+            <i class="ri-check-double-line" style="font-size: 2rem; color: #10b981;"></i>
+            <div class="stat-number" id="paidInvoices">0</div>
+            <div>مكتملة الدفع</div>
+        </div>
+    </div>
+
+    <!-- Invoices Table -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="invoicesTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>رقم الفاتورة</th>
+                                    <th>تاريخ الفاتورة</th>
+                                    <th>تاريخ السفر</th>
+                                    <th>المورد</th>
+                                    <th>المستفيد</th>
+                                    <th>التكلفة</th>
+                                    <th>البيع</th>
+                                    <th>المدفوع</th>
+                                    <th>المسار</th>
+                                    <th>الراكب</th>
+                                    <th>بيانات الحجز</th>
+                                    <th>الربح</th>
+                                    <th>نوع الفاتورة</th>
+                                    <th>حالة السداد</th>
+                                    <th>التأكيد</th>
+                                    <th>الموظف</th>
+                                    <th>الإجراءات</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Data will be loaded by DataTables -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Include jQuery and DataTables -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+
+<script>
+$(document).ready(function() {
+    // Initialize DataTable with server-side processing
+    var table = $('#invoicesTable').DataTable({
+        processing: true,
+        serverSide: true,
+        ajax: {
+            url: '/invoices/data',
+            type: 'GET',
+            data: function(d) {
+                d.period_filter = $('#periodFilter').val();
+                d.status_filter = $('#statusFilter').val();
+                d.section_filter = $('#sectionFilter').val();
+            },
+            error: function(xhr, error, thrown) {
+                console.error('DataTables Ajax Error:', error, thrown);
+                alert('حدث خطأ في تحميل البيانات. يرجى المحاولة مرة أخرى.');
+            }
+        },
+        columns: [
+            { 
+                data: 'es_id', 
+                render: function(data) {
+                    return '<strong>' + data + '</strong>';
+                }
+            },
+            { data: 'invoice_date' },
+            { data: 'travel_date' },
+            { data: 'vendor_names' },
+            { data: 'beneficiary_name' },
+            { 
+                data: 'total_net_price',
+                render: function(data) {
+                    return '<strong>' + parseFloat(data).toLocaleString() + ' ج.م</strong>';
+                }
+            },
+            { 
+                data: 'total_bought_price',
+                render: function(data) {
+                    return '<strong>' + parseFloat(data).toLocaleString() + ' ج.م</strong>';
+                }
+            },
+            { 
+                data: 'invoice_money_pay',
+                render: function(data) {
+                    return '<span style="color: #10b981; font-weight: bold;">' + parseFloat(data).toLocaleString() + ' ج.م</span>';
+                }
+            },
+            { 
+                data: null,
+                render: function(data) {
+                    return (data.from_location || 'غير محدد') + ' / ' + (data.to_location || 'غير محدد');
+                }
+            },
+            { data: 'passenger_names' },
+            { 
+                data: null,
+                render: function(data) {
+                    return 'أرقام الحجز: ' + data.booking_ids + '<br>أرقام التذاكر: ' + data.ticket_ids;
+                }
+            },
+            { 
+                data: 'profit',
+                render: function(data) {
+                    return '<span style="color: #059669; font-weight: bold;">' + parseFloat(data).toLocaleString() + ' ج.م</span>';
+                }
+            },
+            { data: 'invoice_type' },
+            { 
+                data: 'payment_status',
+                render: function(data) {
+                    var statusTexts = {
+                        '0': 'غير مدفوعة',
+                        '1': 'مدفوعة جزئياً', 
+                        '2': 'مدفوعة بالكامل'
+                    };
+                    var statusClasses = {
+                        '0': 'status-0',
+                        '1': 'status-1',
+                        '2': 'status-2'
+                    };
+                    return '<span class="status-badge ' + statusClasses[data] + '">' + statusTexts[data] + '</span>';
+                }
+            },
+            { 
+                data: null,
+                render: function(data) {
+                    var isConfirmed = (data.invoice_status == 1);
+                    var statusClass = isConfirmed ? 'confirmed' : 'unconfirmed';
+                    var statusText = isConfirmed ? 'مؤكدة' : 'غير مؤكدة';
+                    var statusIcon = isConfirmed ? 'ri-checkbox-circle-line' : 'ri-time-line';
+                    
+                    return '<button class="confirm-status-btn ' + statusClass + '" onclick="toggleConfirmStatus(' + data.id + ', ' + (!isConfirmed) + ')">' +
+                           '<i class="' + statusIcon + '"></i> ' + statusText +
+                           '</button>';
+                }
+            },
+            { data: 'employee_name' },
+            { 
+                data: null,
+                render: function(data) {
+                    return createActionDropdown(data);
+                }
+            }
+        ],
+        language: {
+            url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/ar.json'
+        },
+        order: [[1, 'desc']],
+        pageLength: 25,
+        lengthMenu: [[10, 25, 50, 100], [10, 25, 50, 100]],
+        drawCallback: function(settings) {
+            updateStatistics();
+        }
+    });
+
+    // Filter change handlers
+    $('#periodFilter, #statusFilter, #sectionFilter').on('change', function() {
+        table.ajax.reload();
+    });
+
+    // Refresh button
+    $('#refreshBtn').on('click', function() {
+        table.ajax.reload();
+    });
+
+    // Update statistics based on current table data
+    function updateStatistics() {
+        var info = table.page.info();
+        $('#totalInvoices').text(info.recordsDisplay.toLocaleString());
+        
+        // You can enhance this to calculate specific statistics from the current data
+        // For now, we'll use placeholder values
+        $('#unpaidInvoices').text('0');
+        $('#partialInvoices').text('0');
+        $('#paidInvoices').text('0');
+    }
+});
+
+// Toggle confirm status function
+async function toggleConfirmStatus(invoiceId, newStatus) {
+    try {
+        const response = await fetch('/invoices/toggle-confirm', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+            },
+            body: JSON.stringify({
+                invoice_id: invoiceId,
+                status: newStatus ? 1 : 0
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            // Reload the table to reflect changes
+            $('#invoicesTable').DataTable().ajax.reload(null, false);
+            
+            // Show success message
+            alert(result.message);
+        } else {
+            throw new Error(result.message || 'حدث خطأ في تحديث حالة الفاتورة');
+        }
+    } catch (error) {
+        console.error('Toggle confirm status error:', error);
+        alert('حدث خطأ في تحديث حالة الفاتورة: ' + error.message);
+    }
+}
+
+// Create action dropdown
+function createActionDropdown(invoice) {
+    return `
+        <div class="actions-dropdown">
+            <button class="actions-btn" onclick="this.nextElementSibling.classList.toggle('show')">
+                <i class="ri-more-2-line"></i>
+                الإجراءات
+            </button>
+            <div class="dropdown-menu">
+                <a href="/invoices/${invoice.id}/show" class="dropdown-item">
+                    <i class="ri-eye-line"></i>
+                    عرض التفاصيل
+                </a>
+                <a href="/invoices/${invoice.id}/edit" class="dropdown-item">
+                    <i class="ri-edit-box-line"></i>
+                    تعديل الفاتورة
+                </a>
+                <a href="/invoices/pay-part/${invoice.id}" class="dropdown-item text-success">
+                    <i class="ri-wallet-3-line"></i>
+                    سداد الفاتورة
+                </a>
+                <a href="/invoices/reissue/${invoice.es_id}" class="dropdown-item">
+                    <i class="ri-arrow-go-forward-line"></i>
+                    إعادة إصدار
+                </a>
+                <a href="/invoices/remove/${invoice.es_id}" class="dropdown-item text-danger" 
+                   onclick="return confirm('هل أنت متأكد من حذف هذه الفاتورة؟')">
+                    <i class="ri-delete-bin-line"></i>
+                    حذف الفاتورة
+                </a>
+            </div>
+        </div>
+    `;
+}
+
+// Close dropdowns when clicking outside
+$(document).on('click', function(e) {
+    $('.dropdown-menu.show').removeClass('show');
+});
+</script>
+
+@endsection

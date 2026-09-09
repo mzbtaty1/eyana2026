@@ -1,0 +1,476 @@
+@extends('layouts.app')
+@section('content')
+@section('title', 'الفواتير')
+
+@if($errors->any())
+<div class="alert alert-info"><i class="ri-file-info-line"></i> {{$errors->first()}}</div>
+@endif 
+
+<style>
+    /* تحسينات الخطوط والأداء */
+    body {
+        font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    }
+    
+    #invoicesTable {
+        font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        font-size: 14px;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+    }
+    
+    /* تحسينات شاشة التحميل */
+    #loadingOverlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.95);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+        flex-direction: column;
+        backdrop-filter: blur(2px);
+    }
+    .loading-spinner {
+        border: 4px solid rgba(0, 0, 0, 0.1);
+        border-top: 4px solid #3498db;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 0.8s linear infinite;
+        margin-bottom: 10px;
+    }
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    /* تحسينات الجدول */
+    #invoicesTable th {
+        font-weight: 600;
+        background-color: #f8f9fa;
+        padding: 12px 15px;
+        color: #333;
+        font-size: 14px;
+    }
+    
+    #invoicesTable td {
+        padding: 10px 15px;
+        vertical-align: middle;
+        border-color: #eee;
+        font-size: 14px;
+    }
+    
+    /* تحسينات التصفية والترقيم */
+    .dataTables_wrapper {
+        font-size: 14px;
+    }
+    
+    .dataTables_wrapper .dataTables_paginate .paginate_button {
+        padding: 0.4rem 0.75rem;
+        margin: 2px;
+        border-radius: 4px;
+        border: 1px solid #dee2e6;
+        background-color: #f8f9fa;
+        color: #333 !important;
+        transition: all 0.15s ease;
+    }
+
+    .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+        background-color: #0d6efd;
+        color: #fff !important;
+        border-color: #0d6efd;
+    }
+
+    .dataTables_wrapper .dataTables_paginate .paginate_button.current {
+        background-color: #0d6efd;
+        color: #fff !important;
+        border: 1px solid #0d6efd;
+    }
+
+    .dataTables_filter input,
+    .dataTables_length select {
+        padding: 5px 10px;
+        border-radius: 4px;
+        border: 1px solid #ced4da;
+        font-size: 14px;
+    }
+
+    /* تحسينات العناصر الأخرى */
+    .booking-info {
+        font-weight: 500;
+        font-size: 14px;
+    }
+    .booking-number {
+        color: #4e73df;
+        font-weight: 600;
+        font-size: 14px;
+    }
+    .ticket-number {
+        color: #1cc88a;
+        font-weight: 600;
+        font-size: 14px;
+    }
+    .status-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        align-items: center;
+    }
+    .badge-sm {
+        font-size: 0.85rem;
+        padding: 0.4em 0.75em;
+        font-weight: 500;
+    }
+    
+    /* تحسينات البطاقة */
+    .card-header {
+        padding: 14px 18px;
+        background-color: #f8fafc;
+    }
+    .card-title {
+        font-size: 18px;
+        font-weight: 600;
+        margin-bottom: 0;
+        color: #333;
+    }
+    
+    /* تحسينات الأداء */
+    .table-responsive {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    /* تحسينات خاصة بحالة الفاتورة والمستخدمين */
+    .invoice-status-cell {
+        min-width: 180px;
+    }
+    
+    .users-cell {
+        min-width: 250px;
+    }
+    
+    .user-info-block {
+        background-color: #f8f9fa;
+        border-radius: 5px;
+        padding: 8px 10px;
+        margin-bottom: 8px;
+    }
+    
+    .user-info-block:last-child {
+        margin-bottom: 0;
+    }
+    
+    .user-name {
+        font-weight: 600;
+        font-size: 15px;
+        color: #333;
+    }
+    
+    .user-details {
+        font-size: 13px;
+        margin-top: 4px;
+    }
+    
+    .status-badge {
+        font-size: 13px;
+        padding: 0.35em 0.65em;
+    }
+</style>
+
+<!-- شاشة التحميل -->
+<div id="loadingOverlay">
+    <div class="loading-spinner"></div>
+    <span style="margin-top: 10px; font-size: 15px;">جاري تحميل البيانات...</span>
+</div>
+
+<div class="row">
+    <div class="col-lg-12">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center bg-white">
+                <h5 class="card-title mb-0">قائمة الفواتير</h5>
+                <a href="{{route('site.invoices_create')}}" class="btn btn-primary btn-sm">
+                    <i class="ri-file-add-line"></i> اضافة فاتورة
+                </a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table id="invoicesTable" class="table table-bordered dt-responsive nowrap table-striped align-middle m-0" style="width:100%">
+                        <thead>
+                            <tr>
+                                <th width="80px">ES ID</th>
+                                <th width="100px">تاريخ الفاتورة</th>
+                                <th width="100px">تاريخ السفر</th>
+                                <th>اسم المورد</th>
+                                <th>اسم المستفيد</th>
+                                <th class="users-cell">المستخدمين</th>
+                                <th width="120px">الاستلام / الوصول</th>
+                                <th width="80px">التكلفة</th>
+                                <th width="80px">البيع</th>
+                                <th width="80px">الربح</th>
+                                <th width="100px">الموظف</th>
+                                <th class="invoice-status-cell">حالة الفاتورة</th>
+                                <th width="80px">اجراء</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- استخدام إصدارات محددة من المكتبات لتحسين الأداء -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+
+<script>
+    // تخزين نوع الحساب في متغير عام
+    window.authAccountType = {{ Auth::user()->account_type }};
+    
+    $(document).ready(function () {
+        // إظهار شاشة التحميل
+        $('#loadingOverlay').show();
+        
+        // تحميل البيانات عبر AJAX
+        $.ajax({
+            url: '{{ route("site.invoices_json") }}',
+            method: 'GET',
+            dataType: 'json',
+            cache: false, // تعطيل التخزين المؤقت
+            success: function (response) {
+                if (!response || !response.data || !Array.isArray(response.data)) {
+                    console.error('البيانات غير صحيحة أو فارغة');
+                    $('#loadingOverlay').hide();
+                    return;
+                }
+        
+                // إنشاء DataTable
+                var table = $('#invoicesTable').DataTable({
+                    data: response.data,
+                    columns: [
+                        {
+                            data: 'es_id',
+                            render: function(data, type, row) {
+                                if (!row.invoice_ticket_file) return data;
+                                const fileUrl = `/public/storage/${row.invoice_ticket_file.replace('storage/', '')}`;
+                                return `<a href="${fileUrl}" target="_blank" class="text-primary fw-semibold">${data}</a>`;
+                            }
+                        },
+                        { data: 'invoice_date' },
+                        { data: 'invoice_travel_date' },
+                        {
+                            data: null,
+                            render: function (data, type, row) {
+                                if (!row.ticket_vendors || !Array.isArray(row.ticket_vendors)) return '';
+                                return row.ticket_vendors
+                                    .filter(v => v?.supplier?.name)
+                                    .map(v => v.supplier.name)
+                                    .join(" / ");
+                            }
+                        },
+                        {
+                            data: null,
+                            render: function (data, type, row) {
+                                return row?.beneficiaries?.name || '';
+                            }
+                        },
+                        {
+                            data: 'custom_users',
+                            render: function (data, type, row) {
+                                if (!row.users || !Array.isArray(row.users)) return '';
+                                
+                                return row.users.map(u => `
+                                    <div class="user-info-block">
+                                        <div class="user-name">${u.client_name || 'غير محدد'}</div>
+                                        <div class="user-details">
+                                            <span class="me-2"><strong>رقم حجز:</strong> <span class="booking-number">${u.client_booking_id || '-'}</span></span>
+                                            <span><strong>رقم تذكرة:</strong> <span class="ticket-number">${u.client_ticket_id || '-'}</span></span>
+                                        </div>
+                                    </div>
+                                `).join('');
+                            }
+                        },
+                        {
+                            data: 'combined_location',
+                            render: function (data, type, row) {
+                                const from = row.from_location || '';
+                                const to = row.to_location || '';
+                                return from || to ? `${from} / ${to}` : '';
+                            }
+                        },
+                        {
+                            data: null,
+                            render: function (data, type, row) {
+                                return (row.users || []).reduce((sum, user) => {
+                                    return sum + parseFloat(user.client_net_pice || 0);
+                                }, 0).toFixed(2);
+                            },
+                            className: 'text-end fw-semibold'
+                        },
+                        {
+                            data: null,
+                            render: function (data, type, row) {
+                                return (row.users || []).reduce((sum, user) => {
+                                    return sum + parseFloat(user.client_bought_price || 0);
+                                }, 0).toFixed(2);
+                            },
+                            className: 'text-end fw-semibold'
+                        },
+                        {
+                            data: null,
+                            render: function (data, type, row) {
+                                const net = (row.users || []).reduce((sum, user) => {
+                                    return sum + parseFloat(user.client_net_pice || 0);
+                                }, 0);
+                            
+                                const bought = (row.users || []).reduce((sum, user) => {
+                                    return sum + parseFloat(user.client_bought_price || 0);
+                                }, 0);
+                            
+                                const diff = bought - net;
+                                const className = diff >= 0 ? 'text-success' : 'text-danger';
+                                return `<span class="${className} fw-semibold">${diff.toFixed(2)}</span>`;
+                            },
+                            className: 'text-end'
+                        },
+                        {
+                            data: null,
+                            render: function (data, type, row) {
+                                return row.creator && row.creator.name ? `<span class="fw-semibold">${row.creator.name}</span>` : '-';
+                            }
+                        },
+                        {
+                            data: null,
+                            render: function (data, type, row) {
+                                const id = row.id;
+                                const moneyPay = parseFloat(row.invoice_money_pay || 0);
+                                const totalBought = (row.users || []).reduce((sum, user) => {
+                                    return sum + parseFloat(user.client_bought_price || 0);
+                                }, 0);
+                                const invoiceStatus = parseInt(row.invoice_status || 0);
+                                const isAccountType2 = window.authAccountType === 2;
+
+                                let badge = '';
+                                if (moneyPay === 0) {
+                                    badge = `<span class="badge badge-sm bg-dark status-badge">لم يتم السداد</span>`;
+                                } else if (moneyPay < totalBought) {
+                                    badge = `<span class="badge badge-sm bg-warning text-dark status-badge">سداد جزئي (${moneyPay.toFixed(2)} / ${totalBought.toFixed(2)})</span>`;
+                                } else {
+                                    badge = `<span class="badge badge-sm bg-success status-badge">تم السداد بالكامل</span>`;
+                                }
+
+                                let confirmBadge = '';
+                                if (isAccountType2) {
+                                    if (invoiceStatus === 0) {
+                                        confirmBadge = `
+                                            <button class="btn btn-sm btn-primary py-0 px-2" id="rvd_${id}" onclick="do_approved(${id})">
+                                                تأكيد الفاتورة
+                                            </button>
+                                            <span id="apprvd_${id}" style="display:none;">
+                                                <span class="badge badge-sm bg-success status-badge">تم التأكيد</span>
+                                            </span>
+                                        `;
+                                    } else {
+                                        confirmBadge = `<span class="badge badge-sm bg-success status-badge">تم التأكيد</span>`;
+                                    }
+                                }
+
+                                return `
+                                    <div class="status-container">
+                                        ${badge}
+                                        ${confirmBadge}
+                                    </div>
+                                `;
+                            }
+                        },
+                        {
+                            data: null,
+                            orderable: false,
+                            render: function (data, type, row) {
+                                const id = row.id;
+                                const es_id = row.es_id;
+                                const moneyPay = parseFloat(row.invoice_money_pay || 0);
+                                const totalBought = (row.users || []).reduce((sum, user) => {
+                                    return sum + parseFloat(user.client_bought_price || 0);
+                                }, 0);
+                                const invoiceStatus = parseInt(row.invoice_status || 0);
+                                const accountType = window.authAccountType;
+
+                                return `
+                                <div class="dropdown">
+                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle py-0 px-2" type="button" data-bs-toggle="dropdown">
+                                        <i class="ri-more-fill"></i>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <li><a href="/invoices/${id}/show" class="dropdown-item"><i class="ri-eye-fill me-1"></i> تفاصيل</a></li>
+                                        ${(accountType === 2 || invoiceStatus === 0) ? 
+                                        `<li><a href="/invoices/${id}/edit" class="dropdown-item"><i class="ri-edit-box-line me-1"></i> تعديل</a></li>` : ''}
+                                        ${moneyPay < totalBought ? 
+                                        `<li><a href="/invoices/pay-part/${id}" class="dropdown-item"><i class="ri-wallet-3-line me-1"></i> سداد</a></li>` : ''}
+                                        <li><a href="/invoices/reissue/${es_id}" class="dropdown-item"><i class="ri-arrow-go-forward-line me-1"></i> اعادة اصدار</a></li>
+                                        <li><a href="/invoices/refund/${es_id}" class="dropdown-item"><i class="ri-refund-2-line me-1"></i> الغاء</a></li>
+                                        <li><a href="/invoices/${es_id}/remove" class="dropdown-item text-danger"><i class="ri-delete-bin-line me-1"></i> حذف</a></li>
+                                    </ul>
+                                </div>`;
+                            }
+                        }
+                    ],
+                    language: {
+                        url: '//cdn.datatables.net/plug-ins/1.11.3/i18n/ar.json'
+                    },
+                    order: [[1, 'desc']],
+                    pageLength: 20,
+                    lengthMenu: [[10, 20, 50, 100, -1], [10, 20, 50, 100, "الكل"]],
+                    processing: true,
+                    serverSide: false,
+                    searching: true,
+                    responsive: true,
+                    autoWidth: false,
+                    initComplete: function() {
+                        // إخفاء شاشة التحميل بعد اكتمال التحميل
+                        $('#loadingOverlay').fadeOut(200);
+                    },
+                    drawCallback: function() {
+                        // تحسينات إضافية بعد رسم الجدول
+                        $('.dropdown-toggle').dropdown();
+                    }
+                });
+            },
+            error: function (xhr, status, error) {
+                console.error("فشل في تحميل البيانات:", error);
+                $('#loadingOverlay').html('<div class="text-danger">فشل في تحميل البيانات. يرجى المحاولة لاحقاً</div>').delay(2000).fadeOut();
+            }
+        });
+    });
+
+    // دالة تأكيد الفاتورة
+    function do_approved(id) {
+        if (!confirm('هل أنت متأكد من تأكيد هذه الفاتورة؟')) return;
+        
+        $.ajax({
+            type: "GET",
+            url: "{{url('')}}/invoices/" + id + "/approve",
+            headers: {
+                'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+            },
+            success: function (data) {
+                if (data.status_code == 200) {
+                    $('#rvd_' + id).hide();
+                    $('#apprvd_' + id).show();
+                    alert('تم تأكيد العملية بنجاح');
+                } else {
+                    alert('فشل أثناء تأكيد العملية');
+                }
+            },
+            error: function() {
+                alert('حدث خطأ أثناء الاتصال بالخادم');
+            }
+        });
+    }
+</script>
+@endsection

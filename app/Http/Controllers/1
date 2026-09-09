@@ -1,0 +1,537 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
+use Exception;
+
+class InvoiceController extends Controller
+{
+    /**
+     * Display the invoice management page
+     */
+    public function management()
+    {
+        return view('invoices.management');
+    }
+
+    /**
+     * Get invoices data for DataTables with server-side processing
+     * Enhanced live search and proper ordering by invoice_date DESC, then by id DESC
+     */
+    public function getInvoicesData(Request $request)
+    {
+        try {
+            // Get DataTables parameters
+            $draw = intval($request->get('draw', 1));
+            $start = intval($request->get('start', 0));
+            $length = intval($request->get('length', 25));
+            
+            // Get search parameter
+            $search = $request->get('search');
+            $searchValue = isset($search['value']) ? trim($search['value']) : '';
+            
+            // Get custom filters
+            $statusFilter = $request->get('status_filter', 'all');
+            $periodFilter = $request->get('period_filter', '15days');
+            $sectionFilter = $request->get('section_filter', 'all');
+            
+            Log::info('Search Request', [
+                'search_value' => $searchValue,
+                'status_filter' => $statusFilter,
+                'period_filter' => $periodFilter
+            ]);
+            
+            // Build base query with all necessary joins for search
+            $baseQuery = DB::table('invoices as i')
+                ->select([
+                    'i.id',
+                    'i.es_id',
+                    'i.created_at',
+                    'i.invoice_date',
+                    'i.invoice_travel_date',
+                    'i.invoice_money_pay',
+                    'i.from_location',
+                    'i.to_location',
+                    'i.invoice_section',
+                    'i.invoice_create_by',
+                    'i.invoice_beneficiaries',
+                    'i.ticket_system_id',
+                    'i.invoice_comments',
+                    'i.invoice_status',
+                    'i.invoice_shared'
+                ]);
+
+            // Apply period filter
+            $this->applyPeriodFilter($baseQuery, $periodFilter);
+            
+            // Apply section filter
+            if ($sectionFilter !== 'all') {
+                $baseQuery->where('i.invoice_section', $sectionFilter);
+            }
+            
+            // Get total records count
+            $totalRecords = DB::table('invoices')->count();
+            
+            // Clone query for filtered count BEFORE applying search
+            $countQuery = clone $baseQuery;
+            
+            // Apply search filter to both queries if search term exists
+            if (!empty($searchValue)) {
+                Log::info('Applying search filter', ['search_value' => $searchValue]);
+                $this->applyLiveSearch($baseQuery, $searchValue);
+                $this->applyLiveSearch($countQuery, $searchValue);
+            }
+            
+            // Apply status filter
+            if ($statusFilter !== 'all') {
+                $this->applyStatusFilter($baseQuery, $statusFilter);
+                $this->applyStatusFilter($countQuery, $statusFilter);
+            }
+            
+            // Get filtered records count
+            $filteredRecords = $countQuery->count();
+            
+            // Apply ordering
+            $baseQuery->orderBy('i.invoice_date', 'desc')
+                     ->orderBy('i.id', 'desc');
+            
+            // Apply pagination
+            $invoices = $baseQuery->offset($start)->limit($length)->get();
+            
+            Log::info('Query Results', [
+                'total_records' => $totalRecords,
+                'filtered_records' => $filteredRecords,
+                'returned_records' => $invoices->count()
+            ]);
+            
+            // Process results for DataTables
+            $data = [];
+            foreach ($invoices as $invoice) {
+                $data[] = $this->processInvoiceForTable($invoice);
+            }
+            
+            return response()->json([
+                'draw' => intval($draw),
+                'recordsTotal' => $totalRecords,
+                'recordsFiltered' => $filteredRecords,
+                'data' => $data,
+                'success' => true
+            ]);
+            
+        } catch (Exception $e) {
+            Log::error('DataTables Error: ' . $e->getMessage(), [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'request' => $request->all()
+            ]);
+            
+            return response()->json([
+                'draw' => intval($request->get('draw', 1)),
+                'recordsTotal' => 0,
+                'recordsFiltered' => 0,
+                'data' => [],
+                'error' => 'حدث خطأ في تحميل البيانات: ' . $e->getMessage(),
+                'success' => false
+            ], 500);
+        }
+    }
+
+    /**
+     * Apply enhanced live search across all relevant fields
+     */
+    private function applyLiveSearch($query, $searchValue)
+    {
+        try {
+            $searchTerm = '%' . $searchValue . '%';
+            
+            $query->where(function($mainQuery) use ($searchTerm) {
+                // Search in main invoice fields
+                $mainQuery->where('i.es_id', 'LIKE', $searchTerm)
+                         ->orWhere('i.from_location', 'LIKE', $searchTerm)
+                         ->orWhere('i.to_location', 'LIKE', $searchTerm)
+                         ->orWhere('i.invoice_comments', 'LIKE', $searchTerm);
+                
+                // Search in passenger names using subquery
+                $mainQuery->orWhereExists(function($subQuery) use ($searchTerm) {
+                    $subQuery->select(DB::raw(1))
+                             ->from('ticket_users as tu')
+                             ->whereColumn('tu.ticket_system_id', 'i.ticket_system_id')
+                             ->where(function($passengerQuery) use ($searchTerm) {
+                                 $passengerQuery->where('tu.client_name', 'LIKE', $searchTerm)
+                                               ->orWhere('tu.client_name_en', 'LIKE', $searchTerm)
+                                               ->orWhere('tu.client_booking_id', 'LIKE', $searchTerm)
+                                               ->orWhere('tu.client_ticket_id', 'LIKE', $searchTerm);
+                             });
+                });
+                
+                // Search in vendor names using subquery
+                $mainQuery->orWhereExists(function($subQuery) use ($searchTerm) {
+                    $subQuery->select(DB::raw(1))
+                             ->from('ticket_vendors as tv')
+                             ->join('suppliers as s', 'tv.vendor_id', '=', 's.id')
+                             ->whereColumn('tv.ticket_system_id', 'i.ticket_system_id')
+                             ->where('s.name', 'LIKE', $searchTerm);
+                });
+                
+                // Search in beneficiary names using subquery
+                $mainQuery->orWhereExists(function($subQuery) use ($searchTerm) {
+                    $subQuery->select(DB::raw(1))
+                             ->from('suppliers as s')
+                             ->whereColumn('s.id', 'i.invoice_beneficiaries')
+                             ->where('s.name', 'LIKE', $searchTerm);
+                });
+                
+                // Search in employee names using subquery
+                $mainQuery->orWhereExists(function($subQuery) use ($searchTerm) {
+                    $subQuery->select(DB::raw(1))
+                             ->from('users as u')
+                             ->whereColumn('u.id', 'i.invoice_create_by')
+                             ->where('u.name', 'LIKE', $searchTerm);
+                });
+            });
+            
+        } catch (Exception $e) {
+            Log::error('Search query error: ' . $e->getMessage(), [
+                'search_value' => $searchValue,
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
+        }
+    }
+
+    /**
+     * Process invoice data for table display
+     */
+    private function processInvoiceForTable($invoice)
+    {
+        // Get related data
+        $passengerNames = $this->getPassengerNames($invoice->ticket_system_id);
+        $bookingIds = $this->getBookingIds($invoice->ticket_system_id);
+        $ticketIds = $this->getTicketIds($invoice->ticket_system_id);
+        $vendorNames = $this->getVendorNames($invoice->ticket_system_id);
+        $beneficiaryName = $this->getBeneficiaryName($invoice->invoice_beneficiaries);
+        $employeeName = $this->getEmployeeName($invoice->invoice_create_by);
+        
+        // Calculate totals
+        $totalNet = $this->getTotalNetPrice($invoice->ticket_system_id);
+        $totalBought = $this->getTotalBoughtPrice($invoice->ticket_system_id);
+        $paidAmount = floatval($invoice->invoice_money_pay ?? 0);
+        $profit = $totalBought - $totalNet;
+        
+        // Determine payment status
+        $paymentStatus = $this->getPaymentStatus($paidAmount, $totalBought);
+        
+        // Format dates
+        $invoiceDate = $this->formatDate($invoice->invoice_date ?? $invoice->created_at);
+        $travelDate = $this->formatDate($invoice->invoice_travel_date);
+        
+        // Get invoice type
+        $invoiceType = $this->getInvoiceType($invoice->invoice_section ?? 1);
+        
+        return [
+            'id' => $invoice->id,
+            'es_id' => $invoice->es_id,
+            'invoice_date' => $invoiceDate,
+            'travel_date' => $travelDate,
+            'vendor_names' => $vendorNames,
+            'beneficiary_name' => $beneficiaryName,
+            'total_net_price' => $totalNet,
+            'total_bought_price' => $totalBought,
+            'invoice_money_pay' => $paidAmount,
+            'from_location' => $invoice->from_location ?? 'غير محدد',
+            'to_location' => $invoice->to_location ?? 'غير محدد',
+            'passenger_names' => $passengerNames,
+            'booking_ids' => $bookingIds,
+            'ticket_ids' => $ticketIds,
+            'profit' => $profit,
+            'invoice_type' => $invoiceType,
+            'payment_status' => $paymentStatus,
+            'invoice_status' => $invoice->invoice_status,
+            'employee_name' => $employeeName,
+            'invoice_comments' => $invoice->invoice_comments
+        ];
+    }
+
+    /**
+     * Toggle confirm status of invoice
+     */
+    public function toggleConfirmStatus(Request $request)
+    {
+        try {
+            $request->validate([
+                'invoice_id' => 'required|integer|exists:invoices,id',
+                'status' => 'required|integer|in:0,1'
+            ]);
+
+            $invoiceId = $request->invoice_id;
+            $newStatus = $request->status;
+
+            Log::info("Toggle invoice confirm status", [
+                'invoice_id' => $invoiceId,
+                'new_status' => $newStatus,
+                'user_id' => Auth::id()
+            ]);
+
+            // Update invoice status
+            $updated = DB::table('invoices')
+                ->where('id', $invoiceId)
+                ->update([
+                    'invoice_status' => $newStatus,
+                    'updated_at' => now()
+                ]);
+
+            if ($updated) {
+                $statusText = $newStatus ? 'تم تأكيد الفاتورة بنجاح' : 'تم إلغاء تأكيد الفاتورة بنجاح';
+                
+                return response()->json([
+                    'success' => true,
+                    'message' => $statusText,
+                    'data' => [
+                        'invoice_id' => $invoiceId,
+                        'invoice_status' => $newStatus
+                    ]
+                ]);
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'فشل في تحديث حالة الفاتورة'
+                ], 500);
+            }
+
+        } catch (Exception $e) {
+            Log::error('Toggle confirm status error: ' . $e->getMessage(), [
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'request_data' => $request->all()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'حدث خطأ في تحديث حالة الفاتورة: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    // Helper methods remain the same
+    private function getPassengerNames($ticketSystemId)
+    {
+        if (!$ticketSystemId) return 'غير محدد';
+        
+        try {
+            $names = DB::table('ticket_users')
+                ->where('ticket_system_id', $ticketSystemId)
+                ->pluck('client_name')
+                ->filter()
+                ->unique()
+                ->implode(' / ');
+            
+            return $names ?: 'غير محدد';
+        } catch (Exception $e) {
+            return 'غير محدد';
+        }
+    }
+
+    private function getBookingIds($ticketSystemId)
+    {
+        if (!$ticketSystemId) return 'غير محدد';
+        
+        try {
+            $ids = DB::table('ticket_users')
+                ->where('ticket_system_id', $ticketSystemId)
+                ->pluck('client_booking_id')
+                ->filter()
+                ->unique()
+                ->implode(' / ');
+            
+            return $ids ?: 'غير محدد';
+        } catch (Exception $e) {
+            return 'غير محدد';
+        }
+    }
+
+    private function getTicketIds($ticketSystemId)
+    {
+        if (!$ticketSystemId) return 'غير محدد';
+        
+        try {
+            $ids = DB::table('ticket_users')
+                ->where('ticket_system_id', $ticketSystemId)
+                ->pluck('client_ticket_id')
+                ->filter()
+                ->unique()
+                ->implode(' / ');
+            
+            return $ids ?: 'غير محدد';
+        } catch (Exception $e) {
+            return 'غير محدد';
+        }
+    }
+
+    private function getVendorNames($ticketSystemId)
+    {
+        if (!$ticketSystemId) return 'غير محدد';
+        
+        try {
+            $names = DB::table('ticket_vendors')
+                ->join('suppliers', 'ticket_vendors.vendor_id', '=', 'suppliers.id')
+                ->where('ticket_vendors.ticket_system_id', $ticketSystemId)
+                ->pluck('suppliers.name')
+                ->filter()
+                ->unique()
+                ->implode(' / ');
+            
+            return $names ?: 'غير محدد';
+        } catch (Exception $e) {
+            return 'غير محدد';
+        }
+    }
+
+    private function getBeneficiaryName($beneficiaryId)
+    {
+        if (!$beneficiaryId) return 'غير محدد';
+        
+        try {
+            $name = DB::table('suppliers')
+                ->where('id', $beneficiaryId)
+                ->value('name');
+            
+            return $name ?: 'غير محدد';
+        } catch (Exception $e) {
+            return 'غير محدد';
+        }
+    }
+
+    private function getEmployeeName($employeeId)
+    {
+        if (!$employeeId) return 'غير محدد';
+        
+        try {
+            $name = DB::table('users')
+                ->where('id', $employeeId)
+                ->value('name');
+            
+            return $name ?: 'غير محدد';
+        } catch (Exception $e) {
+            return 'غير محدد';
+        }
+    }
+
+    private function getTotalNetPrice($ticketSystemId)
+    {
+        if (!$ticketSystemId) return 0;
+        
+        try {
+            // Try client_net_pice first, then client_net_price
+            $total = DB::table('ticket_users')
+                ->where('ticket_system_id', $ticketSystemId)
+                ->sum('client_net_pice');
+                
+            if ($total == 0) {
+                $total = DB::table('ticket_users')
+                    ->where('ticket_system_id', $ticketSystemId)
+                    ->sum('client_net_price');
+            }
+            
+            return floatval($total);
+        } catch (Exception $e) {
+            return 0;
+        }
+    }
+
+    private function getTotalBoughtPrice($ticketSystemId)
+    {
+        if (!$ticketSystemId) return 0;
+        
+        try {
+            $total = DB::table('ticket_users')
+                ->where('ticket_system_id', $ticketSystemId)
+                ->sum('client_bought_price');
+            
+            return floatval($total);
+        } catch (Exception $e) {
+            return 0;
+        }
+    }
+
+    private function applyStatusFilter($query, $statusFilter)
+    {
+        switch ($statusFilter) {
+            case '0': // Unpaid
+                $query->where(function($q) {
+                    $q->where('i.invoice_money_pay', 0)
+                      ->orWhereNull('i.invoice_money_pay');
+                });
+                break;
+            case '1': // Partially paid
+                $query->where('i.invoice_money_pay', '>', 0);
+                break;
+            case '2': // Fully paid
+                $query->where('i.invoice_money_pay', '>', 0);
+                break;
+        }
+    }
+
+    private function getPaymentStatus($paidAmount, $totalAmount)
+    {
+        if ($paidAmount == 0) return 0; // Unpaid
+        if ($paidAmount >= $totalAmount) return 2; // Fully paid
+        return 1; // Partially paid
+    }
+
+    private function applyPeriodFilter($query, $period)
+    {
+        $now = now();
+        
+        switch ($period) {
+            case '15days':
+                $query->where('i.created_at', '>=', $now->copy()->subDays(15));
+                break;
+            case '1month':
+                $query->where('i.created_at', '>=', $now->copy()->subMonth());
+                break;
+            case '3months':
+                $query->where('i.created_at', '>=', $now->copy()->subMonths(3));
+                break;
+            case '6months':
+                $query->where('i.created_at', '>=', $now->copy()->subMonths(6));
+                break;
+            case '1year':
+                $query->where('i.created_at', '>=', $now->copy()->subYear());
+                break;
+            case 'all':
+                // No date filter
+                break;
+        }
+    }
+
+    private function formatDate($date)
+    {
+        if (!$date) return 'غير محدد';
+        
+        try {
+            return \Carbon\Carbon::parse($date)->format('d/m/Y');
+        } catch (Exception $e) {
+            return 'غير محدد';
+        }
+    }
+
+    private function getInvoiceType($sectionId)
+    {
+        $types = [
+            1 => "فواتير الطيران",
+            2 => "فواتير تأشيرات",
+            3 => "فواتير سياحه داخليه",
+            4 => "فواتير سياحه خارجيه",
+            5 => "فواتير سياحه دينيه",
+            6 => "فواتير تأمينات السفر",
+            7 => "فواتير تحاليل السفر",
+            8 => "فواتير نقل سياحى",
+        ];
+
+        return $types[$sectionId] ?? "فواتير الطيران";
+    }
+}
