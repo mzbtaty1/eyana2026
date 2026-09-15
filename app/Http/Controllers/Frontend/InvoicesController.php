@@ -1708,110 +1708,118 @@ if ($existing_beneficiary_statement) {
         
     }
     public function pay_part_save(Request $request){
-        $id = $request->id;
-         $invoice_check = Invoice::select('*')->where('id',$id)->get();
-     abort_if(count($invoice_check) == 0,404);
-        
-        $invoice_info = $invoice_check[0];
-        
-        
-//        $vendor = TicketVendor::select('*')->where('ticket_system_id' , $invoice_info->ticket_system_id)->get();
-//        abort_if(count($vendor) == 0 , 404);
-//        
-//        $vendor = $vendor[0];
-//        dd($invoice_info->ticket_system_id);
-        
-         $storage_info = Storage::select('*')->where('name','الخزنة الرئيسية')->get();
-        abort_if(count($storage_info) == 0 , 404);
-        
-        $storage_info = $storage_info[0];
-        
-        $create_bond = Bond::create([
-                       "type" => 2,
-           "system_id" => \Str::random(8),
-//           "sub_id" => $sub_id,
-           "from_account" => $invoice_info->invoice_beneficiaries,
-           "from_type" => "supplier",
-           "to_account" => $storage_info->id,
-           "to_type" => "storage",
-           "amount" => $request->money_pay,
-           "info" => "سداد مبلغ لفاتورة $invoice_info->es_id",      
-           "money_way" => 1,
-//           "bank_id" => 1,
-//           "collector_info" => 1,
-           "crt_date" => date('Y-m-d'), 
-           "created_by" => Auth::user()->id,
-            
-            "is_invoice" => 1,
-            "invoice_id" => $id,
-            
-        ]);
-       
-        $balance = $storage_info->balance;
-        $update = Storage::select('*')->where('name','الخزنة الرئيسية')->update([
-            "balance" => $balance + $request->money_pay,
-        ]);
-         
-        $Statement_Vendor = AccountStatement::create([
-            "supp_client_id" => $invoice_info->invoice_beneficiaries,
-            "invoice_type" => 12,
-            "es_id" => $invoice_info->es_id,
-            "invoice_date" => date('Y-m-d'),
-            "debit_balance" => 0,
-            "credit_balance" => $request->money_pay,
-            "transaction_txt" => "سداد مبلغ لصالح رحلة $invoice_info->es_id",
-            "transaction_type" => 4, 
-            "added_by" => Auth::user()->id,
-            "crt_date" => date('Y-m-d'),
-        ]);
-        
-         $storage_log = AccountStatement::create([
-            "supp_client_id" => $storage_info->id,
-            "trans_storage" => 1,
-            "is_storage" => 1, 
-            "invoice_type" => 12,
-//            "sub_id" => $sub_id,
-            "es_id" => $invoice_info->es_id,
-            "invoice_date" => date('Y-m-d'),
-            "debit_balance" => $request->money_pay,
-            "credit_balance" => 0,
-            "transaction_txt" => "سداد مبلغ لصالح رحلة $invoice_info->es_id",
-            "transaction_type" => 4,
-            "added_by" => Auth::user()->id,
-            "crt_date" => date('Y-m-d'),
-        ]);
-        
-        
-       
-        
-        
-        $update = Invoice::select('*')->where('id',$id)->update([
-            "invoice_money_pay" => $invoice_info->invoice_money_pay + $request->money_pay
-        ]);
-        
-        
-        
-                 $system_id = $invoice_info->ticket_system_id;
- $users = TicketUser::select('*')
-            ->where('ticket_system_id', $system_id)
-            ->get();
-                              $total_client_net_pice = 0;
-                      $total_client_bought_price = 0;
-                      foreach($users as $user){
-                          $total_client_net_pice += $user->client_net_pice;
-                          $total_client_bought_price += $user->client_bought_price;
-                      }    
-        
-//        $get_two = Invoice::select('*')->where('id',$id)->get();
-//        $get_two = $get_two[0];
-//        
-//        if($get_two->invoice_money_pay == $total_client_bought_price){
-//             $update = Invoice::select('*')->where('id',$id)->update([
-//            "invoice_money_pay" => $invoice_info->invoice_money_pay + $request->money_pay;
-//        ]);
-//        }
+        $id = (int) $request->id;
+
+        // Safety fix: validate the payment amount before touching anything.
+        if (!is_numeric($request->money_pay) || (float) $request->money_pay <= 0) {
+            return Redirect::back()->withErrors(['msg' => 'برجاء إدخال مبلغ سداد صحيح أكبر من صفر']);
+        }
+        $moneyPay = (float) $request->money_pay;
+
+        // Safety fix: the whole financial operation is now atomic.
+        $result = DB::transaction(function () use ($id, $moneyPay) {
+            // Safety fix: lock the invoice row for the duration of the transaction.
+            $invoice_info = Invoice::where('id', $id)->lockForUpdate()->first();
+            abort_if(!$invoice_info, 404);
+
+            // Safety fix: duplicate-submission guard using the existing Bond
+            // records, checked while the invoice row lock is held (no session,
+            // no new table). A recent matching Bond means this exact payment
+            // was already processed — the invoice row lock guarantees this
+            // check sees any payment committed by a concurrent request.
+            $duplicateBond = Bond::where('invoice_id', $id)
+                ->where('is_invoice', 1)
+                ->where('amount', $moneyPay)
+                ->where('created_at', '>=', now()->subSeconds(10))
+                ->exists();
+            if ($duplicateBond) {
+                return Redirect::back()->withErrors(['msg' => 'تم استلام هذا السداد بالفعل، برجاء عدم تكرار الإرسال']);
+            }
+
+            // Safety fix: lock the storage row for the duration of the transaction.
+            $storage_info = Storage::where('name', 'الخزنة الرئيسية')->lockForUpdate()->first();
+            abort_if(!$storage_info, 404);
+
+            // Actual invoice total, computed from the real ticket data (moved
+            // here from further down in the method, where it was previously
+            // computed but never used).
+            $system_id = $invoice_info->ticket_system_id;
+            $users = TicketUser::where('ticket_system_id', $system_id)->get();
+            $total_client_bought_price = 0;
+            foreach ($users as $user) {
+                $total_client_bought_price += $user->client_bought_price;
+            }
+
+            // Safety fix: never let invoice_money_pay exceed the invoice's actual total.
+            $newMoneyPay = $invoice_info->invoice_money_pay + $moneyPay;
+            if ($newMoneyPay > $total_client_bought_price) {
+                return Redirect::back()->withErrors(['msg' => 'المبلغ المدخل يتجاوز إجمالي قيمة الفاتورة، برجاء مراجعة المبلغ']);
+            }
+
+            $create_bond = Bond::create([
+                           "type" => 2,
+               "system_id" => \Str::random(8),
+               "from_account" => $invoice_info->invoice_beneficiaries,
+               "from_type" => "supplier",
+               "to_account" => $storage_info->id,
+               "to_type" => "storage",
+               "amount" => $moneyPay,
+               "info" => "سداد مبلغ لفاتورة $invoice_info->es_id",
+               "money_way" => 1,
+               "crt_date" => date('Y-m-d'),
+               "created_by" => Auth::user()->id,
+
+                "is_invoice" => 1,
+                "invoice_id" => $id,
+
+            ]);
+
+            $balance = $storage_info->balance;
+            $update = Storage::where('name', 'الخزنة الرئيسية')->update([
+                "balance" => $balance + $moneyPay,
+            ]);
+
+            $Statement_Vendor = AccountStatement::create([
+                "supp_client_id" => $invoice_info->invoice_beneficiaries,
+                "invoice_type" => 12,
+                "es_id" => $invoice_info->es_id,
+                "invoice_date" => date('Y-m-d'),
+                "debit_balance" => 0,
+                "credit_balance" => $moneyPay,
+                "transaction_txt" => "سداد مبلغ لصالح رحلة $invoice_info->es_id",
+                "transaction_type" => 4,
+                "added_by" => Auth::user()->id,
+                "crt_date" => date('Y-m-d'),
+            ]);
+
+             $storage_log = AccountStatement::create([
+                "supp_client_id" => $storage_info->id,
+                "trans_storage" => 1,
+                "is_storage" => 1,
+                "invoice_type" => 12,
+                "es_id" => $invoice_info->es_id,
+                "invoice_date" => date('Y-m-d'),
+                "debit_balance" => $moneyPay,
+                "credit_balance" => 0,
+                "transaction_txt" => "سداد مبلغ لصالح رحلة $invoice_info->es_id",
+                "transaction_type" => 4,
+                "added_by" => Auth::user()->id,
+                "crt_date" => date('Y-m-d'),
+            ]);
+
+            $update = Invoice::where('id', $id)->update([
+                "invoice_money_pay" => $newMoneyPay,
+            ]);
+
+            return null;
+        });
+
+        if ($result) {
+            return $result;
+        }
+
         return redirect()->route('site.invoices');
-        
+
     }
 
 
