@@ -317,33 +317,38 @@ $invoices = Invoice::select('*')
             "invoice_draft" => $request->invoice_draft,
             "invoice_create_by" => Auth::user()->id,
             "invoice_ticket_file" => $path,
-            
-"invoice_shared" => 1, 
-"invoice_account_1" => $request->invoice_account_1, 
-"invoice_account_1_comm"=> 5, 
-"invoice_account_2" => $request->invoice_account_2, 
+
+"invoice_shared" => 1,
+"invoice_account_1" => $request->invoice_account_1,
+"invoice_account_1_comm"=> 5,
+"invoice_account_2" => $request->invoice_account_2,
 "invoice_account_2_comm" => 5,
             "crt_at" => date('Y-m-d'),
         ]);
+
+        // Safety fix: es_id must be derived from this new invoice's own id,
+        // not the original invoice's id, so a second reissue/refund of the
+        // same original invoice never collides on es_id.
+        $newEsId = "FLY-RS" . $create->id;
 
         //        dd($create->id);
         $update_es_id = Invoice::select('*')
             ->where('id', $create->id)
             ->update([
-                "es_id" => "FLY-RS" . $id,
+                "es_id" => $newEsId,
             ]);
 
-        
-        
+
+
           $save_log = Log::create([
-            "log_txt" => "تم اعادة اصدار فاتورة " . "FLY-RS" . $id,
+            "log_txt" => "تم اعادة اصدار فاتورة " . $newEsId,
             "log_ip" => $request->ip(),
             "log_by" => Auth::user()->id,
             "log_date" => date('Y-m-d'),
         ]);
-        
-        
-        
+
+
+
         // Vendor Account Statement
         $users = TicketUser::select('*')
             ->where('ticket_system_id', $system_id)
@@ -361,56 +366,30 @@ $invoices = Invoice::select('*')
         $Statement_Vendor = AccountStatement::create([
             "supp_client_id" => $request->vendor_id,
             "invoice_type" => $request->invoice_section,
-            "es_id" => "FLY-RS" . $id,
+            "es_id" => $newEsId,
             "invoice_date" => $request->invoice_date,
             "debit_balance" => 0,
             "credit_balance" => $total_client_net_pice,
-            "transaction_txt" => " تعديل / اعادة اصدار " . "FLY-RS" . $id,
+            "transaction_txt" => " تعديل / اعادة اصدار " . $newEsId,
             "transaction_type" => 1,
             "added_by" => Auth::user()->id,
             "crt_date" => date('Y-m-d'),
         ]);
-
-        $get_vendors01 = AccountStatement::select('*')
-            ->where('supp_client_id', $request->vendor_id)
-            ->get();
-        $total_debit_balance = 0;
-        foreach ($get_vendors01 as $get_vendor01) {
-            $total_debit_balance += $get_vendor01->debit_balance;
-        }
-        $update_vendors01 = AccountStatement::select('*')
-            ->where('supp_client_id', $request->vendor_id)
-            ->update([
-                "cumulative_balance" => $total_debit_balance,
-            ]);
 
         // invoice_beneficiaries Account Statement
 
         $invoice_beneficiaries_Vendor = AccountStatement::create([
             "supp_client_id" => $request->invoice_beneficiaries,
             "invoice_type" => $request->invoice_section,
-            "es_id" => "FLY-RS" . $id,
+            "es_id" => $newEsId,
             "invoice_date" => $request->invoice_date,
             "debit_balance" => $total_client_bought_price,
             "credit_balance" => 0,
-            "transaction_txt" => " تعديل / اعادة اصدار " . "FLY-RS" . $id,
+            "transaction_txt" => " تعديل / اعادة اصدار " . $newEsId,
             "transaction_type" => 1,
             "added_by" => Auth::user()->id,
             "crt_date" => date('Y-m-d'),
         ]);
-
-        $get_beneficiaries01 = AccountStatement::select('*')
-            ->where('supp_client_id', $request->invoice_beneficiaries)
-            ->get();
-        $total_credit_balance = 0;
-        foreach ($get_beneficiaries01 as $get_beneficiarie01) {
-            $total_credit_balance += $get_beneficiarie01->credit_balance;
-        }
-        $update_vendors01 = AccountStatement::select('*')
-            ->where('supp_client_id', $request->invoice_beneficiaries)
-            ->update([
-                "cumulative_balance" => "-" . $total_credit_balance,
-            ]);
 
         return redirect()->route('site.shared_invoices');
     }
@@ -516,82 +495,61 @@ $invoices = Invoice::select('*')
             "invoice_draft" => $invoice_info->invoice_draft,
             "invoice_create_by" => Auth::user()->id,
             "invoice_ticket_file" => $invoice_info->invoice_ticket_file,
-            
-            "invoice_shared" => 1, 
-"invoice_account_1" => $invoice_info->invoice_account_1, 
-"invoice_account_1_comm"=> 5, 
-"invoice_account_2" => $invoice_info->invoice_account_2, 
+
+            "invoice_shared" => 1,
+"invoice_account_1" => $invoice_info->invoice_account_1,
+"invoice_account_1_comm"=> 5,
+"invoice_account_2" => $invoice_info->invoice_account_2,
 "invoice_account_2_comm" => 5,
             "crt_at" => date('Y-m-d'),
-            
+
         ]);
+
+        // Safety fix: es_id must be derived from this new invoice's own id,
+        // not the original invoice's id, so a second reissue/refund of the
+        // same original invoice never collides on es_id.
+        $newEsId = "FLY-RD" . $create->id;
 
         //        dd($create->id);
         $update_es_id = Invoice::select('*')
             ->where('id', $create->id)
             ->update([
-                "es_id" => "FLY-RD" . $id,
+                "es_id" => $newEsId,
             ]);
-        
+
               $save_log = Log::create([
-            "log_txt" => "تم ارجاع فاتورة " . "FLY-RD" . $id,
+            "log_txt" => "تم ارجاع فاتورة " . $newEsId,
             "log_ip" => $request->ip(),
             "log_by" => Auth::user()->id,
             "log_date" => date('Y-m-d'),
         ]);
-        
+
 
         $Statement_Vendor = AccountStatement::create([
             "supp_client_id" => $vendors->id,
             "invoice_type" => $invoice_info->invoice_section,
-            "es_id" => "FLY-RD" . $id,
+            "es_id" => $newEsId,
             "invoice_date" => $invoice_info->invoice_date,
             "debit_balance" => $request->net_pice_total,
             "credit_balance" => 0,
-            "transaction_txt" => " مرتجع الفاتورة " . "FLY-RD" . $id,
+            "transaction_txt" => " مرتجع الفاتورة " . $newEsId,
             "transaction_type" => 1,
             "added_by" => Auth::user()->id,
             "crt_date" => date('Y-m-d'),
         ]);
-
-        $get_vendors01 = AccountStatement::select('*')
-            ->where('supp_client_id', $vendors->id)
-            ->get();
-        $total_debit_balance = 0;
-        foreach ($get_vendors01 as $get_vendor01) {
-            $total_debit_balance += $get_vendor01->debit_balance;
-        }
-        $update_vendors01 = AccountStatement::select('*')
-            ->where('supp_client_id', $vendors->id)
-            ->update([
-                "cumulative_balance" => $total_debit_balance,
-            ]);
 
         $invoice_beneficiaries_Vendor = AccountStatement::create([
             "supp_client_id" => $invoice_info->invoice_beneficiaries,
             "invoice_type" => $invoice_info->invoice_section,
-            "es_id" => "FLY-RD" . $id,
+            "es_id" => $newEsId,
             "invoice_date" => $invoice_info->invoice_date,
             "debit_balance" => 0,
             "credit_balance" => $request->bought_price_total,
-            "transaction_txt" => " مرتجع الفاتورة " . "FLY-RD" . $id,
+            "transaction_txt" => " مرتجع الفاتورة " . $newEsId,
             "transaction_type" => 1,
             "added_by" => Auth::user()->id,
             "crt_date" => date('Y-m-d'),
         ]);
-
-        $get_beneficiaries01 = AccountStatement::select('*')
-            ->where('supp_client_id', $invoice_info->invoice_beneficiaries)
-            ->get();
-        $total_credit_balance = 0;
-        foreach ($get_beneficiaries01 as $get_beneficiarie01) {
-            $total_credit_balance += $get_beneficiarie01->credit_balance;
-        }
-        $update_vendors01 = AccountStatement::select('*')
-            ->where('supp_client_id', $invoice_info->invoice_beneficiaries)
-            ->update([
-                "cumulative_balance" => "-" . $total_credit_balance,
-            ]);
 
         return redirect()->route('site.shared_invoices');
     }
