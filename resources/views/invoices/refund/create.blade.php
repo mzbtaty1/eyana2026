@@ -21,7 +21,7 @@ swal("", "{{$errors->first()}}", "info");
             <h5 class="card-title mb-0"> استرجاع فاتورة : <b>{{$invoice_info->es_id}}</b> </h5>
          </div>
          <div class="card-body">
-            <form action="{{route('site.invoices_refund_save')}}" method="POST" autocomplete="off" enctype="multipart/form-data">
+            <form id="refundForm" action="{{route('site.invoices_refund_save')}}" method="POST" autocomplete="off" enctype="multipart/form-data">
                @csrf
                 <input type="hidden" name="id" value="{{$invoice_info->id}}">
                 <!-- إضافة حقل تاريخ اليوم المخفي -->
@@ -250,15 +250,26 @@ swal("", "{{$errors->first()}}", "info");
           <p>
           المسترد له
           </p>
-          <input type="number" name="net_pice_total" id="" class="form-control" style="text-align:right;">
+          <input type="number" name="net_pice_total" id="net_pice_total" class="form-control" style="text-align:right;" oninput="calculateRefundLoss()">
       </div>
       <div class="col-6">
           <p>
           المرتجع لنا
           </p>
-            <input type="number" name="bought_price_total" class="form-control" onchange="" style="text-align:right;">
+            <input type="number" name="bought_price_total" id="bought_price_total" class="form-control" onchange="" style="text-align:right;" oninput="calculateRefundLoss()">
       </div>
     </div>
+    <div id="loss_warning" class="alert alert-warning border-0" style="display:none;">
+        <center>
+        تنويه: سيتم تسجيل خسارة على هذه العملية بقيمة <b id="loss_amount"></b> {{$invoice_info->invoice_currency}} نتيجة أن المبلغ المسترد للعميل أكبر من المبلغ المرتجع من المورد.
+        <br>
+        <div class="form-check mt-2" style="display:inline-block;">
+            <input class="form-check-input" type="checkbox" id="loss_confirm_checkbox" onchange="onLossConfirmChange()">
+            <label class="form-check-label" for="loss_confirm_checkbox">أوافق على تسجيل هذه الخسارة</label>
+        </div>
+        </center>
+    </div>
+    <input type="hidden" name="loss_confirmed" id="loss_confirmed" value="0">
                 
 <!--
                   <div class="row">
@@ -405,6 +416,55 @@ element.remove();
     
 } 
     
+</script>
+<script>
+function calculateRefundLoss() {
+    var netPiceEl = document.getElementById('net_pice_total');
+    var boughtPriceEl = document.getElementById('bought_price_total');
+    var warningEl = document.getElementById('loss_warning');
+    var lossAmountEl = document.getElementById('loss_amount');
+    var confirmedEl = document.getElementById('loss_confirmed');
+    var checkboxEl = document.getElementById('loss_confirm_checkbox');
+
+    var netPice = parseFloat(netPiceEl.value);
+    var boughtPrice = parseFloat(boughtPriceEl.value);
+
+    // Any change to either amount invalidates a previous confirmation.
+    confirmedEl.value = '0';
+    if (checkboxEl) {
+        checkboxEl.checked = false;
+    }
+
+    if (!isNaN(netPice) && !isNaN(boughtPrice) && netPice > boughtPrice) {
+        var loss = netPice - boughtPrice;
+        lossAmountEl.textContent = loss.toFixed(2);
+        warningEl.style.display = 'block';
+    } else {
+        warningEl.style.display = 'none';
+    }
+}
+
+function onLossConfirmChange() {
+    var checkboxEl = document.getElementById('loss_confirm_checkbox');
+    var confirmedEl = document.getElementById('loss_confirmed');
+    confirmedEl.value = checkboxEl.checked ? '1' : '0';
+}
+
+document.getElementById('refundForm').addEventListener('submit', function (e) {
+    var netPiceEl = document.getElementById('net_pice_total');
+    var boughtPriceEl = document.getElementById('bought_price_total');
+    var confirmedEl = document.getElementById('loss_confirmed');
+    var warningEl = document.getElementById('loss_warning');
+
+    var netPice = parseFloat(netPiceEl.value);
+    var boughtPrice = parseFloat(boughtPriceEl.value);
+
+    if (!isNaN(netPice) && !isNaN(boughtPrice) && netPice > boughtPrice && confirmedEl.value !== '1') {
+        e.preventDefault();
+        warningEl.style.display = 'block';
+        warningEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+});
 </script>
 
 

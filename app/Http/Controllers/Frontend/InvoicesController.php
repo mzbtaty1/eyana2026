@@ -1535,6 +1535,19 @@ if ($existing_beneficiary_statement) {
     public function invoices_refund_save(Request $request)
     {
 //                dd($request);
+        // Safety fix: validate refund amounts. Losses are allowed and are
+        // never blocked here — only invalid input, or a loss submitted
+        // without the employee's explicit confirmation, is rejected.
+        if (!is_numeric($request->bought_price_total) || (float) $request->bought_price_total <= 0) {
+            return Redirect::back()->withErrors(['msg' => 'برجاء إدخال قيمة صحيحة أكبر من صفر للمبلغ المرتجع من المورد']);
+        }
+        if (!is_numeric($request->net_pice_total) || (float) $request->net_pice_total < 0) {
+            return Redirect::back()->withErrors(['msg' => 'برجاء إدخال قيمة صحيحة للمبلغ المسترد للعميل']);
+        }
+        if ((float) $request->net_pice_total > (float) $request->bought_price_total && $request->loss_confirmed != '1') {
+            return Redirect::back()->withErrors(['msg' => 'هذه العملية تسجل خسارة، برجاء تأكيد الموافقة على الخسارة قبل الحفظ']);
+        }
+
         $id = (int) $request->id;
         $invoice_info = Invoice::select('*')
             ->where('id', $id)
