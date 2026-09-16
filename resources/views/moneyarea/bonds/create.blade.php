@@ -202,6 +202,10 @@ $(document).ready(function() {
                     <option value="{{$bank->id}}">{{$bank->bank_name}} - (رصيد : {{number_format($bank->bank_balance)}} ج.م)</option>
                     @endforeach
                     </select>
+                    <div class="mt-2">
+                        <p>عمولة البنك / المحفظة (اختياري)</p>
+                        <input type="tel" name="commission" id="commission" value="0" placeholder="0" class="form-control" style="text-align:right;" inputmode="numeric" oninput="this.value = this.value.replace(/\D+/g, '')">
+                    </div>
                     </div>
                        <div id="collector_part" class="collector_part">
                     

@@ -116,12 +116,16 @@ $date = $request->crt_date;
         }
         
         
+        // P0.5: bank/e-wallet commission -- payment bonds (type_slctd==1) with money_way==2 only.
+        $commission = ($request->money_way == 2) ? (float) $request->commission : 0;
+        $total = (float) $amount + $commission;
+        
            $check_storage = Storage::select('*')->where('id',$storage_id)->get();
         abort_if(count($check_storage) == 0 , 404);
         $storage_info = $check_storage[0];
         
         $update_storage = Storage::select('*')->where('id',$storage_id)->update([
-            "balance" => $storage_info->balance - $amount,
+            "balance" => $storage_info->balance - $total,
         ]);
         
         if($request->money_way == 2){
@@ -130,7 +134,7 @@ $date = $request->crt_date;
             
             
             $update_bank = Bank::select('*')->where('id',$request->bank_id)->update([
-            "bank_balance" => $bank_info->bank_balance - $amount,
+            "bank_balance" => $bank_info->bank_balance - $total,
         ]);
         }
         
@@ -145,6 +149,7 @@ $date = $request->crt_date;
            "to_account" => $supp_id,
            "to_type" => "supplier",
            "amount" => $amount,
+           "commission" => $commission,
            "info" => $transaction_info,      
            "money_way" => $money_way,
            "bank_id" => $bank_id,
@@ -181,7 +186,7 @@ $date = $request->crt_date;
             "es_id" => "FLY-BD" . $createBond->id,
             "invoice_date" => $date,
             "debit_balance" => 0,
-            "credit_balance" => $amount,
+            "credit_balance" => $total,
             "transaction_txt" => "سند دفع من خزينة $storage_info->name لصالح $supplier->name",
             "transaction_type" => 2,
             "added_by" => Auth::user()->id,
@@ -357,13 +362,25 @@ if ($request->money_way2 == 2) {
             $storage_id = $check_bond->from_account;
             
             $amount = $check_bond->amount;
+            $commission = $check_bond->commission ?? 0;
+            $total = (float) $amount + (float) $commission;
         $check_storage = Storage::select('*')->where('id',$storage_id)->get();
         abort_if(count($check_storage) == 0 , 404);
         $storage_info = $check_storage[0];
         
         $update_storage = Storage::select('*')->where('id',$storage_id)->update([
-            "balance" => $storage_info->balance + $amount,
+            "balance" => $storage_info->balance + $total,
         ]);
+
+        if ($check_bond->money_way == 2 && $check_bond->bank_id) {
+            $check_bank = Bank::select('*')->where('id',$check_bond->bank_id)->get();
+            if (count($check_bank) > 0) {
+                $bank_info = $check_bank[0];
+                Bank::select('*')->where('id',$check_bond->bank_id)->update([
+                    "bank_balance" => $bank_info->bank_balance + $total,
+                ]);
+            }
+        }
         
             
         }else{
@@ -465,6 +482,20 @@ $date = $request->crt_date;
         }
 //        dd($request->crt_date);
        
+        // P0.5: capture the ORIGINAL bond state before any mutation, so the
+        // original Storage/Bank movement (including any original commission)
+        // can be reversed using the ORIGINAL storage_id/bank_id/money_way --
+        // never the new request values.
+        $orig_amount     = $check_bond->amount;
+        $orig_commission = $check_bond->commission ?? 0;
+        $orig_money_way  = $check_bond->money_way;
+        $orig_bank_id    = $check_bond->bank_id;
+        $orig_storage_id = $check_bond->from_account;
+        $orig_total      = (float) $orig_amount + (float) $orig_commission;
+
+        $new_commission = ($request->money_way == 2) ? (float) $request->commission : 0;
+        $new_total      = (float) $amount + $new_commission;
+
                $createBond = Bond::select('*')->where('id',$id)->update([
            "file_path" => $path, 
            "type" => 1,
@@ -474,6 +505,7 @@ $date = $request->crt_date;
            "to_account" => $supp_id,
            "to_type" => "supplier",
            "amount" => $amount,
+           "commission" => $new_commission,
            "info" => $transaction_info,      
            "money_way" => $money_way,
            "bank_id" => $bank_id,
@@ -482,33 +514,46 @@ $date = $request->crt_date;
         ]);  
             
             
+        // Step 1: reverse the ORIGINAL Storage movement (on the ORIGINAL storage_id).
+        $check_orig_storage = Storage::select('*')->where('id',$orig_storage_id)->get();
+        abort_if(count($check_orig_storage) == 0 , 404);
+        $orig_storage_info = $check_orig_storage[0];
+
+        Storage::select('*')->where('id',$orig_storage_id)->update([
+            "balance" => $orig_storage_info->balance + $orig_total,
+        ]);
+
+        // Step 1b: reverse the ORIGINAL Bank movement, only if the original bond used money_way==2.
+        if ($orig_money_way == 2 && $orig_bank_id) {
+            $check_orig_bank = Bank::select('*')->where('id',$orig_bank_id)->get();
+            if (count($check_orig_bank) > 0) {
+                $orig_bank_info = $check_orig_bank[0];
+                Bank::select('*')->where('id',$orig_bank_id)->update([
+                    "bank_balance" => $orig_bank_info->bank_balance + $orig_total,
+                ]);
+            }
+        }
+
+        // Step 2: apply the NEW Storage movement (on the NEW storage_id).
            $check_storage = Storage::select('*')->where('id',$storage_id)->get();
         abort_if(count($check_storage) == 0 , 404);
         $storage_info = $check_storage[0];
         
         $update_storage = Storage::select('*')->where('id',$storage_id)->update([
-            "balance" => $storage_info->balance + $check_bond->amount,
+            "balance" => $storage_info->balance - $new_total,
         ]);
-         
-    
-        
-        
-         
-            $check_storageTwo = Storage::select('*')->where('id',$storage_id)->get();
-        abort_if(count($check_storageTwo) == 0 , 404);
-        $storage_infoTwo = $check_storageTwo[0];
-        
-        $update_storage = Storage::select('*')->where('id',$storage_id)->update([
-            "balance" => $storage_infoTwo->balance - $amount,
-        ]);
-        
-    
-        
-        
-        
-        
 
-        
+        // Step 2b: apply the NEW Bank movement, only if the new money_way==2.
+        if ($request->money_way == 2 && $bank_id) {
+            $check_new_bank = Bank::select('*')->where('id',$bank_id)->get();
+            if (count($check_new_bank) > 0) {
+                $new_bank_info = $check_new_bank[0];
+                Bank::select('*')->where('id',$bank_id)->update([
+                    "bank_balance" => $new_bank_info->bank_balance - $new_total,
+                ]);
+            }
+        }
+
 $rmv = AccountStatement::select('*')->where('es_id',$check_bond->es_id)->delete();
         
         
@@ -527,7 +572,7 @@ $rmv = AccountStatement::select('*')->where('es_id',$check_bond->es_id)->delete(
             "es_id" => $check_bond->es_id,
             "invoice_date" => $date,
             "debit_balance" => 0,
-            "credit_balance" => $amount,
+            "credit_balance" => $new_total,
             "transaction_txt" => "سند دفع من خزينة $storage_info->name لصالح $supplier->name",
             "transaction_type" => 2,
             "added_by" => Auth::user()->id,

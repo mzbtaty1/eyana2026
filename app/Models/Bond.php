@@ -28,6 +28,7 @@ class Bond extends Model
               
 "money_way",
 "bank_id",
+"commission",
 "collector_info",
 "crt_date",
 "created_by",
@@ -40,4 +41,8 @@ class Bond extends Model
     ];
 
     
+    protected $casts = [
+        "commission" => "decimal:2",
+    ];
+
 }
