@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('account_statements', function (Blueprint $table) {
-            $table->decimal('cumulative_balance', 14, 2)->nullable()->after('credit_balance');
+            $table->decimal('ledger_net_effect', 14, 2)->nullable()->after('credit_balance');
         });
     }
 
@@ -22,7 +22,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('account_statements', function (Blueprint $table) {
-            $table->dropColumn('cumulative_balance');
+            $table->dropColumn('ledger_net_effect');
         });
     }
 };

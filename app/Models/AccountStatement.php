@@ -22,7 +22,7 @@ class AccountStatement extends Model
 "invoice_date",
 "debit_balance",
 "credit_balance",
-"cumulative_balance",
+"ledger_net_effect",
 "balance_on_transaction",
 "transaction_txt",
 "transaction_type",

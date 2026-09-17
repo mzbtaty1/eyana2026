@@ -40,7 +40,7 @@ class ReconcileBalances extends Command
             $computed = DB::table('account_statements')
                 ->where('is_storage', 1)
                 ->where('supp_client_id', $storage->id)
-                ->sum(DB::raw('CAST(cumulative_balance AS DECIMAL(14,2))'));
+                ->sum(DB::raw('CAST(ledger_net_effect AS DECIMAL(14,2))'));
 
             $stored = (float) $storage->balance;
             $diff = round($stored - (float) $computed, 2);
@@ -62,7 +62,7 @@ class ReconcileBalances extends Command
         }
 
         $this->error(count($mismatches) . ' storage(s) with a mismatch between stored balance and ledger sum:');
-        $this->table(['Storage ID', 'Name', 'Stored balance', 'Ledger sum (cumulative_balance)', 'Diff'], array_slice($mismatches, 0, $limit));
+        $this->table(['Storage ID', 'Name', 'Stored balance', 'Ledger sum (ledger_net_effect)', 'Diff'], array_slice($mismatches, 0, $limit));
     }
 
     protected function reconcileInvoicePayments(int $limit): void
@@ -109,7 +109,7 @@ class ReconcileBalances extends Command
         $checks = [
             ['account_statements', 'debit_balance'],
             ['account_statements', 'credit_balance'],
-            ['account_statements', 'cumulative_balance'],
+            ['account_statements', 'ledger_net_effect'],
             ['storages', 'balance'],
             ['banks', 'bank_balance'],
         ];

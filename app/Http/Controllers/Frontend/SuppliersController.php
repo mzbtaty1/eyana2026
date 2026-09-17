@@ -67,7 +67,7 @@ class SuppliersController extends Controller
             "invoice_date" => date('Y-m-d'),
             "debit_balance" => $request->debit_opening_balance,
             "credit_balance" => $request->opening_credit_balance,
-            "cumulative_balance" => floatval($request->debit_opening_balance) - floatval($request->opening_credit_balance),
+            "ledger_net_effect" => floatval($request->debit_opening_balance) - floatval($request->opening_credit_balance),
             "transaction_txt" => "الارصدة الافتتاحية",
             "transaction_type" => 3,
             "added_by" => Auth::user()->id,
@@ -151,7 +151,7 @@ class SuppliersController extends Controller
         $update_in_account = AccountStatement::select('*')->where('supp_client_id',$id)->where('is_supp_account',1)->update([
             "debit_balance" => $request->debit_opening_balance,
             "credit_balance" => $request->opening_credit_balance,
-            "cumulative_balance" => floatval($request->debit_opening_balance) - floatval($request->opening_credit_balance),
+            "ledger_net_effect" => floatval($request->debit_opening_balance) - floatval($request->opening_credit_balance),
         ]);
         
            $save_log = Log::create([
