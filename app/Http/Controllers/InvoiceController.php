@@ -866,6 +866,22 @@ class InvoiceController extends Controller
                 ], 404);
             }
             
+
+            // P1.2: refuse to delete an invoice that has already received payment --
+            // deleting it would silently orphan the paid amount in Storage/Bank with
+            // no invoice, ledger row, or trace of where the money came from.
+            if ((float) ($invoice->invoice_money_pay ?? 0) > 0) {
+                Log::warning("Blocked delete of paid invoice", [
+                    'invoice_id' => $invoice->id,
+                    'es_id' => $invoice->es_id ?? 'N/A',
+                    'invoice_money_pay' => $invoice->invoice_money_pay,
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'لا يمكن حذف فاتورة تم سداد مبلغ عليها. برجاء عمل مرتجع / استرجاع أولاً.'
+                ], 422);
+            }
             // Use the actual numeric ID for deletion
             $actualId = $invoice->id;
 

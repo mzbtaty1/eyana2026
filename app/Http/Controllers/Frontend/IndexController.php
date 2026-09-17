@@ -60,8 +60,8 @@ $suppliersBalances = Cache::remember('suppliers_balances', 60, function () {
     return DB::table('account_statements')
         ->select(
             'supp_client_id',
-            DB::raw('SUM(debit_balance) as total_debit'),
-            DB::raw('SUM(credit_balance) as total_credit')
+            DB::raw('SUM(CAST(debit_balance AS DECIMAL(14,2))) as total_debit'),
+            DB::raw('SUM(CAST(credit_balance AS DECIMAL(14,2))) as total_credit')
         )
         ->where('is_storage', '!=', 1)
         ->groupBy('supp_client_id')
