@@ -186,7 +186,13 @@ class StoragesController extends Controller
      */
     public function save(Request $request)
     {
-        $create = Storage::create([
+        // P4 ledger bypass fix: a newly created storage previously started
+        // with zero ledger history, so accounting:reconcile would list it
+        // as "pending cutover" forever. Now writes an 'opening' entry for
+        // the initial balance immediately, matching the same cutover
+        // convention used for the pre-existing storage.
+        DB::transaction(function () use ($request) {
+            $create = Storage::create([
 "name" => $request->name,
 "type" => $request->type,
 "bank_id" => $request->bank_id,
@@ -194,17 +200,30 @@ class StoragesController extends Controller
 "balance" => $request->balance,
         ]);
 
-        
-          $save_log = Log::create([
-            "log_txt" => "تم اضافة الخزينة  $request->name",
-            "log_ip" => $request->ip(),
-            "log_by" => Auth::user()->id,
-            "log_date" => date('Y-m-d'),
-        ]);
-        
-        
+            $balance = (float) $request->balance;
+            StorageStatement::record([
+                'storage_id' => $create->id,
+                'bond_id' => null,
+                'entry_type' => 'opening',
+                'transaction_date' => date('Y-m-d'),
+                'description' => "الرصيد الافتتاحي لخزينة $request->name",
+                'reference' => null,
+                'debit' => $balance < 0 ? abs($balance) : 0,
+                'credit' => $balance >= 0 ? $balance : 0,
+                'commission' => 0,
+                'created_by' => Auth::user()->id,
+            ]);
+
+            $save_log = Log::create([
+                "log_txt" => "تم اضافة الخزينة  $request->name",
+                "log_ip" => $request->ip(),
+                "log_by" => Auth::user()->id,
+                "log_date" => date('Y-m-d'),
+            ]);
+        });
+
         return redirect()->route('site.storages');
-        
+
     }
  public function sub_save(Request $request)
     {
