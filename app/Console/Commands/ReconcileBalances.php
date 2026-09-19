@@ -22,9 +22,9 @@ class ReconcileBalances extends Command
         $this->newLine();
         $this->reconcileInvoicePayments($limit);
         $this->newLine();
-        $this->reportNonNumericValues($limit);
+        $this->reconcileBanks($limit);
         $this->newLine();
-        $this->warn('Note: Bank.bank_balance has no corresponding account_statements ledger entries anywhere in the codebase (bond bank movements are not logged per-bank), so it cannot be reconciled by this command.');
+        $this->reportNonNumericValues($limit);
 
         return 0;
     }
@@ -100,6 +100,58 @@ class ReconcileBalances extends Command
 
         $this->error(count($mismatches) . ' invoice(s) with a mismatch between invoice_money_pay and ledger sum:');
         $this->table(['Invoice ID', 'es_id', 'invoice_money_pay', 'Ledger sum (payments)', 'Diff'], array_slice($mismatches, 0, $limit));
+    }
+
+    protected function reconcileBanks(int $limit): void
+    {
+        $this->line('== Bank balance reconciliation (bank_statements ledger) ==');
+
+        $banks = DB::table('banks')->get();
+        $mismatches = [];
+        $noLedgerYet = [];
+
+        foreach ($banks as $bank) {
+            $computed = DB::table('bank_statements')
+                ->where('bank_id', $bank->id)
+                ->orderByDesc('id')
+                ->value('running_balance');
+
+            if ($computed === null) {
+                // No ledger entries yet for this bank -- expected until its
+                // opening-balance cutover entry has been recorded (P2 bank
+                // ledger design, step 12: cutover is a separate, explicit,
+                // not-yet-performed step). Not a mismatch, just not
+                // reconcilable yet.
+                $noLedgerYet[] = [$bank->id, $bank->bank_name, number_format((float) $bank->bank_balance, 2)];
+                continue;
+            }
+
+            $stored = (float) $bank->bank_balance;
+            $diff = round($stored - (float) $computed, 2);
+
+            if (abs($diff) > 0.01) {
+                $mismatches[] = [
+                    $bank->id,
+                    $bank->bank_name,
+                    number_format($stored, 2),
+                    number_format((float) $computed, 2),
+                    number_format($diff, 2),
+                ];
+            }
+        }
+
+        if (!empty($noLedgerYet)) {
+            $this->warn(count($noLedgerYet) . ' bank(s) have no bank_statements entries yet (pending opening-balance cutover) and were skipped:');
+            $this->table(['Bank ID', 'Name', 'Current bank_balance'], array_slice($noLedgerYet, 0, $limit));
+        }
+
+        if (empty($mismatches)) {
+            $this->info('No mismatches found among banks with ledger entries.');
+            return;
+        }
+
+        $this->error(count($mismatches) . ' bank(s) with a mismatch between stored balance and ledger running balance:');
+        $this->table(['Bank ID', 'Name', 'Stored bank_balance', 'Ledger running_balance', 'Diff'], array_slice($mismatches, 0, $limit));
     }
 
     protected function reportNonNumericValues(int $limit): void

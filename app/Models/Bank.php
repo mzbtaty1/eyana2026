@@ -12,4 +12,9 @@ class Bank extends Model
          "bank_name",
          "bank_balance",
      ];
+
+    public function statements()
+    {
+        return $this->hasMany(BankStatement::class);
+    }
 }

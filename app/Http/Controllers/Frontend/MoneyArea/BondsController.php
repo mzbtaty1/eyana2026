@@ -9,13 +9,14 @@ use Auth;
 use Redirect;
 use App\Models\{
     Supplier,
-    Invoice, 
+    Invoice,
     TicketUser,
     TicketVendor,
     Airline,
     AccountStatement,
     Log,
     Bank,
+    BankStatement,
     Storage,
     SubStorage,
     Bond,
@@ -141,6 +142,7 @@ $date = $request->crt_date;
             "bank_balance" => $bank_info->bank_balance - $total,
         ]);
         }
+        // P2 bank ledger: recorded once $createBond/$supplier are known below.
 
 
        $createBond = Bond::create([
@@ -212,6 +214,24 @@ $date = $request->crt_date;
             "added_by" => Auth::user()->id,
             "crt_date" => date('Y-m-d'),
         ]);
+
+        // P2 bank ledger: one debit entry per payment bond that actually
+        // moved money out of a bank/e-wallet. Debit = amount + commission,
+        // matching exactly what was just subtracted from bank_balance above.
+        if ($request->money_way == 2) {
+            BankStatement::record([
+                'bank_id' => (int) $request->bank_id,
+                'bond_id' => $createBond->id,
+                'entry_type' => 'bond',
+                'transaction_date' => $date,
+                'description' => "سند دفع رقم FLY-BD{$createBond->id} من بنك {$bank_info->bank_name} لصالح $supplier->name",
+                'reference' => $createBond->es_id,
+                'debit' => $total,
+                'credit' => 0,
+                'commission' => $commission,
+                'created_by' => Auth::user()->id,
+            ]);
+        }
         });
 
 
@@ -348,6 +368,24 @@ if ($request->money_way2 == 2) {
             "added_by" => Auth::user()->id,
             "crt_date" => date('Y-m-d'),
         ]);
+
+        // P2 bank ledger: one credit entry per receipt bond that actually
+        // moved money into a bank/e-wallet. Receipt bonds never carry a
+        // commission (unchanged from existing behavior), so credit = amount.
+        if ($request->money_way2 == 2 && $bank) {
+            BankStatement::record([
+                'bank_id' => (int) $request->bank_id2,
+                'bond_id' => $createBond->id,
+                'entry_type' => 'bond',
+                'transaction_date' => $date,
+                'description' => "سند قبض رقم FLY-BD{$createBond->id} لصالح بنك {$bank->bank_name} من حساب $supplier->name",
+                'reference' => $createBond->es_id,
+                'debit' => 0,
+                'credit' => $amount,
+                'commission' => 0,
+                'created_by' => Auth::user()->id,
+            ]);
+        }
         });
 
 
@@ -396,6 +434,14 @@ if ($request->money_way2 == 2) {
                         Bank::where('id',$check_bond->bank_id)->update([
                             "bank_balance" => $bank_info->bank_balance + $total,
                         ]);
+
+                        // P2 bank ledger: void the bond's active ledger entry and
+                        // append its exact reversal, never delete the original.
+                        BankStatement::reverseActiveEntryForBond(
+                            $id,
+                            "عكس سند محذوف رقم {$check_bond->es_id}",
+                            Auth::user()->id
+                        );
                     }
                 }
 
@@ -411,6 +457,28 @@ if ($request->money_way2 == 2) {
                 Storage::where('id',$storage_id)->update([
                     "balance" => $storage_info->balance - $amount,
                 ]);
+
+                // P2 bug fix: receipt bonds (type==2) with money_way==2 credited
+                // banks.bank_balance by $amount at creation (see save()'s receipt
+                // branch) but this branch never reversed it on delete, silently
+                // leaving bank_balance permanently overstated. Mirrors the
+                // reversal already done above for payment bonds (type==1),
+                // reversing exactly $amount -- receipt bonds never carry a
+                // commission, so none is applied here either.
+                if ($check_bond->money_way == 2 && $check_bond->bank_id) {
+                    $bank_info = Bank::where('id',$check_bond->bank_id)->lockForUpdate()->first();
+                    if ($bank_info) {
+                        Bank::where('id',$check_bond->bank_id)->update([
+                            "bank_balance" => $bank_info->bank_balance - $amount,
+                        ]);
+
+                        BankStatement::reverseActiveEntryForBond(
+                            $id,
+                            "عكس سند محذوف رقم {$check_bond->es_id}",
+                            Auth::user()->id
+                        );
+                    }
+                }
 
             }
 
@@ -592,6 +660,14 @@ $date = $request->crt_date;
                 "bank_balance" => $banks[$orig_bank_id_lock]->bank_balance + $orig_total,
             ]);
             $banks[$orig_bank_id_lock]->bank_balance += $orig_total;
+
+            // P2 bank ledger: void the original bank entry and append its
+            // exact reversal -- the original row is never deleted or edited.
+            BankStatement::reverseActiveEntryForBond(
+                $id,
+                "عكس السند الأصلي رقم {$check_bond->es_id} بسبب تعديل السند",
+                Auth::user()->id
+            );
         }
 
         // Step 2: apply the NEW Storage movement (on the NEW storage_id).
@@ -613,11 +689,29 @@ $rmv = AccountStatement::where('es_id',$check_bond->es_id)->delete();
          $supplier = Supplier::where('id',$supp_id)->first();
         abort_if(!$supplier, 404);
 
+        // P2 bank ledger: one debit entry for the edited bond's NEW bank
+        // movement, only if the new state still touches a bank. Debit =
+        // amount + commission, matching exactly what was just subtracted
+        // from bank_balance in Step 2b above.
+        if ($new_bank_id_lock !== null && isset($banks[$new_bank_id_lock])) {
+            BankStatement::record([
+                'bank_id' => $new_bank_id_lock,
+                'bond_id' => $id,
+                'entry_type' => 'bond',
+                'transaction_date' => $date,
+                'description' => "سند دفع (معدل) رقم {$check_bond->es_id} من بنك {$banks[$new_bank_id_lock]->bank_name} لصالح $supplier->name",
+                'reference' => $check_bond->es_id,
+                'debit' => $new_total,
+                'credit' => 0,
+                'commission' => $new_commission,
+                'created_by' => Auth::user()->id,
+            ]);
+        }
 
         $storage_log = AccountStatement::create([
             "supp_client_id" => $storage_id,
             "trans_storage" => 1,
-            "is_storage" => 1, 
+            "is_storage" => 1,
             "invoice_type" => 9,
             "sub_id" => $sub_id,
             "es_id" => $check_bond->es_id,

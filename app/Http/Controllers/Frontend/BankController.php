@@ -8,13 +8,14 @@ use Auth;
 use Redirect;
 use App\Models\{
     Supplier,
-    Invoice, 
+    Invoice,
     TicketUser,
     TicketVendor,
     Airline,
     AccountStatement,
     Log,
     Bank,
+    BankStatement,
     Bond,
 };
 
@@ -114,19 +115,51 @@ class BankController extends Controller
          return redirect()->route('site.banks');
     }
     
-    public function bank_account_transactions($id){
-           $check_bank = Bank::select('*')->where('id',$id)->get();
-        abort_if(count($check_bank) == 0 , 404);
-        $bank_info = $check_bank[0];
-        
-        
-        $bonds = Bond::select('*')
-            ->where('bank_id' ,$id)
-            ->where('money_way' ,2)
+    public function bank_account_transactions(Request $request, $id)
+    {
+        $id = (int) $id;
+        $bank_info = Bank::where('id', $id)->first();
+        abort_if(!$bank_info, 404);
+
+        $date_from = $request->date_from;
+        $date_to   = $request->date_to;
+
+        // Opening balance for the requested range = the running_balance of
+        // the latest ledger entry strictly before date_from. With no
+        // date_from (or no entries at all yet -- e.g. before this bank's
+        // opening-balance cutover has been recorded), this is 0.
+        $opening_balance = 0.0;
+        if ($date_from) {
+            $priorEntry = BankStatement::where('bank_id', $id)
+                ->where('transaction_date', '<', $date_from)
+                ->orderByDesc('transaction_date')
+                ->orderByDesc('id')
+                ->first();
+            $opening_balance = $priorEntry ? (float) $priorEntry->running_balance : 0.0;
+        }
+
+        $entries = BankStatement::where('bank_id', $id)
+            ->when($date_from, fn ($q) => $q->where('transaction_date', '>=', $date_from))
+            ->when($date_to, fn ($q) => $q->where('transaction_date', '<=', $date_to))
+            ->orderBy('transaction_date')
+            ->orderBy('id')
             ->get();
-        return view('moneyarea.banks.bnk_transactions' , [
+
+        $total_debit  = (float) $entries->sum('debit');
+        $total_credit = (float) $entries->sum('credit');
+        $closing_balance = $entries->isNotEmpty()
+            ? (float) $entries->last()->running_balance
+            : $opening_balance;
+
+        return view('moneyarea.banks.bnk_transactions', [
             "bank_info" => $bank_info,
-            "bonds" => $bonds,
+            "entries" => $entries,
+            "opening_balance" => $opening_balance,
+            "total_debit" => $total_debit,
+            "total_credit" => $total_credit,
+            "closing_balance" => $closing_balance,
+            "date_from" => $date_from,
+            "date_to" => $date_to,
         ]);
     }
 }

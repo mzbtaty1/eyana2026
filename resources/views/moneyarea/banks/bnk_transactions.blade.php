@@ -3,10 +3,10 @@
 @section('title' , 'كشف حساب بنك')
     @if($errors->any())
 <div class="alert alert-info"><i class="ri-file-info-line"></i> {{$errors->first()}}</div>
-@endif 
+@endif
 <div class="row">
    <div class="col-lg-12">
-       
+
       <div class="card">
          <div class="card-header">
             <h5 class="card-title mb-0"> كشف حساب بنك : {{$bank_info->bank_name}}</h5>
@@ -18,173 +18,114 @@
              </a>
          </div>
          <div class="card-body">
-             
+
+            <form method="GET" action="{{route('site.bank_account_transactions', $bank_info->id)}}" class="row g-2 mb-3">
+                <div class="col-auto">
+                    <label class="col-form-label">من تاريخ</label>
+                </div>
+                <div class="col-auto">
+                    <input type="date" name="date_from" class="form-control" value="{{$date_from}}">
+                </div>
+                <div class="col-auto">
+                    <label class="col-form-label">الى تاريخ</label>
+                </div>
+                <div class="col-auto">
+                    <input type="date" name="date_to" class="form-control" value="{{$date_to}}">
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-primary">عرض</button>
+                </div>
+            </form>
+
+            <div class="row mb-3">
+                <div class="col-md-3">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <div class="text-muted">الرصيد الافتتاحي</div>
+                            <h5 class="mb-0">{{number_format($opening_balance,2)}}</h5>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <div class="text-muted">اجمالي مدين (خارج)</div>
+                            <h5 class="mb-0 text-danger">{{number_format($total_debit,2)}}</h5>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <div class="text-muted">اجمالي دائن (داخل)</div>
+                            <h5 class="mb-0 text-success">{{number_format($total_credit,2)}}</h5>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <div class="text-muted">الرصيد الختامي</div>
+                            <h5 class="mb-0">{{number_format($closing_balance,2)}}</h5>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <table id="myTable" class="table table-bordered dt-responsive nowrap table-striped align-middle" style="width:100%">
                <thead>
                   <tr>
-                     <th data-ordering="false" style="text-align:right;">نوع السند</th>
-                     <th data-ordering="false" style="text-align:right;">بيان العملية</th>
-                     <th data-ordering="false" style="text-align:right;">المبلغ</th>
-                     <th data-ordering="false" style="text-align:right;">تاريخ السند</th>
-                       <th data-ordering="false" style="text-align:right;">اعتماد العملية</th>
+                     <th data-ordering="false" style="text-align:right;">التاريخ</th>
+                     <th data-ordering="false" style="text-align:right;">البيان</th>
+                     <th data-ordering="false" style="text-align:right;">المرجع</th>
+                     <th data-ordering="false" style="text-align:right;">مدين</th>
+                     <th data-ordering="false" style="text-align:right;">دائن</th>
+                     <th data-ordering="false" style="text-align:right;">الرصيد بعد العملية</th>
+                     <th data-ordering="false" style="text-align:right;">الحالة</th>
                   </tr>
                </thead>
                <tbody>
-                   
-                     <?php
-                 
-                      $totalBonds = 0;
-                      foreach($bonds as $bank_transaction){
-                          $totalBonds += $bank_transaction->amount;
-                      }
-                      ?>
-                   
-                  @foreach($bonds as $bond)
-                   
-                  <tr>
-                     <td>
-                      <?php
-                         if($bond->type == 1){
-                             $type = "سند دفع";
-                         }else{
-                             $type = "سند قبض";
-                         }
-    
-                         ?>
-                         {{$type}}
-                      </td>
-                     <td>
-                      
-                      تحويل من 
-                         @if($bond->from_type == "storage")
-                         خزينة
-                         <?php
-                         $min_info = App\Models\Storage::select('*')->where('id' , $bond->from_account)->get();
-                         $min_info = $min_info[0];
-                         ?>
-                         @else
-                         حساب
-                         <?php
-                         $min_info = App\Models\Supplier::select('*')->where('id' , $bond->from_account)->get();
-                         $min_info = $min_info[0];
-                         ?>
-                         @endif
-                         <b>{{$min_info->name}}</b>
-                         
-                         
-                         لصالح
-                          @if($bond->to_type == "storage")
-                         خزينة
-                         
-                          <?php
-                         $min_info2 = App\Models\Storage::select('*')->where('id' , $bond->to_account)->get();
-                         $min_info2 = $min_info2[0];
-                         ?>
-                         
-                         @else
-                         حساب
-                         <?php
-                         $min_info2 = App\Models\Supplier::select('*')->where('id' , $bond->to_account)->get();
-                         $min_info2 = $min_info2[0];
-                         ?>
-                         @endif 
-                          <b>{{$min_info2->name}}</b>
-                      </td>
-                      <td style="text-align:right;">{{number_format($bond->amount,2)}}</td>
-                      <td style="text-align:right;">{{$bond->crt_date}}</td>
-                     <td>
-                       @if($bond->bond_status == 0)
-                    
-                    <button class="btn btn-primary" id="rvd_{{$bond->id}}" style="border-radius: 55px;font-size: 10px;" onclick="do_approved({{$bond->id}})">
-                         تأكيد العملية
-                        </button>
-                     <button class="btn btn-success" id="apprvd_{{$bond->id}}" style="border-radius: 55px;font-size: 10px;display:none;">
-                     تم التأكيد
-                        </button>      
-                          @else
-                         
-                       <button class="btn btn-success" style="border-radius: 55px;font-size: 10px;">
-                     تم التأكيد
-                        </button>      
-                    @endif
-                      </td>
+                  <tr class="table-secondary">
+                     <td colspan="5"><b>رصيد افتتاحي{{ $date_from ? ' بتاريخ '.$date_from : '' }}</b></td>
+                     <td style="text-align:right;"><b>{{number_format($opening_balance,2)}}</b></td>
+                     <td>--</td>
                   </tr>
-                   
+                  @foreach($entries as $entry)
+                  <tr @if($entry->is_voided) class="text-muted" style="text-decoration: line-through;" @endif>
+                     <td style="text-align:right;">{{ \Illuminate\Support\Carbon::parse($entry->transaction_date)->format('Y-m-d') }}</td>
+                     <td>{{$entry->description}}</td>
+                     <td style="text-align:right;">{{$entry->reference}}</td>
+                     <td style="text-align:right;">{{ $entry->debit > 0 ? number_format($entry->debit,2) : '--' }}</td>
+                     <td style="text-align:right;">{{ $entry->credit > 0 ? number_format($entry->credit,2) : '--' }}</td>
+                     <td style="text-align:right;">{{number_format($entry->running_balance,2)}}</td>
+                     <td>
+                        @if($entry->entry_type == 'reversal')
+                            <span class="badge bg-danger">عكس / Reversal</span>
+                        @elseif($entry->is_voided)
+                            <span class="badge bg-warning text-dark">ملغي / Voided</span>
+                        @elseif($entry->entry_type == 'opening')
+                            <span class="badge bg-secondary">رصيد افتتاحي</span>
+                        @else
+                            <span class="badge bg-success">نشط / Active</span>
+                        @endif
+                     </td>
+                  </tr>
                   @endforeach
                </tbody>
                 <tfoot>
                 <tr>
-                        <td style="text-align:right;">الاجمالي</td>
-                        <td style="text-align:right;">--</td>
-                    <td style="text-align:right;color:white;" class="bg-dark">{{number_format($totalBonds,2)}}</td>
-                    <td style="text-align:right;">--</td>
-                     <td style="text-align:right;">--</td>
+                        <td colspan="3" style="text-align:right;">الاجمالي</td>
+                    <td style="text-align:right;color:white;" class="bg-dark">{{number_format($total_debit,2)}}</td>
+                    <td style="text-align:right;color:white;" class="bg-dark">{{number_format($total_credit,2)}}</td>
+                    <td style="text-align:right;"><b>{{number_format($closing_balance,2)}} (رصيد ختامي)</b></td>
+                     <td>--</td>
                     </tr>
                 </tfoot>
             </table>
-   
+
           </div>
       </div>
    </div>
    <!--end col-->
 </div>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" integrity="sha512-894YE6QWD5I59HgZOGReFYm4dnWc1Qt5NtvYSaNcOP+u1T9qYdvdihz0PPSiiqn/+/3e7Jo4EaG7TubfWGUrMQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-
-  <script>
-        function do_approved(id){
-//          alert(id);
-          
-   var url = "{{url('')}}/bonds/" + id + "/approve";
-//          alert(url);
-           
-           $(document).ready(function () {
-
-      $.ajax({
-         type: "GET",
-         url: url,
-         headers: {
-            'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
-         },
-         data: "id=" + id,
-         //   beforeSend: function() {
-         //   $('.message_box').html(
-         //   '<img src="Loader.gif" width="25" height="25"/>'
-         //   );
-         //   },
-         success: function (data) {
-            //var dataResult = JSON.parse(data);
-
-            //console.log(data.status_code);
-
-            var status_code = data.status_code;
- 
-             
-             if(status_code == 200){
-                 swal("", "تم تأكيد العملية بنجاح", "success");
-                 
-                 var n1 = "rvd_" + id;
-                 var n2 = "apprvd_" + id;
-                  document.getElementById(n1).style.display = "none"; 
-                  document.getElementById(n2).style.display = "block"; 
-//                  document.getElementById("myDIV").style.display = "none"; 
-                 
-             }else{
-                 swal("", "فشل اثناء تأكيد العملية", "error");
-             }
-
-
-         }
-      });
-      //   });
-
-   });
-          
-          
-          
-      }
-      
-    
-    
-</script>
 @endsection
