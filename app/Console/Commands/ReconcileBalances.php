@@ -31,16 +31,34 @@ class ReconcileBalances extends Command
 
     protected function reconcileStorages(int $limit): void
     {
-        $this->line('== Storage balance reconciliation ==');
+        $this->line('== Storage balance reconciliation (storage_statements ledger) ==');
 
+        // P3: this used to compare storages.balance against
+        // SUM(account_statements.ledger_net_effect), but that column only
+        // exists on rows created after the P1 migration -- every historical
+        // is_storage=1 row (100% of them, as of the P3 storage ledger audit)
+        // has ledger_net_effect NULL, making that comparison structurally
+        // meaningless. Now compares against the dedicated storage_statements
+        // ledger instead, exactly mirroring reconcileBanks().
         $storages = DB::table('storages')->get();
         $mismatches = [];
+        $noLedgerYet = [];
 
         foreach ($storages as $storage) {
-            $computed = DB::table('account_statements')
-                ->where('is_storage', 1)
-                ->where('supp_client_id', $storage->id)
-                ->sum(DB::raw('CAST(ledger_net_effect AS DECIMAL(14,2))'));
+            $computed = DB::table('storage_statements')
+                ->where('storage_id', $storage->id)
+                ->orderByDesc('id')
+                ->value('running_balance');
+
+            if ($computed === null) {
+                // No ledger entries yet for this storage -- expected until
+                // its opening-balance cutover entry has been recorded (P3
+                // storage ledger design: cutover is a separate, explicit,
+                // not-yet-performed step). Not a mismatch, just not
+                // reconcilable yet.
+                $noLedgerYet[] = [$storage->id, $storage->name, number_format((float) $storage->balance, 2)];
+                continue;
+            }
 
             $stored = (float) $storage->balance;
             $diff = round($stored - (float) $computed, 2);
@@ -56,13 +74,18 @@ class ReconcileBalances extends Command
             }
         }
 
+        if (!empty($noLedgerYet)) {
+            $this->warn(count($noLedgerYet) . ' storage(s) have no storage_statements entries yet (pending opening-balance cutover) and were skipped:');
+            $this->table(['Storage ID', 'Name', 'Current balance'], array_slice($noLedgerYet, 0, $limit));
+        }
+
         if (empty($mismatches)) {
-            $this->info('No mismatches found across ' . $storages->count() . ' storage(s).');
+            $this->info('No mismatches found among storages with ledger entries.');
             return;
         }
 
-        $this->error(count($mismatches) . ' storage(s) with a mismatch between stored balance and ledger sum:');
-        $this->table(['Storage ID', 'Name', 'Stored balance', 'Ledger sum (ledger_net_effect)', 'Diff'], array_slice($mismatches, 0, $limit));
+        $this->error(count($mismatches) . ' storage(s) with a mismatch between stored balance and ledger running balance:');
+        $this->table(['Storage ID', 'Name', 'Stored balance', 'Ledger running_balance', 'Diff'], array_slice($mismatches, 0, $limit));
     }
 
     protected function reconcileInvoicePayments(int $limit): void

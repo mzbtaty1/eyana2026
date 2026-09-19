@@ -7,8 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class Storage extends Model
 {
-    use HasFactory; 
-    
+    use HasFactory;
+
         protected $fillable = [
 "name",
 "type",
@@ -16,5 +16,9 @@ class Storage extends Model
 "bank_number",
 "balance",
     ];
-    
+
+    public function statements()
+    {
+        return $this->hasMany(StorageStatement::class);
+    }
 }

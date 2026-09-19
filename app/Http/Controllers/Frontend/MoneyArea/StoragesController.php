@@ -4,11 +4,12 @@ namespace App\Http\Controllers\Frontend\MoneyArea;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Auth;
 use Redirect;
 use App\Models\{
     Supplier,
-    Invoice, 
+    Invoice,
     TicketUser,
     TicketVendor,
     Airline,
@@ -16,6 +17,7 @@ use App\Models\{
     Log,
     Bank,
     Storage,
+    StorageStatement,
     SubStorage,
 };
 
@@ -283,63 +285,96 @@ class StoragesController extends Controller
     {
 //        dd($request);
         $id = (int) $request->id;
-        
-          $check_storage = Storage::select('*')->where('id',$id)->get();
-        abort_if(count($check_storage) == 0 , 404);
-        $storage_info = $check_storage[0];
-        
-          $save_log = Log::create([
-            "log_txt" => "تم تعديل بيانات الخزينة $storage_info->name",
-            "log_ip" => $request->ip(),
-            "log_by" => Auth::user()->id,
-            "log_date" => date('Y-m-d'),
-        ]);
-        
-        
-        
-        $update_storage = Storage::select('*')->where('id',$id)->update([
+
+        // P3 safety fix + storage ledger: lock the storage row for the
+        // duration of the transaction (this form previously overwrote
+        // "balance" with zero locking/transaction at all), and log a
+        // manual 'adjustment' ledger entry whenever the edit actually
+        // changes the balance, so a direct admin edit can no longer
+        // silently desync storage_statements from storages.balance.
+        DB::transaction(function () use ($request, $id) {
+            $storage_info = Storage::where('id',$id)->lockForUpdate()->first();
+            abort_if(!$storage_info, 404);
+
+            $save_log = Log::create([
+                "log_txt" => "تم تعديل بيانات الخزينة $storage_info->name",
+                "log_ip" => $request->ip(),
+                "log_by" => Auth::user()->id,
+                "log_date" => date('Y-m-d'),
+            ]);
+
+            $oldBalance = (float) $storage_info->balance;
+            $newBalance = (float) $request->balance;
+
+            $update_storage = Storage::where('id',$id)->update([
 //            "name" => $request->name,
 "type" => $request->type,
 "bank_id" => $request->bank_id,
 "bank_number" => $request->bank_number,
 "balance" => $request->balance,
-            
+
         ]);
-        
+
+            $delta = round($newBalance - $oldBalance, 2);
+            if ($delta != 0) {
+                StorageStatement::record([
+                    'storage_id' => $id,
+                    'bond_id' => null,
+                    'entry_type' => 'adjustment',
+                    'transaction_date' => date('Y-m-d'),
+                    'description' => "تعديل يدوي لرصيد الخزينة {$storage_info->name}",
+                    'reference' => null,
+                    'debit' => $delta < 0 ? abs($delta) : 0,
+                    'credit' => $delta > 0 ? $delta : 0,
+                    'commission' => 0,
+                    'created_by' => Auth::user()->id,
+                ]);
+            }
+        });
+
         return redirect()->route('site.storages_edit' , $id);
-        
+
     }
   public function sub_update(Request $request)
     {
 //        dd($request);
         $id = (int) $request->id;
-        
-          $check_storage = SubStorage::select('*')->where('id',$id)->get();
-        abort_if(count($check_storage) == 0 , 404);
-        $storage_info = $check_storage[0];
-        
-        
-      
-        
-           $save_log = Log::create([
-            "log_txt" => "تم تعديل بيانات الخزينة الفرعية $storage_info->name",
-            "log_ip" => $request->ip(),
-            "log_by" => Auth::user()->id,
-            "log_date" => date('Y-m-d'),
-        ]);
-      
-        $update_storage = SubStorage::select('*')->where('id',$id)->update([
-            "main_storage" => $request->main_storage,
-            "name" => $request->name,
+
+        // P3 safety fix: lock the sub-storage row for the duration of the
+        // transaction (this form previously had zero locking/transaction
+        // at all). No storage_statements entry is written here: the
+        // approved design's FK is to storages.id only, and sub_storages
+        // is a separate table whose balance is not reflected in
+        // storages.balance by any existing code path -- logging a
+        // sub-storage edit against its parent storage's ledger would
+        // create a running_balance that no longer matches the parent
+        // Storage's actual balance, corrupting reconciliation. Flagging
+        // this as a scoping decision, not an oversight: a genuine
+        // sub-storage ledger would need its own dedicated table.
+        DB::transaction(function () use ($request, $id) {
+            $storage_info = SubStorage::where('id',$id)->lockForUpdate()->first();
+            abort_if(!$storage_info, 404);
+
+            $save_log = Log::create([
+                "log_txt" => "تم تعديل بيانات الخزينة الفرعية $storage_info->name",
+                "log_ip" => $request->ip(),
+                "log_by" => Auth::user()->id,
+                "log_date" => date('Y-m-d'),
+            ]);
+
+            $update_storage = SubStorage::where('id',$id)->update([
+                "main_storage" => $request->main_storage,
+                "name" => $request->name,
 "type" => $request->type,
 "bank_id" => $request->bank_id,
 "bank_number" => $request->bank_number,
 "balance" => $request->balance,
-            
+
         ]);
-        
+        });
+
         return redirect()->route('site.sub_storages_edit' , $id);
-        
+
     }
 
     /**

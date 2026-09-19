@@ -7,7 +7,7 @@ use Illuminate\Http\Request;
 use Auth;
 use Redirect;
 use Illuminate\Support\Carbon;
-use App\Models\{Supplier, Invoice, TicketUser, TicketVendor, Airline, AccountStatement , Log , TransactionBalance,Storage,Bond , User};
+use App\Models\{Supplier, Invoice, TicketUser, TicketVendor, Airline, AccountStatement , Log , TransactionBalance,Storage,StorageStatement,Bond , User};
 use Yajra\DataTables\Facades\DataTables;
 
 use DB;
@@ -1788,6 +1788,23 @@ if ($existing_beneficiary_statement) {
                 "transaction_type" => 4,
                 "added_by" => Auth::user()->id,
                 "crt_date" => date('Y-m-d'),
+            ]);
+
+            // P3 storage ledger: one credit entry for the invoice payment
+            // that just moved money into storage. Tagged with this bond's
+            // id, so a future deletion of this bond via BondsController's
+            // generic bond-delete flow correctly finds and reverses it.
+            StorageStatement::record([
+                'storage_id' => $storage_info->id,
+                'bond_id' => $create_bond->id,
+                'entry_type' => 'bond',
+                'transaction_date' => date('Y-m-d'),
+                'description' => "سداد مبلغ لصالح رحلة $invoice_info->es_id",
+                'reference' => $invoice_info->es_id,
+                'debit' => 0,
+                'credit' => $moneyPay,
+                'commission' => 0,
+                'created_by' => Auth::user()->id,
             ]);
 
             $update = Invoice::where('id', $id)->update([
