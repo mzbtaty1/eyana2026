@@ -822,9 +822,231 @@ $rmv = AccountStatement::where('es_id',$check_bond->es_id)->delete();
         });
 
         }else{
-            dd('TWo');
+            // P5: receipt-bond edit. Mirrors the payment-bond edit branch
+            // above exactly (same canonical Bond -> Storage -> Bank lock
+            // order, same reversal-then-reapply structure), swapped for
+            // receipt semantics using save()'s receipt branch as the
+            // source of truth: original storage/bank is on to_account (not
+            // from_account), the movement direction is a credit (not a
+            // debit), and receipt bonds never carry a commission.
+            $storage_id = $request->storage_id2;
+            $sub_id = $request->sub_id2;
+            $supp_id = $request->supp_id2;
+            $amount = $request->amount2;
+            $money_way = $request->money_way2;
+            $bank_id = $request->bank_id2;
+            $collector_info = $request->collector_info2;
+            $transaction_info = $request->transaction_info2;
+            $date = $request->crt_date2;
+
+            if ($request->hasFile('myPoster2')) {
+                $imagePath = $request->file('myPoster2');
+                $imageName = $imagePath->getClientOriginalName();
+                $extension = $imagePath->extension();
+
+                $list_allow = ["jpg", "png", "jpeg", "webp", "pdf"];
+                if (!in_array($extension, $list_allow)) {
+                    $msg = "برجاء الالتزام بالصيغة المحددة لرفع صورة / ملف التذكرة الخاصة بالفاتورة";
+                    return Redirect::back()->withErrors(['msg' => $msg]);
+                }
+
+                $imageNewName = \Str::random(32) . "." . $extension;
+                $path = 'storage/' . $request->file('myPoster2')->storeAs('bonds_files', $imageNewName, 'public');
+            } else {
+                $path = $check_bond->file_path;
+            }
+
+            // Receipt bonds never carry a commission (unchanged from
+            // save()'s receipt branch and delete()'s receipt reversal).
+            $new_total = (float) $amount;
+
+            // Canonical lock order (identical to the payment-edit branch
+            // above): Bond, then Storage rows ascending by id, then Bank
+            // rows ascending by id, deduplicated.
+            DB::transaction(function () use ($request, $id, $path, $storage_id, $sub_id, $supp_id, $amount, $money_way, $bank_id, $collector_info, $transaction_info, $date, $new_total) {
+
+                // Canonical lock order, step 1: the Bond row being edited.
+                $check_bond = Bond::where('id', $id)->lockForUpdate()->first();
+                abort_if(!$check_bond, 404);
+
+                $orig_amount     = $check_bond->amount;
+                $orig_money_way  = $check_bond->money_way;
+                $orig_bank_id    = $check_bond->bank_id;
+                // Receipt bonds store the storage on to_account (see
+                // save()'s receipt branch and delete()'s receipt branch),
+                // unlike payment bonds which use from_account.
+                $orig_storage_id = (int) $check_bond->to_account;
+                $orig_total      = (float) $orig_amount; // no commission
+
+                $new_storage_id    = (int) $storage_id;
+                $orig_bank_id_lock = ($orig_money_way == 2 && $orig_bank_id) ? (int) $orig_bank_id : null;
+                $new_bank_id_lock  = ($request->money_way2 == 2 && $bank_id) ? (int) $bank_id : null;
+
+                // Canonical lock order, step 2: Storage rows, ascending id, deduplicated.
+                $storageIds = array_unique([$orig_storage_id, $new_storage_id]);
+                sort($storageIds);
+                $storages = [];
+                foreach ($storageIds as $sid) {
+                    $storages[$sid] = Storage::where('id', $sid)->lockForUpdate()->first();
+                    abort_if(!$storages[$sid], 404);
+                }
+
+                // Canonical lock order, step 3: Bank rows, ascending id, deduplicated.
+                $bankIds = array_values(array_unique(array_filter(
+                    [$orig_bank_id_lock, $new_bank_id_lock],
+                    fn ($v) => $v !== null
+                )));
+                sort($bankIds);
+                $banks = [];
+                foreach ($bankIds as $bid) {
+                    $bankRow = Bank::where('id', $bid)->lockForUpdate()->first();
+                    if ($bankRow) {
+                        $banks[$bid] = $bankRow;
+                    }
+                }
+
+                Bond::where('id', $id)->update([
+                    "file_path" => $path,
+                    "type" => 2,
+                    "sub_id" => $sub_id,
+                    "from_account" => $supp_id,
+                    "from_type" => "supplier",
+                    "to_account" => $storage_id,
+                    "to_type" => "storage",
+                    "amount" => $amount,
+                    "commission" => 0,
+                    "info" => $transaction_info,
+                    "money_way" => $money_way,
+                    "bank_id" => $bank_id,
+                    "collector_info" => $collector_info,
+                    "crt_date" => $request->crt_date2,
+                ]);
+
+                // Step 1: reverse the ORIGINAL Storage movement -- it was a
+                // credit at creation, so reverse it with a debit.
+                Storage::where('id',$orig_storage_id)->update([
+                    "balance" => $storages[$orig_storage_id]->balance - $orig_total,
+                ]);
+                // Keep the in-memory copy in sync in case orig_storage_id === new_storage_id,
+                // so Step 2 below (re)uses the post-reversal balance instead of a stale one.
+                $storages[$orig_storage_id]->balance -= $orig_total;
+
+                // P5 storage ledger: void the original storage entry and
+                // append its exact reversal -- runs unconditionally, every
+                // edit touches Storage.
+                StorageStatement::reverseActiveEntryForBond(
+                    $id,
+                    "عكس السند الأصلي رقم {$check_bond->es_id} بسبب تعديل السند",
+                    Auth::user()->id
+                );
+
+                // Step 1b: reverse the ORIGINAL Bank movement (credit -> debit), only if the original bond used money_way==2.
+                if ($orig_bank_id_lock !== null && isset($banks[$orig_bank_id_lock])) {
+                    Bank::where('id',$orig_bank_id_lock)->update([
+                        "bank_balance" => $banks[$orig_bank_id_lock]->bank_balance - $orig_total,
+                    ]);
+                    $banks[$orig_bank_id_lock]->bank_balance -= $orig_total;
+
+                    // P5 bank ledger: void the original bank entry and
+                    // append its exact reversal -- the original row is
+                    // never deleted or edited.
+                    BankStatement::reverseActiveEntryForBond(
+                        $id,
+                        "عكس السند الأصلي رقم {$check_bond->es_id} بسبب تعديل السند",
+                        Auth::user()->id
+                    );
+                }
+
+                // Step 2: apply the NEW Storage movement (credit) on the NEW storage_id.
+                $storage_info = $storages[$new_storage_id];
+                Storage::where('id',$storage_id)->update([
+                    "balance" => $storage_info->balance + $new_total,
+                ]);
+
+                // Step 2b: apply the NEW Bank movement (credit), only if the new money_way2==2.
+                if ($new_bank_id_lock !== null && isset($banks[$new_bank_id_lock])) {
+                    Bank::where('id',$new_bank_id_lock)->update([
+                        "bank_balance" => $banks[$new_bank_id_lock]->bank_balance + $new_total,
+                    ]);
+                }
+
+                AccountStatement::where('es_id',$check_bond->es_id)->delete();
+
+                $supplier = Supplier::where('id',$supp_id)->first();
+                abort_if(!$supplier, 404);
+
+                // P5 storage ledger: one credit entry for the edited bond's
+                // NEW storage movement -- runs unconditionally, every edit
+                // touches Storage. Reuses the bond's original es_id, exactly
+                // as the payment-edit branch does.
+                StorageStatement::record([
+                    'storage_id' => $new_storage_id,
+                    'bond_id' => $id,
+                    'entry_type' => 'bond',
+                    'transaction_date' => $date,
+                    'description' => "سند قبض (معدل) رقم {$check_bond->es_id} لصالح خزينة {$storage_info->name} من حساب $supplier->name",
+                    'reference' => $check_bond->es_id,
+                    'debit' => 0,
+                    'credit' => $new_total,
+                    'commission' => 0,
+                    'created_by' => Auth::user()->id,
+                ]);
+
+                // P5 bank ledger: one credit entry for the edited bond's NEW
+                // bank movement, only if the new state still touches a bank.
+                if ($new_bank_id_lock !== null && isset($banks[$new_bank_id_lock])) {
+                    BankStatement::record([
+                        'bank_id' => $new_bank_id_lock,
+                        'bond_id' => $id,
+                        'entry_type' => 'bond',
+                        'transaction_date' => $date,
+                        'description' => "سند قبض (معدل) رقم {$check_bond->es_id} لصالح بنك {$banks[$new_bank_id_lock]->bank_name} من حساب $supplier->name",
+                        'reference' => $check_bond->es_id,
+                        'debit' => 0,
+                        'credit' => $new_total,
+                        'commission' => 0,
+                        'created_by' => Auth::user()->id,
+                    ]);
+                }
+
+                // Two AccountStatement rows, exact field set/invoice_type=10
+                // mirror of save()'s receipt branch, reusing the bond's
+                // original es_id (not a freshly generated one).
+                $storage_log = AccountStatement::create([
+                    "supp_client_id" => $storage_id,
+                    "is_storage" => 1,
+                    "trans_storage" => 1,
+                    "invoice_type" => 10,
+                    "sub_id" => $sub_id,
+                    "es_id" => $check_bond->es_id,
+                    "invoice_date" => $date,
+                    "debit_balance" => $amount,
+                    "credit_balance" => 0,
+                    "ledger_net_effect" => $amount,
+                    "transaction_txt" => "سند قبض من حساب $supplier->name لصالح خزينة {$storage_info->name}",
+                    "transaction_type" => 2,
+                    "added_by" => Auth::user()->id,
+                    "crt_date" => date('Y-m-d'),
+                ]);
+
+                $storage_log2 = AccountStatement::create([
+                    "supp_client_id" => $supp_id,
+                    "trans_storage" => 1,
+                    "invoice_type" => 10,
+                    "sub_id" => $sub_id,
+                    "es_id" => $check_bond->es_id,
+                    "invoice_date" => $date,
+                    "debit_balance" => 0,
+                    "credit_balance" => $amount,
+                    "ledger_net_effect" => -$amount,
+                    "transaction_txt" => "سند قبض من حساب $supplier->name لصالح خزينة {$storage_info->name}",
+                    "transaction_type" => 2,
+                    "added_by" => Auth::user()->id,
+                    "crt_date" => date('Y-m-d'),
+                ]);
+            });
         }
-        
+
         return redirect()->route('site.bonds_edit',$id);
     }
 
