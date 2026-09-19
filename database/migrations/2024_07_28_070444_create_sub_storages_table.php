@@ -11,6 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('sub_storages')) {
+            return;
+        }
+
         Schema::create('sub_storages', function (Blueprint $table) {
             $table->id();
             $table->text("main_storage");
