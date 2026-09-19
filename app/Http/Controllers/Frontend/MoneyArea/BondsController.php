@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Frontend\MoneyArea;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Auth;
 use Redirect;
 use App\Models\{
@@ -120,25 +121,28 @@ $date = $request->crt_date;
         $commission = ($request->money_way == 2) ? (float) $request->commission : 0;
         $total = (float) $amount + $commission;
         
-           $check_storage = Storage::select('*')->where('id',$storage_id)->get();
-        abort_if(count($check_storage) == 0 , 404);
-        $storage_info = $check_storage[0];
-        
-        $update_storage = Storage::select('*')->where('id',$storage_id)->update([
+        // P2 safety fix: lock the Storage/Bank rows and make the whole
+        // money movement + ledger write atomic, mirroring the fix already
+        // applied to InvoicesController::pay_part_save(). Without this,
+        // two concurrent bond submissions touching the same storage/bank
+        // can both read the same starting balance and one update is lost.
+        DB::transaction(function () use ($request, $path, $type_slctd, $storage_id, $sub_id, $supp_id, $amount, $commission, $money_way, $bank_id, $collector_info, $transaction_info, $date, $total) {
+        $storage_info = Storage::where('id',$storage_id)->lockForUpdate()->first();
+        abort_if(!$storage_info, 404);
+
+        Storage::where('id',$storage_id)->update([
             "balance" => $storage_info->balance - $total,
         ]);
-        
+
         if($request->money_way == 2){
-            $bank_info = Bank::select('*')->where('id',$request->bank_id)->get();
-        $bank_info = $bank_info[0];
-            
-            
-            $update_bank = Bank::select('*')->where('id',$request->bank_id)->update([
+            $bank_info = Bank::where('id',$request->bank_id)->lockForUpdate()->first();
+
+            Bank::where('id',$request->bank_id)->update([
             "bank_balance" => $bank_info->bank_balance - $total,
         ]);
         }
-        
-        
+
+
        $createBond = Bond::create([
            "file_path" => $path, 
            "type" => $type_slctd,
@@ -171,16 +175,14 @@ $date = $request->crt_date;
 
         
         
-         $supplier = Supplier::select('*')->where('id',$supp_id)->get();
-        abort_if(count($supplier) == 0 , 404);
-        
-        $supplier = $supplier[0];
-        
-        
+         $supplier = Supplier::where('id',$supp_id)->first();
+        abort_if(!$supplier, 404);
+
+
         $storage_log = AccountStatement::create([
             "supp_client_id" => $storage_id,
             "trans_storage" => 1,
-            "is_storage" => 1, 
+            "is_storage" => 1,
             "invoice_type" => 9,
             "sub_id" => $sub_id,
             "es_id" => "FLY-BD" . $createBond->id,
@@ -210,9 +212,10 @@ $date = $request->crt_date;
             "added_by" => Auth::user()->id,
             "crt_date" => date('Y-m-d'),
         ]);
-        
-        
-        
+        });
+
+
+
     }else{
         
         // dd($request->money_way2);
@@ -248,9 +251,25 @@ $date = $request->crt_date2;
         
 // dd($request->money_way2);
 
+// P2 safety fix: lock the Storage/Bank rows and make the whole money
+// movement + ledger write atomic, mirroring the fix already applied to
+// InvoicesController::pay_part_save(). Without this, two concurrent bond
+// submissions touching the same storage/bank can race and lose an update.
+// Canonical lock order (matches save()'s other branch, delete() and
+// save_update()): Storage before Bank, to avoid ABBA deadlocks between
+// concurrent requests that touch the same storage+bank pair.
+DB::transaction(function () use ($request, $path, $type_slctd, $storage_id, $sub_id, $supp_id, $amount, $money_way, $bank_id, $collector_info, $transaction_info, $date) {
+
+              $storage_info = Storage::where('id',$storage_id)->lockForUpdate()->first();
+        abort_if(!$storage_info, 404);
+
+        Storage::where('id',$storage_id)->update([
+            "balance" => $storage_info->balance + $amount,
+        ]);
+
 if ($request->money_way2 == 2) {
-    // dd(50); 
-    $bank = Bank::find($request->bank_id2);
+    // dd(50);
+    $bank = Bank::where('id', $request->bank_id2)->lockForUpdate()->first();
 
     if ($bank) { // التأكد من أن البنك موجود
         $bank->increment('bank_balance', $amount);
@@ -258,23 +277,13 @@ if ($request->money_way2 == 2) {
         // dd('none');
     }else{
         // dd('nBank');
-    } 
+    }
 }
- 
 
-       
-              $check_storage = Storage::select('*')->where('id',$storage_id)->get();
-        abort_if(count($check_storage) == 0 , 404);
-        $storage_info = $check_storage[0];
-        
-        $update_storage = Storage::select('*')->where('id',$storage_id)->update([
-            "balance" => $storage_info->balance + $amount,
-        ]);
-        
-        
-       
-         
-        
+
+
+
+
         $createBond = Bond::create([
            "file_path" => $path,
            "type" => $type_slctd,
@@ -302,12 +311,10 @@ if ($request->money_way2 == 2) {
         
         
         
-            $supplier = Supplier::select('*')->where('id',$supp_id)->get();
-        abort_if(count($supplier) == 0 , 404);
-        
-        $supplier = $supplier[0];
-        
-        
+            $supplier = Supplier::where('id',$supp_id)->first();
+        abort_if(!$supplier, 404);
+
+
         $storage_log = AccountStatement::create([
             "supp_client_id" => $storage_id,
             "is_storage" => 1,
@@ -341,13 +348,14 @@ if ($request->money_way2 == 2) {
             "added_by" => Auth::user()->id,
             "crt_date" => date('Y-m-d'),
         ]);
-        
-        
-        
-        
-        
-    }    
-        
+        });
+
+
+
+
+
+    }
+
         return redirect()->route('site.bonds');
         
     }
@@ -357,59 +365,60 @@ if ($request->money_way2 == 2) {
      */
     public function delete($id)
     {
-         $id = (int) $id;
-        $check_bond = Bond::select('*')->where('id',$id)->get();
-        abort_if(count($check_bond) == 0 , 404);
-        $check_bond = $check_bond[0];
-        
-        if($check_bond->type == 1){
-            $storage_id = $check_bond->from_account;
-            
-            $amount = $check_bond->amount;
-            $commission = $check_bond->commission ?? 0;
-            $total = (float) $amount + (float) $commission;
-        $check_storage = Storage::select('*')->where('id',$storage_id)->get();
-        abort_if(count($check_storage) == 0 , 404);
-        $storage_info = $check_storage[0];
-        
-        $update_storage = Storage::select('*')->where('id',$storage_id)->update([
-            "balance" => $storage_info->balance + $total,
-        ]);
+        $id = (int) $id;
 
-        if ($check_bond->money_way == 2 && $check_bond->bank_id) {
-            $check_bank = Bank::select('*')->where('id',$check_bond->bank_id)->get();
-            if (count($check_bank) > 0) {
-                $bank_info = $check_bank[0];
-                Bank::select('*')->where('id',$check_bond->bank_id)->update([
-                    "bank_balance" => $bank_info->bank_balance + $total,
+        // P2 safety fix: lock the Bond row plus whichever Storage/Bank rows
+        // it moved money through, and make the reversal + delete atomic,
+        // mirroring the fix already applied to InvoicesController::pay_part_save().
+        // Without this, a concurrent request touching the same storage/bank
+        // can race with this reversal and lose an update.
+        DB::transaction(function () use ($id) {
+            $check_bond = Bond::where('id',$id)->lockForUpdate()->first();
+            abort_if(!$check_bond, 404);
+
+            if($check_bond->type == 1){
+                $storage_id = $check_bond->from_account;
+
+                $amount = $check_bond->amount;
+                $commission = $check_bond->commission ?? 0;
+                $total = (float) $amount + (float) $commission;
+
+                $storage_info = Storage::where('id',$storage_id)->lockForUpdate()->first();
+                abort_if(!$storage_info, 404);
+
+                Storage::where('id',$storage_id)->update([
+                    "balance" => $storage_info->balance + $total,
                 ]);
+
+                if ($check_bond->money_way == 2 && $check_bond->bank_id) {
+                    $bank_info = Bank::where('id',$check_bond->bank_id)->lockForUpdate()->first();
+                    if ($bank_info) {
+                        Bank::where('id',$check_bond->bank_id)->update([
+                            "bank_balance" => $bank_info->bank_balance + $total,
+                        ]);
+                    }
+                }
+
+            }else{
+
+                $storage_id = $check_bond->to_account;
+
+                $amount = $check_bond->amount;
+
+                $storage_info = Storage::where('id',$storage_id)->lockForUpdate()->first();
+                abort_if(!$storage_info, 404);
+
+                Storage::where('id',$storage_id)->update([
+                    "balance" => $storage_info->balance - $amount,
+                ]);
+
             }
-        }
-        
-            
-        }else{
-            
-            
-            $storage_id = $check_bond->to_account;
-            
-            $amount = $check_bond->amount;
-        $check_storage = Storage::select('*')->where('id',$storage_id)->get();
-        abort_if(count($check_storage) == 0 , 404);
-        $storage_info = $check_storage[0];
-        
-        $update_storage = Storage::select('*')->where('id',$storage_id)->update([
-            "balance" => $storage_info->balance - $amount,
-        ]);  
-            
-        }
-        
-        
-        $delete  = Bond::select('*')->where('id',$id)->delete();
-        $delete2  = AccountStatement::select('*')->where('es_id',$check_bond->es_id)->delete();
-        
+
+            Bond::where('id',$id)->delete();
+            AccountStatement::where('es_id',$check_bond->es_id)->delete();
+        });
+
         return redirect()->route('site.bonds');
-        
-        
     }
 
     /**
@@ -485,23 +494,74 @@ $date = $request->crt_date;
             $path = $check_bond->file_path;
         }
 //        dd($request->crt_date);
-       
-        // P0.5: capture the ORIGINAL bond state before any mutation, so the
-        // original Storage/Bank movement (including any original commission)
-        // can be reversed using the ORIGINAL storage_id/bank_id/money_way --
-        // never the new request values.
-        $orig_amount     = $check_bond->amount;
-        $orig_commission = $check_bond->commission ?? 0;
-        $orig_money_way  = $check_bond->money_way;
-        $orig_bank_id    = $check_bond->bank_id;
-        $orig_storage_id = $check_bond->from_account;
-        $orig_total      = (float) $orig_amount + (float) $orig_commission;
 
         $new_commission = ($request->money_way == 2) ? (float) $request->commission : 0;
         $new_total      = (float) $amount + $new_commission;
 
-               $createBond = Bond::select('*')->where('id',$id)->update([
-           "file_path" => $path, 
+        // P2 safety fix: lock every row this edit touches -- the Bond row
+        // itself, then every distinct Storage row, then every distinct Bank
+        // row -- in one canonical, deterministic order before mutating
+        // anything, and make the whole reversal + re-apply + ledger rewrite
+        // atomic. This mirrors the fix already applied to
+        // InvoicesController::pay_part_save().
+        //
+        // Canonical lock order (shared with save() and delete()): Bond,
+        // then Storage rows ascending by id, then Bank rows ascending by
+        // id, with duplicate ids (e.g. editing a bond back onto the same
+        // storage/bank) locked only once. This avoids ABBA deadlocks
+        // between concurrent requests that touch overlapping rows in
+        // different orders.
+        //
+        // The ORIGINAL bond state (orig_amount/orig_storage_id/etc.) is
+        // derived from the Bond row AFTER it is locked below, not from the
+        // pre-transaction $check_bond read above (that read is only used
+        // for the file_path fallback and the early 404 check, both
+        // non-financial). Deriving orig_* from a locked row prevents a
+        // concurrent edit or delete of the very same bond from committing
+        // between the read and this transaction, which would otherwise
+        // make this reversal silently wrong.
+        DB::transaction(function () use ($request, $id, $path, $storage_id, $sub_id, $supp_id, $amount, $money_way, $bank_id, $collector_info, $transaction_info, $date, $new_commission, $new_total) {
+
+            // Canonical lock order, step 1: the Bond row being edited.
+            $check_bond = Bond::where('id', $id)->lockForUpdate()->first();
+            abort_if(!$check_bond, 404);
+
+            $orig_amount     = $check_bond->amount;
+            $orig_commission = $check_bond->commission ?? 0;
+            $orig_money_way  = $check_bond->money_way;
+            $orig_bank_id    = $check_bond->bank_id;
+            $orig_storage_id = (int) $check_bond->from_account;
+            $orig_total      = (float) $orig_amount + (float) $orig_commission;
+
+            $new_storage_id     = (int) $storage_id;
+            $orig_bank_id_lock  = ($orig_money_way == 2 && $orig_bank_id) ? (int) $orig_bank_id : null;
+            $new_bank_id_lock   = ($request->money_way == 2 && $bank_id) ? (int) $bank_id : null;
+
+            // Canonical lock order, step 2: Storage rows, ascending id, deduplicated.
+            $storageIds = array_unique([$orig_storage_id, $new_storage_id]);
+            sort($storageIds);
+            $storages = [];
+            foreach ($storageIds as $sid) {
+                $storages[$sid] = Storage::where('id', $sid)->lockForUpdate()->first();
+                abort_if(!$storages[$sid], 404);
+            }
+
+            // Canonical lock order, step 3: Bank rows, ascending id, deduplicated.
+            $bankIds = array_values(array_unique(array_filter(
+                [$orig_bank_id_lock, $new_bank_id_lock],
+                fn ($v) => $v !== null
+            )));
+            sort($bankIds);
+            $banks = [];
+            foreach ($bankIds as $bid) {
+                $bankRow = Bank::where('id', $bid)->lockForUpdate()->first();
+                if ($bankRow) {
+                    $banks[$bid] = $bankRow;
+                }
+            }
+
+               $createBond = Bond::where('id',$id)->update([
+           "file_path" => $path,
            "type" => 1,
            "sub_id" => $sub_id,
            "from_account" => $storage_id,
@@ -510,63 +570,50 @@ $date = $request->crt_date;
            "to_type" => "supplier",
            "amount" => $amount,
            "commission" => $new_commission,
-           "info" => $transaction_info,      
+           "info" => $transaction_info,
            "money_way" => $money_way,
            "bank_id" => $bank_id,
            "collector_info" => $collector_info,
-           "crt_date" => $request->crt_date, 
-        ]);  
-            
-            
-        // Step 1: reverse the ORIGINAL Storage movement (on the ORIGINAL storage_id).
-        $check_orig_storage = Storage::select('*')->where('id',$orig_storage_id)->get();
-        abort_if(count($check_orig_storage) == 0 , 404);
-        $orig_storage_info = $check_orig_storage[0];
-
-        Storage::select('*')->where('id',$orig_storage_id)->update([
-            "balance" => $orig_storage_info->balance + $orig_total,
+           "crt_date" => $request->crt_date,
         ]);
 
+
+        // Step 1: reverse the ORIGINAL Storage movement (on the ORIGINAL storage_id).
+        Storage::where('id',$orig_storage_id)->update([
+            "balance" => $storages[$orig_storage_id]->balance + $orig_total,
+        ]);
+        // Keep the in-memory copy in sync in case orig_storage_id === new_storage_id,
+        // so Step 2 below (re)uses the post-reversal balance instead of a stale one.
+        $storages[$orig_storage_id]->balance += $orig_total;
+
         // Step 1b: reverse the ORIGINAL Bank movement, only if the original bond used money_way==2.
-        if ($orig_money_way == 2 && $orig_bank_id) {
-            $check_orig_bank = Bank::select('*')->where('id',$orig_bank_id)->get();
-            if (count($check_orig_bank) > 0) {
-                $orig_bank_info = $check_orig_bank[0];
-                Bank::select('*')->where('id',$orig_bank_id)->update([
-                    "bank_balance" => $orig_bank_info->bank_balance + $orig_total,
-                ]);
-            }
+        if ($orig_bank_id_lock !== null && isset($banks[$orig_bank_id_lock])) {
+            Bank::where('id',$orig_bank_id_lock)->update([
+                "bank_balance" => $banks[$orig_bank_id_lock]->bank_balance + $orig_total,
+            ]);
+            $banks[$orig_bank_id_lock]->bank_balance += $orig_total;
         }
 
         // Step 2: apply the NEW Storage movement (on the NEW storage_id).
-           $check_storage = Storage::select('*')->where('id',$storage_id)->get();
-        abort_if(count($check_storage) == 0 , 404);
-        $storage_info = $check_storage[0];
-        
-        $update_storage = Storage::select('*')->where('id',$storage_id)->update([
+        $storage_info = $storages[$new_storage_id];
+        Storage::where('id',$storage_id)->update([
             "balance" => $storage_info->balance - $new_total,
         ]);
 
         // Step 2b: apply the NEW Bank movement, only if the new money_way==2.
-        if ($request->money_way == 2 && $bank_id) {
-            $check_new_bank = Bank::select('*')->where('id',$bank_id)->get();
-            if (count($check_new_bank) > 0) {
-                $new_bank_info = $check_new_bank[0];
-                Bank::select('*')->where('id',$bank_id)->update([
-                    "bank_balance" => $new_bank_info->bank_balance - $new_total,
-                ]);
-            }
+        if ($new_bank_id_lock !== null && isset($banks[$new_bank_id_lock])) {
+            Bank::where('id',$new_bank_id_lock)->update([
+                "bank_balance" => $banks[$new_bank_id_lock]->bank_balance - $new_total,
+            ]);
         }
 
-$rmv = AccountStatement::select('*')->where('es_id',$check_bond->es_id)->delete();
-        
-        
-         $supplier = Supplier::select('*')->where('id',$supp_id)->get();
-        abort_if(count($supplier) == 0 , 404);
-        
-        $supplier = $supplier[0];
-        
-        
+$rmv = AccountStatement::where('es_id',$check_bond->es_id)->delete();
+
+
+         $supplier = Supplier::where('id',$supp_id)->first();
+        abort_if(!$supplier, 404);
+
+
         $storage_log = AccountStatement::create([
             "supp_client_id" => $storage_id,
             "trans_storage" => 1,
@@ -600,7 +647,8 @@ $rmv = AccountStatement::select('*')->where('es_id',$check_bond->es_id)->delete(
             "added_by" => Auth::user()->id,
             "crt_date" => date('Y-m-d'),
         ]);
-            
+        });
+
         }else{
             dd('TWo');
         }
