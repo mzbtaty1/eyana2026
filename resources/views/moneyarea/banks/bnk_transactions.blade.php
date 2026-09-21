@@ -83,13 +83,13 @@
                      <th data-ordering="false" style="text-align:right;">الرصيد بعد العملية</th>
                      <th data-ordering="false" style="text-align:right;">الحالة</th>
                   </tr>
-               </thead>
-               <tbody>
                   <tr class="table-secondary">
                      <td colspan="5"><b>رصيد افتتاحي{{ $date_from ? ' بتاريخ '.$date_from : '' }}</b></td>
                      <td style="text-align:right;"><b>{{number_format($opening_balance,2)}}</b></td>
                      <td>--</td>
                   </tr>
+               </thead>
+               <tbody>
                   @foreach($entries as $entry)
                   <tr @if($entry->is_voided) class="text-muted" style="text-decoration: line-through;" @endif>
                      <td style="text-align:right;">{{ \Illuminate\Support\Carbon::parse($entry->transaction_date)->format('Y-m-d') }}</td>
