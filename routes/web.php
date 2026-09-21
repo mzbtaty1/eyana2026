@@ -53,7 +53,7 @@ Route::middleware(['auth' , 'check_status'])->group(function(){
     Route::get('/suppliers/create', [SuppliersController::class , 'create'])->name('site.suppliers_create');
     Route::post('/suppliers/save', [SuppliersController::class , 'save'])->name('site.suppliers_save');
     Route::get('/suppliers/{id}', [SuppliersController::class , 'edit'])->name('site.suppliers_edit');
-    Route::get('/suppliers/{id}/delete', [SuppliersController::class , 'delete'])->name('site.suppliers_delete');
+    Route::post('/suppliers/{id}/delete', [SuppliersController::class , 'delete'])->name('site.suppliers_delete');
     Route::post('/suppliers/update', [SuppliersController::class , 'update'])->name('site.suppliers_update');
      
     Route::get('/customers', [CustomersController::class , 'index'])->name('site.customers');
@@ -195,7 +195,7 @@ Route::middleware(['auth' , 'check_status'])->group(function(){
     Route::get('/banks/create' , [BankController::class , 'create'])->name('site.banks_create');
     Route::post('/banks/save' , [BankController::class , 'save'])->name('site.banks_save');
     Route::get('/banks/{id}' , [BankController::class , 'edit'])->name('site.banks_edit');
-    Route::get('/banks/{id}/delete' , [BankController::class , 'delete'])->name('site.banks_delete');
+    Route::post('/banks/{id}/delete' , [BankController::class , 'delete'])->name('site.banks_delete');
     Route::get('/banks/{id}/account-statement' , [BankController::class , 'bank_account_transactions'])->name('site.bank_account_transactions');
     Route::post('/banks/update' , [BankController::class , 'update'])->name('site.banks_update');
     
@@ -231,7 +231,7 @@ Route::middleware(['auth' , 'check_status'])->group(function(){
     Route::get('/bonds/add' , [BondsController::class , 'create'])->name('site.bonds_create');
     Route::post('/bonds/save' , [BondsController::class , 'save'])->name('site.bonds_save');
     Route::get('/bonds/{id}' , [BondsController::class , 'edit'])->name('site.bonds_edit');
-    Route::get('/bonds/{id}/delete' , [BondsController::class , 'delete'])->name('site.bonds_delete');
+    Route::post('/bonds/{id}/delete' , [BondsController::class , 'delete'])->name('site.bonds_delete');
     Route::post('/bonds/update' , [BondsController::class , 'update'])->name('site.bonds_update');
     Route::get('/bonds/{id}/print' , [BondsController::class , 'print_one'])->name('site.bonds_print_one');
     Route::get('/bonds/{id}/edit' , [BondsController::class , 'edit'])->name('site.bonds_edit');
@@ -266,6 +266,9 @@ Route::middleware(['auth' , 'check_status'])->group(function(){
     Route::get('/passwords' , [UserController::class , 'password'])->name('site.password');
     Route::get('/passwords/create' , [UserController::class , 'password_create'])->name('site.password_create');
     Route::post('/passwords/save' , [UserController::class , 'password_save'])->name('site.password_save');
+    Route::get('/passwords/{id}/edit' , [UserController::class , 'password_edit'])->name('site.password_edit');
+    Route::post('/passwords/update' , [UserController::class , 'password_update'])->name('site.password_update');
+    Route::post('/passwords/{id}/delete' , [UserController::class , 'password_delete'])->name('site.password_delete');
     
     Route::get('/api/supp_info/{id}' , function($id){
         

@@ -11,22 +11,24 @@
          <div class="card-body">
             <form action="{{route('site.banks_save')}}" method="POST" autocomplete="off">
                @csrf
-         
-                
+               @if($errors->any())
+               <div class="alert alert-info"><i class="ri-file-info-line"></i> {{$errors->first()}}</div>
+               @endif
+
                <p>
                     اسم البنك
-                <rtag>(*)</rtag>    
+                <rtag>(*)</rtag>
                 </p>
-                     <input type="text" name="bank_name" value="" placeholder="اسم البنك" class="form-control" style="text-align:right;" required="">
-                  
+                     <input type="text" name="bank_name" value="{{old('bank_name')}}" placeholder="اسم البنك" class="form-control @error('bank_name') is-invalid @enderror" style="text-align:right;" required="">
+                     @error('bank_name') <div class="invalid-feedback">{{$message}}</div> @enderror
                 <br>
-                
+
                  <p>
                     رصيد البنك
-                <rtag>(*)</rtag>    
+                <rtag>(*)</rtag>
                 </p>
-                     <input type="text" name="bank_balance" value="" placeholder="رصيد البنك" class="form-control" style="text-align:right;" required="">
-                  
+                     <input type="text" name="bank_balance" value="{{old('bank_balance')}}" placeholder="رصيد البنك" class="form-control @error('bank_balance') is-invalid @enderror" style="text-align:right;" required="">
+                     @error('bank_balance') <div class="invalid-feedback">{{$message}}</div> @enderror
                 <br>
                 
                <div class="d-grid gap-2">

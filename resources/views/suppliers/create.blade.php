@@ -13,42 +13,51 @@
                @csrf
          
                 
+               @if($errors->any())
+               <div class="alert alert-info"><i class="ri-file-info-line"></i> {{$errors->first()}}</div>
+               @endif
                <div class="row">
                   <div class="col-6 mb-3">
                      <p>
                         اسم المورد
                      </p>
-                     <input type="text" name="name" value="" placeholder="اسم المورد" class="form-control" style="text-align:right;" required="">
+                     <input type="text" name="name" value="{{old('name')}}" placeholder="اسم المورد" class="form-control @error('name') is-invalid @enderror" style="text-align:right;" required="">
+                     @error('name') <div class="invalid-feedback">{{$message}}</div> @enderror
                   </div>
                   <div class="col-6">
                      <p>
                         الايميل
                      </p>
-                     <input type="email" name="email" value="" placeholder="الايميل" class="form-control" style="text-align:right;">
+                     <input type="email" name="email" value="{{old('email')}}" placeholder="الايميل" class="form-control @error('email') is-invalid @enderror" style="text-align:right;">
+                     @error('email') <div class="invalid-feedback">{{$message}}</div> @enderror
                   </div>
                </div>
                <p>
                   العنوان
                </p>
-               <input type="text" name="address" value="" placeholder="العنوان" class="form-control" style="text-align:right;">
+               <input type="text" name="address" value="{{old('address')}}" placeholder="العنوان" class="form-control @error('address') is-invalid @enderror" style="text-align:right;">
+               @error('address') <div class="invalid-feedback d-block">{{$message}}</div> @enderror
                <br>
                 <p>
                   الحد الائتماني المسموح
                </p>
-               <input type="text" name="limit_balance" value="0" placeholder="الحد الائتماني المسموح" class="form-control" style="text-align:right;">
+               <input type="text" name="limit_balance" value="{{old('limit_balance', '0')}}" placeholder="الحد الائتماني المسموح" class="form-control @error('limit_balance') is-invalid @enderror" style="text-align:right;">
+               @error('limit_balance') <div class="invalid-feedback d-block">{{$message}}</div> @enderror
                <br>
                <div class="row">
                   <div class="col-6 mb-3">
                      <p>
                         رقم الهاتف 1
                      </p>
-                     <input type="text" name="phone_1" inputmode="numeric" oninput="this.value = this.value.replace(/\D+/g, '')" value="" placeholder="رقم الهاتف 1" class="form-control" style="text-align:right;" required="">
+                     <input type="text" name="phone_1" inputmode="numeric" oninput="this.value = this.value.replace(/\D+/g, '')" value="{{old('phone_1')}}" placeholder="رقم الهاتف 1" class="form-control @error('phone_1') is-invalid @enderror" style="text-align:right;" required="">
+                     @error('phone_1') <div class="invalid-feedback">{{$message}}</div> @enderror
                   </div>
                   <div class="col-6">
                      <p>
-                        رقم الهاتف 2 
+                        رقم الهاتف 2
                      </p>
-                     <input type="text" name="phone_2" inputmode="numeric" oninput="this.value = this.value.replace(/\D+/g, '')" value="" placeholder="رقم الهاتف 2 (غير الزامي)" class="form-control" style="text-align:right;">
+                     <input type="text" name="phone_2" inputmode="numeric" oninput="this.value = this.value.replace(/\D+/g, '')" value="{{old('phone_2')}}" placeholder="رقم الهاتف 2 (غير الزامي)" class="form-control @error('phone_2') is-invalid @enderror" style="text-align:right;">
+                     @error('phone_2') <div class="invalid-feedback">{{$message}}</div> @enderror
                   </div>
                </div>
 <!--
@@ -72,13 +81,15 @@
                      <p>
                         الرصيد الافتتاحي المدين
                      </p>
-                     <input type="text" name="debit_opening_balance" inputmode="numeric" oninput="this.value = this.value.replace(/\D+/g, '')" value="0" placeholder="الرصيد الافتتاحي المدين" class="form-control" style="text-align:right;" required="">
+                     <input type="text" name="debit_opening_balance" inputmode="numeric" oninput="this.value = this.value.replace(/\D+/g, '')" value="{{old('debit_opening_balance', '0')}}" placeholder="الرصيد الافتتاحي المدين" class="form-control @error('debit_opening_balance') is-invalid @enderror" style="text-align:right;" required="">
+                     @error('debit_opening_balance') <div class="invalid-feedback">{{$message}}</div> @enderror
                   </div>
                   <div class="col-6">
                      <p>
-                        رصيد افتتاحى الدائن 
+                        رصيد افتتاحى الدائن
                      </p>
-                     <input type="text" name="opening_credit_balance" inputmode="numeric" oninput="this.value = this.value.replace(/\D+/g, '')" value="0" placeholder="رصيد افتتاحى الدائن " class="form-control" style="text-align:right;" required>
+                     <input type="text" name="opening_credit_balance" inputmode="numeric" oninput="this.value = this.value.replace(/\D+/g, '')" value="{{old('opening_credit_balance', '0')}}" placeholder="رصيد افتتاحى الدائن " class="form-control @error('opening_credit_balance') is-invalid @enderror" style="text-align:right;" required>
+                     @error('opening_credit_balance') <div class="invalid-feedback">{{$message}}</div> @enderror
                   </div>
                </div>
                <div class="row">
@@ -86,19 +97,19 @@
                      <p>
                         الحالة
                      </p>
-                     <select name="status" class="form-control" style="text-align:right;" required="">
-                         <option value="1">مفعل</option>
-                     <option value="0">موقوف</option>
-                     
+                     <select name="status" class="form-control @error('status') is-invalid @enderror" style="text-align:right;" required="">
+                         <option value="1" @if(old('status')==='1') selected @endif>مفعل</option>
+                     <option value="0" @if(old('status')==='0') selected @endif>موقوف</option>
+
                      </select>
                   </div>
                   <div class="col-6">
                      <p>
                         النوع
                      </p>
-                     <select name="type" class="form-control" style="text-align:right;" required="">
-                     <option value="1">فرد</option>
-                     <option value="2">شركة</option>
+                     <select name="type" class="form-control @error('type') is-invalid @enderror" style="text-align:right;" required="">
+                     <option value="1" @if(old('type')==='1') selected @endif>فرد</option>
+                     <option value="2" @if(old('type')==='2') selected @endif>شركة</option>
                      </select>
                   </div>
                    <div class="col-6">
@@ -106,20 +117,20 @@
                                                 اظهار كملخص في الصفحة الرئيسية
 
                      </p>
-                     <select name="in_index" class="form-control" style="text-align:right;" required="">
-                     <option value="0">لا</option>
-                     <option value="1">نعم</option>
+                     <select name="in_index" class="form-control @error('in_index') is-invalid @enderror" style="text-align:right;" required="">
+                     <option value="0" @if(old('in_index')==='0') selected @endif>لا</option>
+                     <option value="1" @if(old('in_index')==='1') selected @endif>نعم</option>
                      </select>
                   </div>
-                   
+
                      <div class="col-6">
                      <p>
                                                 عرض في كشف الحساب الشركات المخصص
 
                      </p>
-                     <select name="in_stat" class="form-control" style="text-align:right;" required="">
-                     <option value="0">لا</option>
-                     <option value="1">نعم</option>
+                     <select name="in_stat" class="form-control @error('in_stat') is-invalid @enderror" style="text-align:right;" required="">
+                     <option value="0" @if(old('in_stat')==='0') selected @endif>لا</option>
+                     <option value="1" @if(old('in_stat')==='1') selected @endif>نعم</option>
                      </select>
                   </div>
                    

@@ -74,7 +74,9 @@ $bond = $check_bond;
          <div class="card-body">
             <form action="{{route('site.bonds_save_update')}}" method="POST" autocomplete="off" enctype='multipart/form-data'>
                @csrf
-         
+               @if($errors->any())
+               <div class="alert alert-danger"><i class="ri-file-info-line"></i> {{$errors->first()}}</div>
+               @endif
                 <input type="hidden" name="bond_id" id="bond_id" value="{{$bond->id}}">
                 <input type="hidden" name="type_slctd" id="type_slctd" value="{{$bond->type}}">
               

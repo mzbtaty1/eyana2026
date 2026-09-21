@@ -81,63 +81,42 @@
                      <td>{{$bond->crt_date}}</td>
                      <td>
                       
-                      تحويل من 
+                      تحويل من
                          @if($bond->from_type == "storage")
                          خزينة
-                         <?php
-                         $min_info = App\Models\Storage::select('*')->where('id' , $bond->from_account)->get();
-                         $min_info = $min_info[0];
-                         ?>
+                         @php $min_info = $bondStorages[$bond->from_account] ?? null; @endphp
                          @else
                          حساب
-                         <?php
-                         $min_info = App\Models\Supplier::select('*')->where('id' , $bond->from_account)->get();
-                         $min_info = $min_info[0];
-                         ?>
+                         @php $min_info = $bondSuppliers[$bond->from_account] ?? null; @endphp
                          @endif
-                         @if($min_info->acc_type == 3)
+                         @if($min_info && $min_info->acc_type == 3)
                          مصروفات
                          @endif
-                         <b>{{$min_info->name}}</b>
-                         
-                         
+                         <b>{{$min_info->name ?? ''}}</b>
+
+
                          لصالح
                           @if($bond->to_type == "storage")
                          خزينة
-                         
-                          <?php
-                         $min_info2 = App\Models\Storage::select('*')->where('id' , $bond->to_account)->get();
-                         $min_info2 = $min_info2[0];
-                         ?>
-                         
+                         @php $min_info2 = $bondStorages[$bond->to_account] ?? null; @endphp
                          @else
                          حساب
-                         <?php
-                         $min_info2 = App\Models\Supplier::select('*')->where('id' , $bond->to_account)->get();
-                         $min_info2 = $min_info2[0];
-                         ?>
-                         @endif 
-                          @if($min_info2->acc_type == 3)
+                         @php $min_info2 = $bondSuppliers[$bond->to_account] ?? null; @endphp
+                         @endif
+                          @if($min_info2 && $min_info2->acc_type == 3)
                          مصروفات
                          @endif
-                          <b>{{$min_info2->name}}</b>
+                          <b>{{$min_info2->name ?? ''}}</b>
                          @if($bond->sub_id == null)
                          @else
                          <br>
-                         <?php
+                         @php
                          $sub_id = (int) $bond->sub_id;
-                         if($sub_id == 0){
-                             
-                         }else{
-                             $min_info3 = App\Models\SubStorage::select('*')->where('id' , $bond->sub_id)->get();
-                         $min_info3 = $min_info3[0];
-                             
-                         }
-                         
-                         ?>
+                         $min_info3 = $sub_id !== 0 ? ($bondSubStorages[$bond->sub_id] ?? null) : null;
+                         @endphp
                          @if($sub_id == 0)
                          @else
-                         خزينة فرعية : <b>{{$min_info3->name}}</b>
+                         خزينة فرعية : <b>{{$min_info3->name ?? ''}}</b>
                          @endif
                          @endif
                          
@@ -151,34 +130,21 @@
                      <td>{{number_format($bond->amount,2)}}</td>
                      <td>
                       @if($bond->money_way == 1)
-                         دفع نقدي 
+                         دفع نقدي
                          @elseif($bond->money_way == 2)
                          تحويل بنكي
-                    <?php
-                         $bank_info = App\Models\Bank::select('*')->where('id',$bond->bank_id)->get();
-                         $bank_info = $bank_info[0];
-                         ?>
-                         {{$bank_info->bank_name}}
+                         {{ ($bondBanks[$bond->bank_id] ?? null)->bank_name ?? '' }}
                          @else
-                         تحصيل من المندوب : 
-                         <?php
-                         $collector_info = App\Models\Collector::select('*')->where('id',$bond->collector_info)->get();
-                         $collector_info = $collector_info[0];
-                         ?>
-                         {{$collector_info->name}}
-                         
+                         تحصيل من المندوب :
+                         {{ ($bondCollectors[$bond->collector_info] ?? null)->name ?? '' }}
                          @endif
-                         
-                        
-                         
+
+
+
                       </td>
-                    
+
                    <td>
-                          <?php
-                    $mem = App\Models\User::select('*')->where('id',$bond->created_by)->get();
-                    $mem = $mem[0];
-                    ?>
-                       {{$mem->name}}
+                       {{ ($bondUsers[$bond->created_by] ?? null)->name ?? '' }}
                       </td>
                    <td>
 <!--
@@ -188,14 +154,16 @@
                            </button>
                        </a>
 -->
-                         
-                       <button class="btn btn-danger" onclick="Removeairline({{$bond->id}})">
+                         <form id="delete-form-{{$bond->id}}" action="{{route('site.bonds_delete', $bond->id)}}" method="POST" style="display:none;">
+                            @csrf
+                         </form>
+                       <button class="btn btn-danger" onclick="confirmDeleteForm('delete-form-{{$bond->id}}', 'هل انت متأكد؟', 'سيتم حذف ذلك السند وازالة كل البيانات المرتبطه به')">
                            <i class="ri-delete-bin-line"></i>
                            </button>
                            <button class="btn btn-dark" onclick="printdiv({{$bond->id}})">
                            <i class="ri-printer-line"></i>
                            </button>
-                        
+
                       </td>
                   </tr>
                   @endforeach
@@ -274,28 +242,5 @@ function printdiv(id){
        }, true);
 //       
    }
-      function Removeairline(id){
-    
-      swal({
-     title: "هل انت متأكد؟",
-     text: "سيتم حذف ذلك السند وازالة كل البيانات المرتبطه به",
-     icon: "warning",
-     buttons: true,
-     dangerMode: true,
-   })
-   .then((willDelete) => {
-     if (willDelete) {
-   //       var url = "http://teacher.cuoratech.com/aladmin_srp/sections/" + id + "/remove";
-   var url = "{{url('')}}/bonds/" + id + "/delete";
-//                     alert(url);
-         window.location.href = url;
-         
-     } else {
-       swal("تم الغاء عملية الحذف بنجاح");
-     }
-   });
-    
-}
-      
-        </script>  
+        </script>
 @endsection

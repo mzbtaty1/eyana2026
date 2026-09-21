@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Auth;
 use Redirect;
+use App\Http\Requests\StoreSupplierRequest;
+use App\Http\Requests\UpdateSupplierRequest;
 use App\Models\{
     Supplier,
     Log,
@@ -36,7 +38,7 @@ class SuppliersController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function save(Request $request)
+    public function save(StoreSupplierRequest $request)
     {
 //        dd($request);
         $create = Supplier::create([
@@ -106,7 +108,7 @@ class SuppliersController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request)
+    public function update(UpdateSupplierRequest $request)
     {
         $id = (int) $request->id;
 //        dd($request);

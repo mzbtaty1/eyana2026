@@ -495,14 +495,20 @@ private function getCreatedBy($userId)
     }
     public function index()
     {
+        // Eager-loads the same relations the row loop in invoices/all.blade.php
+        // needs (previously fetched with a handful of per-row queries each).
+        $eagerLoad = ['ticketVendors.supplier', 'beneficiaries', 'users', 'creator', 'mostarad', 'mortaga'];
+
         if(Auth::user()->account_type == 2){
         $invoices = Invoice::select('*')
+            ->with($eagerLoad)
             ->orderBy('id', 'DESC')
             ->where('invoice_shared', '!=', 1)
             ->get();
         }else{
-        
+
 $invoices = Invoice::select('*')
+            ->with($eagerLoad)
             ->orderBy('id', 'DESC')
             ->where('invoice_shared', '!=', 1)
             ->where('invoice_create_by', Auth::user()->id)

@@ -7,6 +7,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Auth;
 use Redirect;
+use App\Http\Requests\StoreBankRequest;
+use App\Http\Requests\UpdateBankRequest;
 use App\Models\{
     Supplier,
     Invoice,
@@ -29,9 +31,18 @@ class BankController extends Controller
     public function index()
     {
         $banks = Bank::select('*')->orderBy('id','DESC')->get();
-        
+
+        // Batched replacement for a per-row Bond::where(...)->get() query that
+        // previously ran once per bank on every page load.
+        $bondTotals = Bond::where('bond_status', 0)
+            ->where('money_way', 2)
+            ->select('bank_id', DB::raw('SUM(amount) as total_amount'))
+            ->groupBy('bank_id')
+            ->pluck('total_amount', 'bank_id');
+
         return view('moneyarea.banks.all' , [
             "banks" => $banks,
+            "bondTotals" => $bondTotals,
         ]);
     }
 
@@ -46,7 +57,7 @@ class BankController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function save(Request $request)
+    public function save(StoreBankRequest $request)
     {
         // P4 ledger bypass fix: a newly created bank previously started
         // with zero ledger history, so accounting:reconcile would list it
@@ -102,7 +113,7 @@ class BankController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request)
+    public function update(UpdateBankRequest $request)
     {
         $id = (int) $request->id;
 
