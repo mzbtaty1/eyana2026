@@ -11,14 +11,16 @@
          <div class="card-body">
             <form action="{{route('site.expenses_save')}}" method="POST" autocomplete="off">
                @csrf
-         
-                
+               @if($errors->any())
+               <div class="alert alert-info"><i class="ri-file-info-line"></i> {{$errors->first()}}</div>
+               @endif
                <div class="row">
                   <div class="">
                      <p>
                         اسم المصروف
                      </p>
-                     <input type="text" name="name" value="" placeholder="اسم المصروف" class="form-control" style="text-align:right;" required="">
+                     <input type="text" name="name" value="{{old('name')}}" placeholder="اسم المصروف" class="form-control @error('name') is-invalid @enderror" style="text-align:right;" required="">
+                     @error('name') <div class="invalid-feedback">{{$message}}</div> @enderror
                   </div>
 <!--
                   <div class="col-6">
@@ -73,13 +75,15 @@
                      <p>
                         الرصيد الافتتاحي المدين
                      </p>
-                     <input type="text" name="debit_opening_balance" inputmode="numeric" oninput="this.value = this.value.replace(/\D+/g, '')" value="0" placeholder="الرصيد الافتتاحي المدين" class="form-control" style="text-align:right;" required="">
+                     <input type="text" name="debit_opening_balance" inputmode="numeric" oninput="this.value = this.value.replace(/\D+/g, '')" value="{{old('debit_opening_balance', '0')}}" placeholder="الرصيد الافتتاحي المدين" class="form-control @error('debit_opening_balance') is-invalid @enderror" style="text-align:right;" required="">
+                     @error('debit_opening_balance') <div class="invalid-feedback">{{$message}}</div> @enderror
                   </div>
                   <div class="col-6">
                      <p>
-                        رصيد افتتاحى الدائن 
+                        رصيد افتتاحى الدائن
                      </p>
-                     <input type="text" name="opening_credit_balance" inputmode="numeric" oninput="this.value = this.value.replace(/\D+/g, '')" value="0" placeholder="رصيد افتتاحى الدائن " class="form-control" style="text-align:right;">
+                     <input type="text" name="opening_credit_balance" inputmode="numeric" oninput="this.value = this.value.replace(/\D+/g, '')" value="{{old('opening_credit_balance', '0')}}" placeholder="رصيد افتتاحى الدائن " class="form-control @error('opening_credit_balance') is-invalid @enderror" style="text-align:right;">
+                     @error('opening_credit_balance') <div class="invalid-feedback">{{$message}}</div> @enderror
                   </div>
                </div>
                <div class="row">
@@ -87,19 +91,19 @@
                      <p>
                         الحالة
                      </p>
-                     <select name="status" class="form-control" style="text-align:right;" required="">
-                         <option value="1">مفعل</option>
-                     <option value="0">موقوف</option>
-                     
+                     <select name="status" class="form-control @error('status') is-invalid @enderror" style="text-align:right;" required="">
+                         <option value="1" @if(old('status')==='1') selected @endif>مفعل</option>
+                     <option value="0" @if(old('status')==='0') selected @endif>موقوف</option>
+
                      </select>
                   </div>
                   <div class="col-6">
                      <p>
                         النوع
                      </p>
-                     <select name="type" class="form-control" style="text-align:right;" required="">
-                     <option value="1">فرد</option>
-                     <option value="2">شركة</option>
+                     <select name="type" class="form-control @error('type') is-invalid @enderror" style="text-align:right;" required="">
+                     <option value="1" @if(old('type')==='1') selected @endif>فرد</option>
+                     <option value="2" @if(old('type')==='2') selected @endif>شركة</option>
                      </select>
                   </div>
                </div>

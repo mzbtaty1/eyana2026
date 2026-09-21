@@ -6,9 +6,11 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Auth;
 use Redirect;
+use App\Http\Requests\StoreCollectorRequest;
+use App\Http\Requests\UpdateCollectorRequest;
 use App\Models\{
     Supplier,
-    Invoice, 
+    Invoice,
     TicketUser,
     TicketVendor,
     Airline,
@@ -43,7 +45,7 @@ class CollectorsController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function save(Request $request)
+    public function save(StoreCollectorRequest $request)
     {
         $create_bank = Collector::create([
             "name" => $request->name,
@@ -78,7 +80,7 @@ class CollectorsController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request)
+    public function update(UpdateCollectorRequest $request)
     {
         $id = (int) $request->id;
         $check_bank = Collector::select('*')->where('id',$id)->get();

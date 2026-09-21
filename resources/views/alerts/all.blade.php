@@ -35,12 +35,17 @@
                      <td>{{$alert->alert_txt}}</td>
                     
                      <td>
-                     
-                        <a href="#Removecustomer" onclick="Removecustomer({{$alert->id}})">
-                        <button class="btn btn-soft-danger btn-sm dropdown" type="button" style="font-size: 16px;">
-                        <i class="ri-delete-bin-line align-middle"></i>
+                        <a href="{{route('site.alerts_edit' , $alert->id)}}">
+                        <button class="btn btn-soft-secondary btn-sm dropdown" type="button" style="font-size: 16px;">
+                        <i class="ri-edit-2-line align-middle"></i>
                         </button>
                         </a>
+                        <form id="delete-form-{{$alert->id}}" action="{{route('site.alerts_delete', $alert->id)}}" method="POST" style="display:none;">
+                           @csrf
+                        </form>
+                        <button class="btn btn-soft-danger btn-sm dropdown" type="button" style="font-size: 16px;" onclick="confirmDeleteForm('delete-form-{{$alert->id}}', 'هل انت متأكد؟', 'سيتم حذف ذلك الاشعار وازالة كل البيانات المرتبطه به')">
+                        <i class="ri-delete-bin-line align-middle"></i>
+                        </button>
                      </td>
                   </tr>
                   @endforeach
@@ -51,28 +56,4 @@
    </div>
    <!--end col-->
 </div>
-<script>
-function Removecustomer(id){
-    
-      swal({
-     title: "هل انت متأكد؟",
-     text: "سيتم حذف ذلك الاشعار وازالة كل البيانات المرتبطه به",
-     icon: "warning",
-     buttons: true,
-     dangerMode: true,
-   })
-   .then((willDelete) => {
-     if (willDelete) {
-   //       var url = "http://teacher.cuoratech.com/aladmin_srp/sections/" + id + "/remove";
-   var url = "{{url('')}}/alerts/" + id + "/delete";
-//                     alert(url);
-         window.location.href = url;
-         
-     } else {
-       swal("تم الغاء عملية الحذف بنجاح");
-     }
-   });
-    
-}
-</script>
 @endsection

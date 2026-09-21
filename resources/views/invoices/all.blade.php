@@ -87,23 +87,23 @@
         <td class="{{$bg}}" style="{{$style}}">{{$invoice->invoice_travel_date}}</td>
         <td class="{{$bg}}" style="{{$style}}">
             <?php
-                $vendors = App\Models\TicketVendor::where('ticket_system_id' , $invoice->ticket_system_id)->get();
+                $vendors = $invoice->ticketVendors;
             ?>
             @foreach($vendors as $vendor)
                 <?php
-                    $vendor_info = App\Models\Supplier::find($vendor->vendor_id);
+                    $vendor_info = $vendor->supplier;
                 ?>
-                {{$vendor_info->name}} /
+                {{$vendor_info->name ?? ''}} /
             @endforeach
         </td>
         <td class="{{$bg}}" style="{{$style}}">
             <?php
-                $ben_info = App\Models\Supplier::find($invoice->invoice_beneficiaries);
+                $ben_info = $invoice->beneficiaries;
             ?>
             {{$ben_info->name ?? ''}}
         </td>
         <?php
-            $users = App\Models\TicketUser::where('ticket_system_id' , $invoice->ticket_system_id)->get();
+            $users = $invoice->users;
             $total_client_net_pice = 0;
             $total_client_bought_price = 0;
             foreach($users as $user){
@@ -113,8 +113,8 @@
         ?>
         @if($result == "FLY-RD")
             <?php
-                $mostarad = App\Models\AccountStatement::where('es_id',$invoice->es_id)->where('credit_balance',0)->first();
-                $mortaga = App\Models\AccountStatement::where('es_id',$invoice->es_id)->where('debit_balance',0)->first();
+                $mostarad = $invoice->mostarad;
+                $mortaga = $invoice->mortaga;
             ?>
             <td class="{{$bg}}" style="{{$style}}">{{ (float)($mostarad->debit_balance ?? 0) }}</td>
             <td class="{{$bg}}" style="{{$style}}">{{ (float)($mortaga->credit_balance ?? 0) }}</td>
@@ -185,7 +185,7 @@
         </td>
         <td class="{{$bg}}" style="{{$style}}">
             <?php
-                $mem_info = App\Models\User::find($invoice->invoice_create_by);
+                $mem_info = $invoice->creator;
             ?>
             {{$mem_info->name ?? ''}}
         </td>
@@ -257,32 +257,8 @@
         }
     },
 });
-        </script>  
+        </script>
 <script>
-function Removecustomer(id){
-    
-      swal({
-     title: "هل انت متأكد؟",
-     text: "سيتم حذف ذلك الفاتورة وازالة كل البيانات المرتبطه بها",
-     icon: "warning",
-     buttons: true,
-     dangerMode: true,
-   })
-   .then((willDelete) => {
-     if (willDelete) {
-   //       var url = "http://teacher.cuoratech.com/aladmin_srp/sections/" + id + "/remove";
-   var url = "{{url('')}}/customers/" + id + "/delete";
-//                     alert(url);
-         window.location.href = url;
-         
-     } else {
-       swal("تم الغاء عملية الحذف بنجاح");
-     }
-   });
-    
-}
-    
-    
          function do_approved(id){
 //          alert(id);
           

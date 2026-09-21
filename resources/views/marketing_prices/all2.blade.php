@@ -27,7 +27,7 @@ use Carbon\Carbon;
 
                 
                 <?php
-                $MarketingPrices0 = App\Models\MarketingPrice::select('*')->where('title',$title->id)->orderBy('travel_date' , 'ASC')->get();
+                $MarketingPrices0 = $pricesByTitle[$title->id] ?? collect();
                 ?>
                 
                <thead>
@@ -99,48 +99,24 @@ $diff = $date->diffInSeconds($now);
                         <i class="ri-edit-2-line align-middle"></i>
                         </button>
                         </a> 
-                          <a href="#Removeairline" onclick="Removeairline({{$MarketingPrice->id}})">
-                        <button class="btn btn-soft-danger btn-sm dropdown" type="button" style="font-size: 16px;">
+                          <form id="delete-form-{{$MarketingPrice->id}}" action="{{route('site.marketing_prices_delete', $MarketingPrice->id)}}" method="POST" style="display:none;">
+                             @csrf
+                          </form>
+                        <button class="btn btn-soft-danger btn-sm dropdown" type="button" style="font-size: 16px;" onclick="confirmDeleteForm('delete-form-{{$MarketingPrice->id}}', 'هل انت متأكد؟', 'سيتم حذف قائمة الاسعار وازالة كل البيانات المرتبطه به')">
                         <i class="ri-delete-bin-line align-middle"></i>
                         </button>
-                        </a>
                       </td>
                   </tr>
                   @endforeach
                   @endforeach
                </tbody>
             </table>
-   
+
           </div>
       </div>
    </div>
    <!--end col-->
 </div>
-
-<script>
-function Removeairline(id){
-    
-      swal({
-     title: "هل انت متأكد؟",
-     text: "سيتم حذف قائمة الاسعار وازالة كل البيانات المرتبطه به",
-     icon: "warning",
-     buttons: true,
-     dangerMode: true,
-   })
-   .then((willDelete) => {
-     if (willDelete) {
-   //       var url = "http://teacher.cuoratech.com/aladmin_srp/sections/" + id + "/remove";
-   var url = "{{url('')}}/marketing-prices/" + id + "/delete";
-//                     alert(url);
-         window.location.href = url;
-         
-     } else {
-       swal("تم الغاء عملية الحذف بنجاح");
-     }
-   });
-    
-}
-</script>
 
   <script>
        let table = new DataTable('#InvoicesTable', {

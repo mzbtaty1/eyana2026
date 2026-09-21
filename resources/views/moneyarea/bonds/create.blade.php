@@ -59,7 +59,9 @@ $(document).ready(function() {
          <div class="card-body">
             <form action="{{route('site.bonds_save')}}" method="POST" autocomplete="off" enctype='multipart/form-data'>
                @csrf
-         
+               @if($errors->any())
+               <div class="alert alert-danger"><i class="ri-file-info-line"></i> {{$errors->first()}}</div>
+               @endif
                 <input type="hidden" name="type_slctd" id="type_slctd" value="">
               
        

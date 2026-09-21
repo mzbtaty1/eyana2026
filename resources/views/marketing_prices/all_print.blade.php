@@ -57,11 +57,7 @@
 
                 
                 <?php
-                $MarketingPrices0 = App\Models\MarketingPrice::select('*')->where('title',$title->id)->orderBy('travel_date' , 'ASC')->get();
-                
-//                $MarketingPrices0 = MarketingPrice::select('*')->get();
-$MarketingPrices0 = $MarketingPrices0->unique('travel_date');
-                
+                $MarketingPrices0 = ($pricesByTitle[$title->id] ?? collect())->unique('travel_date');
                 ?>
                 
                <thead>

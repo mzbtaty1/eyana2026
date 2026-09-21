@@ -7,6 +7,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Auth;
 use Redirect;
+use App\Http\Requests\StoreBondRequest;
+use App\Http\Requests\UpdateBondRequest;
 use App\Models\{
     Supplier,
     Invoice,
@@ -22,6 +24,7 @@ use App\Models\{
     SubStorage,
     Bond,
     Collector,
+    User,
 };
 
 class BondsController extends Controller
@@ -32,8 +35,32 @@ class BondsController extends Controller
     public function index()
     {
         $bonds = Bond::select('*')->orderBy('id','DESC')->get();
-//        dd($bonds);
-        return view('moneyarea.bonds.all' , ["bonds" => $bonds]);
+
+        // Batched replacement for what used to be up to 5 per-row lookup
+        // queries (Storage/Supplier for from_account+to_account, SubStorage,
+        // Bank, Collector, User) executed inline in the Blade view, once per
+        // bond. Same conditions as the view previously used per row.
+        $storageIds = $bonds->where('from_type', 'storage')->pluck('from_account')
+            ->merge($bonds->where('to_type', 'storage')->pluck('to_account'))
+            ->filter()->unique();
+        $supplierIds = $bonds->where('from_type', '!=', 'storage')->pluck('from_account')
+            ->merge($bonds->where('to_type', '!=', 'storage')->pluck('to_account'))
+            ->filter()->unique();
+        $subStorageIds = $bonds->pluck('sub_id')->filter(fn ($v) => (int) $v !== 0)->unique();
+        $bankIds = $bonds->where('money_way', 2)->pluck('bank_id')->filter()->unique();
+        $collectorIds = $bonds->filter(fn ($b) => $b->money_way != 1 && $b->money_way != 2)
+            ->pluck('collector_info')->filter()->unique();
+        $userIds = $bonds->pluck('created_by')->filter()->unique();
+
+        return view('moneyarea.bonds.all' , [
+            "bonds" => $bonds,
+            "bondStorages" => Storage::whereIn('id', $storageIds)->get()->keyBy('id'),
+            "bondSuppliers" => Supplier::whereIn('id', $supplierIds)->get()->keyBy('id'),
+            "bondSubStorages" => SubStorage::whereIn('id', $subStorageIds)->get()->keyBy('id'),
+            "bondBanks" => Bank::whereIn('id', $bankIds)->get()->keyBy('id'),
+            "bondCollectors" => Collector::whereIn('id', $collectorIds)->get()->keyBy('id'),
+            "bondUsers" => User::whereIn('id', $userIds)->get()->keyBy('id'),
+        ]);
     }
  public function daily_report()
     {
@@ -82,7 +109,7 @@ class BondsController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function save(Request $request)
+    public function save(StoreBondRequest $request)
     {
 //        dd($request);
         
@@ -577,7 +604,7 @@ if ($request->money_way2 == 2) {
     /**
      * Update the specified resource in storage.
      */
-    public function save_update(Request $request)
+    public function save_update(UpdateBondRequest $request)
     {
        $id = (int) $request->bond_id;
           $check_bond = Bond::select('*')->where('id',$id)->get();

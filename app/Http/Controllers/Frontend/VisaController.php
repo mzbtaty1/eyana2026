@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Auth;
 use Redirect;
+use App\Http\Requests\StoreVisaRequest;
+use App\Http\Requests\UpdateVisaRequest;
 use App\Models\{
     Visa,
     Log,
@@ -35,7 +37,7 @@ class VisaController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function save(Request $request)
+    public function save(StoreVisaRequest $request)
     {
         $create = Visa::create([
             "visa_name" => $request->visa_name,
@@ -82,7 +84,7 @@ class VisaController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request)
+    public function update(UpdateVisaRequest $request)
     {
         $id = (int) $request->id;
         $Visa_name = $request->Visa_name;

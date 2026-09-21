@@ -7,6 +7,10 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Auth;
 use Redirect;
+use App\Http\Requests\StoreStorageRequest;
+use App\Http\Requests\UpdateStorageRequest;
+use App\Http\Requests\StoreSubStorageRequest;
+use App\Http\Requests\UpdateSubStorageRequest;
 use App\Models\{
     Supplier,
     Invoice,
@@ -16,6 +20,7 @@ use App\Models\{
     AccountStatement,
     Log,
     Bank,
+    Bond,
     Storage,
     StorageStatement,
     SubStorage,
@@ -85,34 +90,53 @@ class StoragesController extends Controller
          
         
         $AccountStatements = $AccountStatements->get();
-        
-        
-        
-        
-//        $total_debit_balance = 0;
-//        foreach ($AccountStatements as $AccountStatement) {
-//            $total_debit_balance += $AccountStatement->debit_balance;
-//        }
-//        $total_credit_balance = 0;
-//        foreach ($AccountStatements as $AccountStatement) {
-//            $total_credit_balance += $AccountStatement->credit_balance;
-//        }
+
+        // Batched replacement for what used to be up to 6 per-row lookup
+        // queries (Invoice-or-Bond by es_id, TicketUser, Storage,
+        // Bank-or-Collector, User) executed inline in the Blade view, once
+        // per statement row. Same conditions/branching the view used to
+        // evaluate per row -- resolved here from pre-fetched keyed
+        // collections instead.
+        $esIds = $AccountStatements->pluck('es_id')->filter()->unique();
+        $invoicesByEsId = Invoice::whereIn('es_id', $esIds)->get()->keyBy('es_id');
+        $bondsByEsId = Bond::whereIn('es_id', $esIds)->get()->keyBy('es_id');
+
+        $ticketSystemIds = $invoicesByEsId->pluck('ticket_system_id')->filter()->unique();
+        $usersByTicketSystemId = TicketUser::whereIn('ticket_system_id', $ticketSystemIds)->get()->groupBy('ticket_system_id');
+
+        $storageIds = $AccountStatements->pluck('supp_client_id')->filter()->unique();
+        $storagesById = Storage::whereIn('id', $storageIds)->get()->keyBy('id');
+
+        $bankIds = $bondsByEsId->where('money_way', 2)->pluck('bank_id')->filter()->unique();
+        $banksById = Bank::whereIn('id', $bankIds)->get()->keyBy('id');
+
+        $collectorIds = $bondsByEsId->filter(fn ($b) => $b->money_way != 1 && $b->money_way != 2)
+            ->pluck('collector_info')->filter()->unique();
+        $collectorsById = \App\Models\Collector::whereIn('id', $collectorIds)->get()->keyBy('id');
+
+        $addedByIds = $AccountStatements->pluck('added_by')->filter()->unique();
+        $usersById = \App\Models\User::whereIn('id', $addedByIds)->get()->keyBy('id');
 
         return view('moneyarea.storages.acc_all', [
             "AccountStatements" => $AccountStatements,
             "storage_info" => $storage_info,
             "st" => $st,
-            
+            "invoicesByEsId" => $invoicesByEsId,
+            "bondsByEsId" => $bondsByEsId,
+            "usersByTicketSystemId" => $usersByTicketSystemId,
+            "storagesById" => $storagesById,
+            "banksById" => $banksById,
+            "collectorsById" => $collectorsById,
+            "usersById" => $usersById,
+
 "storage_id" => $request->storage_id,
 "date_from" => $request->date_from,
 "date_to" => $request->date_to,
 "transaction_type" => $request->transaction_type,
-//            "total_debit_balance" => $total_debit_balance,
-//            "total_credit_balance" => $total_credit_balance,
         ]);
-        
-        
-        
+
+
+
     }
     
     public function stor_acc_print($storage_id , $date_from = null , $date_to = null , $transaction_type = null){
@@ -184,7 +208,7 @@ class StoragesController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function save(Request $request)
+    public function save(StoreStorageRequest $request)
     {
         // P4 ledger bypass fix: a newly created storage previously started
         // with zero ledger history, so accounting:reconcile would list it
@@ -225,7 +249,7 @@ class StoragesController extends Controller
         return redirect()->route('site.storages');
 
     }
- public function sub_save(Request $request)
+ public function sub_save(StoreSubStorageRequest $request)
     {
         $create = SubStorage::create([
 "main_storage" => $request->main_storage,
@@ -300,7 +324,7 @@ class StoragesController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request)
+    public function update(UpdateStorageRequest $request)
     {
 //        dd($request);
         $id = (int) $request->id;
@@ -354,7 +378,7 @@ class StoragesController extends Controller
         return redirect()->route('site.storages_edit' , $id);
 
     }
-  public function sub_update(Request $request)
+  public function sub_update(UpdateSubStorageRequest $request)
     {
 //        dd($request);
         $id = (int) $request->id;
@@ -399,40 +423,40 @@ class StoragesController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function delete($id)
+    public function delete(Request $request, $id)
     {
               $check_storage = Storage::select('*')->where('id',$id)->get();
         abort_if(count($check_storage) == 0 , 404);
         $storage_info = $check_storage[0];
-        
-        
-          
+
+
+
            $save_log = Log::create([
             "log_txt" => "تم حذف بيانات الخزينة $storage_info->name",
             "log_ip" => $request->ip(),
             "log_by" => Auth::user()->id,
             "log_date" => date('Y-m-d'),
         ]);
-        
-        
-        
+
+
+
         $delete = Storage::select('*')->where('id',$id)->delete();
         return redirect()->route('site.storages');
     }
-    public function sub_delete($id)
+    public function sub_delete(Request $request, $id)
     {
               $check_storage = SubStorage::select('*')->where('id',$id)->get();
         abort_if(count($check_storage) == 0 , 404);
         $storage_info = $check_storage[0];
-        
-          
+
+
            $save_log = Log::create([
             "log_txt" => "تم حذف بيانات الخزينة الفرعية $storage_info->name",
             "log_ip" => $request->ip(),
             "log_by" => Auth::user()->id,
             "log_date" => date('Y-m-d'),
         ]);
-        
+
         $delete = SubStorage::select('*')->where('id',$id)->delete();
         return redirect()->route('site.sub_storages');
     }

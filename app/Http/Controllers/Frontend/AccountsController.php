@@ -6,8 +6,8 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Auth;
 use Redirect;
-use App\Models\{Supplier, Invoice, TicketUser, TicketVendor, Airline, AccountStatement, Log , Bond};
-use App\Exports\AccountatExport; 
+use App\Models\{Supplier, Invoice, TicketUser, TicketVendor, Airline, AccountStatement, Log , Bond, Bank, Collector, SubStorage, User};
+use App\Exports\AccountatExport;
 //use App\Imports\ImportProduct;
 use DB;
 use Maatwebsite\Excel\Facades\Excel;
@@ -93,22 +93,54 @@ class AccountsController extends Controller
             $total_credit_balance += $AccountStatement->credit_balance;
         }
 
+        // Batched replacement for what used to be up to 7 per-row lookup
+        // queries (Bond-or-Invoice by es_id, TicketUser, Bank-or-Collector,
+        // SubStorage, User) executed inline in the Blade view, once per
+        // statement row. Same conditions the view used to evaluate per row.
+        $esIds = $AccountStatements->pluck('es_id')->filter()->unique();
+        $bondsByEsId = Bond::whereIn('es_id', $esIds)->get()->keyBy('es_id');
+        $invoicesByEsId = Invoice::whereIn('es_id', $esIds)->get()->keyBy('es_id');
+
+        $ticketSystemIds = $invoicesByEsId->pluck('ticket_system_id')->filter()->unique();
+        $usersByTicketSystemId = TicketUser::whereIn('ticket_system_id', $ticketSystemIds)->get()->groupBy('ticket_system_id');
+
+        $bankIds = $bondsByEsId->where('money_way', 2)->pluck('bank_id')->filter()->unique();
+        $banksById = Bank::whereIn('id', $bankIds)->get()->keyBy('id');
+
+        $collectorIds = $bondsByEsId->filter(fn ($b) => $b->money_way != 1 && $b->money_way != 2)
+            ->pluck('collector_info')->filter()->unique();
+        $collectorsById = Collector::whereIn('id', $collectorIds)->get()->keyBy('id');
+
+        $subIds = $AccountStatements->filter(fn ($a) => $a->trans_storage == 1 && (int) $a->sub_id !== 0)
+            ->pluck('sub_id')->filter()->unique();
+        $subStoragesById = SubStorage::whereIn('id', $subIds)->get()->keyBy('id');
+
+        $addedByIds = $AccountStatements->pluck('added_by')->filter()->unique();
+        $usersById = User::whereIn('id', $addedByIds)->get()->keyBy('id');
+
         return view('accounts_statement.show', [
             "AccountStatements" => $AccountStatements,
             "supplier" => $supplier,
             "total_debit_balance" => $total_debit_balance,
             "total_credit_balance" => $total_credit_balance,
             "st" => $st,
-            
-            
+            "bondsByEsId" => $bondsByEsId,
+            "invoicesByEsId" => $invoicesByEsId,
+            "usersByTicketSystemId" => $usersByTicketSystemId,
+            "banksById" => $banksById,
+            "collectorsById" => $collectorsById,
+            "subStoragesById" => $subStoragesById,
+            "usersById" => $usersById,
+
+
 "invoice_beneficiaries" => $request->invoice_beneficiaries,
 "date_from" => $request->date_from,
 "date_to" => $request->date_to,
 "transaction_type" => $request->transaction_type,
-            
+
         ]);
-        
-        
+
+
     }
     
     public function accounts_statement_print_all($invoice_beneficiaries , $date_from = null , $date_to = null , $transaction_type = null){

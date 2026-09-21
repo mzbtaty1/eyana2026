@@ -12,12 +12,14 @@
             <form action="{{route('site.airlines_update')}}" method="POST" autocomplete="off">
                @csrf
          <input type="hidden" name="id" value="{{$airline->id}}">
-                
+               @if($errors->any())
+               <div class="alert alert-info"><i class="ri-file-info-line"></i> {{$errors->first()}}</div>
+               @endif
                <p>
                     اسم خط الطيران
                      </p>
-                     <input type="text" name="airline_name" value="{{$airline->airline_name}}" placeholder="اسم خط الطيران" class="form-control" style="text-align:right;" required="">
-                  
+                     <input type="text" name="airline_name" value="{{old('airline_name', $airline->airline_name)}}" placeholder="اسم خط الطيران" class="form-control @error('airline_name') is-invalid @enderror" style="text-align:right;" required="">
+                     @error('airline_name') <div class="invalid-feedback">{{$message}}</div> @enderror
                 <br>
                 
                <div class="d-grid gap-2">

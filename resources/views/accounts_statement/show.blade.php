@@ -126,17 +126,13 @@ $url2 = route('site.accounts_statement_print_excel' , [
     $bond = null;
 
     if($AccountStatement->trans_storage == 1){
-        $ticket_info_result = App\Models\Bond::select('*')->where('es_id' , $AccountStatement->es_id)->get();
-        if(count($ticket_info_result) > 0){
-            $ticket_info = $ticket_info_result[0];
-        }
+        $ticket_info = $bondsByEsId[$AccountStatement->es_id] ?? null;
         $bond = $ticket_info;
     }else{
         if($AccountStatement->is_supp_account == 0){
-            $ticket_info_result = App\Models\Invoice::select('*')->where('es_id' , $AccountStatement->es_id)->get();
-            if(count($ticket_info_result) > 0){
-                $ticket_info = $ticket_info_result[0];
-                $users = App\Models\TicketUser::select('*')->where('ticket_system_id' , $ticket_info->ticket_system_id)->get();
+            $ticket_info = $invoicesByEsId[$AccountStatement->es_id] ?? null;
+            if($ticket_info){
+                $users = $usersByTicketSystemId[$ticket_info->ticket_system_id] ?? collect();
             }
         }
     }
@@ -234,8 +230,7 @@ $url2 = route('site.accounts_statement_print_excel' , [
                 @elseif($bond->money_way == 2)
                     تحويل بنكي
                     <?php
-                    $bank_info_result = App\Models\Bank::select('*')->where('id',$bond->bank_id)->get();
-                    $bank_info = count($bank_info_result) > 0 ? $bank_info_result[0] : null;
+                    $bank_info = $banksById[$bond->bank_id] ?? null;
                     ?>
                     @if($bank_info)
                         {{$bank_info->bank_name}}
@@ -243,8 +238,7 @@ $url2 = route('site.accounts_statement_print_excel' , [
                 @else
                     تحصيل من المندوب :
                     <?php
-                    $collector_info_result = App\Models\Collector::select('*')->where('id',$bond->collector_info)->get();
-                    $collector_info = count($collector_info_result) > 0 ? $collector_info_result[0] : null;
+                    $collector_info = $collectorsById[$bond->collector_info] ?? null;
                     ?>
                     @if($collector_info)
                         {{$collector_info->name}}
@@ -257,8 +251,7 @@ $url2 = route('site.accounts_statement_print_excel' , [
                 <br>
                 <?php
                 $sub_id = (int) $AccountStatement->sub_id;
-                $min_info_result = App\Models\SubStorage::select('*')->where('id' , $sub_id)->get();
-                $min_info3 = count($min_info_result) > 0 ? $min_info_result[0] : null;
+                $min_info3 = $subStoragesById[$sub_id] ?? null;
                 ?>
                 @if($min_info3)
                     خزينة فرعية : <b>{{$min_info3->name}}</b>
@@ -272,8 +265,7 @@ $url2 = route('site.accounts_statement_print_excel' , [
 
         <td style="text-align: right;">
             <?php
-            $mem_result = App\Models\User::select('*')->where('id',$AccountStatement->added_by)->get();
-            $mem = count($mem_result) > 0 ? $mem_result[0] : null;
+            $mem = $usersById[$AccountStatement->added_by] ?? null;
             ?>
             @if($mem)
                 {{$mem->name}}

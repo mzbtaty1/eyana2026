@@ -33,6 +33,7 @@ $rname = Route::currentRouteName();
       <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
       <meta name="csrf-token" content="{{csrf_token()}}">
       <meta http-equiv="Pragma" content="no-cache" />
+      <script>window.MAPBOX_TOKEN = @json(config('services.mapbox.token'));</script>
       <!-- App favicon -->
       <link rel="shortcut icon" href="{{asset('assets/images/favicon.ico')}}">
       <!-- jsvectormap css -->  
@@ -632,13 +633,31 @@ $rname = Route::currentRouteName();
    <script src="{{asset('assets/js/app.js')}}"></script>
   
    <script>
-//      let table = new DataTable('#myTable', {
-//      responsive: true,
-//          
-//      });
-//         $.fn.dataTable.ext.errMode = 'none';
-         
-         
+      if (document.getElementById('myTable')) {
+         let table = new DataTable('#myTable', {
+            responsive: true,
+         });
+      }
+      $.fn.dataTable.ext.errMode = 'none';
+
+      // Shared delete-confirmation helper: submits a hidden CSRF-protected POST form
+      // instead of navigating a bare GET link, after a SweetAlert confirmation.
+      function confirmDeleteForm(formId, title, text) {
+         swal({
+            title: title || "هل انت متأكد؟",
+            text: text || "لا يمكن التراجع عن هذا الإجراء",
+            icon: "warning",
+            buttons: true,
+            dangerMode: true,
+         }).then((willDelete) => {
+            if (willDelete) {
+               document.getElementById(formId).submit();
+            } else {
+               swal("تم الغاء عملية الحذف بنجاح");
+            }
+         });
+      }
+
           var select_box_element = document.querySelector('#select_box');
           var select_box_element2 = document.querySelector('#select_box2');
           var select_box_element3 = document.querySelector('#select_box3');

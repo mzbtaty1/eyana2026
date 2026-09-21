@@ -116,7 +116,11 @@
                         <tbody>
 
                     @php
-$invoices = Invoice::with(['users', 'accountStatements'])->get();
+$invoicesQuery = Invoice::with(['users', 'accountStatements']);
+if (isset($date_from) && isset($date_to)) {
+    $invoicesQuery = $invoicesQuery->whereBetween('invoice_date', [$date_from, $date_to]);
+}
+$invoices = $invoicesQuery->get();
                     @endphp
                  @foreach($invoices as $invoice)
     @php

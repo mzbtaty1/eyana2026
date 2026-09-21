@@ -7,6 +7,8 @@ use Illuminate\Http\Request;
 use Auth;
 use App\Models\User;
 use App\Models\Password;
+use App\Http\Requests\StorePasswordRequest;
+use App\Http\Requests\UpdatePasswordEntryRequest;
 class UserController extends Controller
 {
     /**
@@ -24,18 +26,51 @@ public function password ()
     }
 public function password_create  ()
     {
-    
+
         return view('passwords.create');
     }
-public function password_save  (Request $request)
+public function password_save  (StorePasswordRequest $request)
     {
-    
+
         $create = Password::create([
             "url" => $request->url,
             "user" => $request->user,
             "pass" => $request->pass,
         ]);
     return redirect()->route('site.password');
+    }
+
+    public function password_edit($id)
+    {
+        $password = Password::select('*')->where('id', $id)->get();
+        abort_if(count($password) == 0, 404);
+
+        return view('passwords.edit', ['password_info' => $password[0]]);
+    }
+
+    public function password_update(UpdatePasswordEntryRequest $request)
+    {
+        $id = (int) $request->id;
+        $password = Password::select('*')->where('id', $id)->get();
+        abort_if(count($password) == 0, 404);
+
+        Password::where('id', $id)->update([
+            "url" => $request->url,
+            "user" => $request->user,
+            "pass" => $request->pass,
+        ]);
+
+        return redirect()->route('site.password');
+    }
+
+    public function password_delete($id)
+    {
+        $password = Password::select('*')->where('id', $id)->get();
+        abort_if(count($password) == 0, 404);
+
+        Password::where('id', $id)->delete();
+
+        return redirect()->route('site.password');
     }
 
     /**

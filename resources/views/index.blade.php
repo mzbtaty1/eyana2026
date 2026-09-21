@@ -132,13 +132,7 @@
                   @php $x = 1; @endphp
                   @foreach($allSuppliers as $supplier)
                   @php
-                     $trsnactions = \App\Models\AccountStatement::where('supp_client_id', $supplier->id)
-                         ->where('is_storage', '!=', 1)
-                         ->get();
-
-                     $total_credit = $trsnactions->sum('credit_balance');
-                     $total_debit = $trsnactions->sum('debit_balance');
-                     $balance = $total_debit - $total_credit;
+                     $balance = $suppliersBalances[$supplier->id] ?? 0;
                      $show_alert = $supplier->limit_balance > 0 && $balance > $supplier->limit_balance;
                   @endphp
 

@@ -14,30 +14,33 @@
                <input type="hidden" value="{{$supplier->id}}" name="id">
                       @if($errors->any())
 <div class="alert alert-info"><i class="ri-file-info-line"></i> {{$errors->first()}}</div>
-@endif 
+@endif
                <div class="row">
                   <div class="">
                      <p>
                         اسم المصروف
                      </p>
-                     <input type="text" name="name" value="{{$supplier->name}}" placeholder="" class="form-control" style="text-align:right;" required="">
+                     <input type="text" name="name" value="{{old('name', $supplier->name)}}" placeholder="" class="form-control @error('name') is-invalid @enderror" style="text-align:right;" required="">
+                     @error('name') <div class="invalid-feedback">{{$message}}</div> @enderror
                   </div>
-                  
+
                </div>
-              
-                
+
+
                <div class="row">
                   <div class="col-6 mb-3">
                      <p>
                         الرصيد الافتتاحي المدين
                      </p>
-                     <input type="text" name="debit_opening_balance" inputmode="numeric" oninput="this.value = this.value.replace(/\D+/g, '')" value="{{$supplier->debit_opening_balance}}" placeholder="" class="form-control" style="text-align:right;" required="">
+                     <input type="text" name="debit_opening_balance" inputmode="numeric" oninput="this.value = this.value.replace(/\D+/g, '')" value="{{old('debit_opening_balance', $supplier->debit_opening_balance)}}" placeholder="" class="form-control @error('debit_opening_balance') is-invalid @enderror" style="text-align:right;" required="">
+                     @error('debit_opening_balance') <div class="invalid-feedback">{{$message}}</div> @enderror
                   </div>
                   <div class="col-6">
                      <p>
-                        رصيد افتتاحى الدائن 
+                        رصيد افتتاحى الدائن
                      </p>
-                     <input type="text" name="opening_credit_balance" inputmode="numeric" oninput="this.value = this.value.replace(/\D+/g, '')" value="{{$supplier->opening_credit_balance}}" placeholder="" class="form-control" style="text-align:right;">
+                     <input type="text" name="opening_credit_balance" inputmode="numeric" oninput="this.value = this.value.replace(/\D+/g, '')" value="{{old('opening_credit_balance', $supplier->opening_credit_balance)}}" placeholder="" class="form-control @error('opening_credit_balance') is-invalid @enderror" style="text-align:right;">
+                     @error('opening_credit_balance') <div class="invalid-feedback">{{$message}}</div> @enderror
                   </div>
                </div>
              

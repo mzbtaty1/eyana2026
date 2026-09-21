@@ -21,21 +21,23 @@
          <div class="card-body">
       
               <form action="{{route('site.password_save')}}" method="POST" autocomplete="off">
-               @csrf       
-           
+               @csrf
+               @if($errors->any())
+               <div class="alert alert-info"><i class="ri-file-info-line"></i> {{$errors->first()}}</div>
+               @endif
                 <p style="text-align: right;"> رابط الموقع</p>
-               <input type="text" name="url" class="form-control" style="text-align:right;" value="" required="" autocomplete="off">
-           
+               <input type="text" name="url" class="form-control @error('url') is-invalid @enderror" style="text-align:right;" value="{{old('url')}}" required="" autocomplete="off">
+               @error('url') <div class="invalid-feedback">{{$message}}</div> @enderror
                <br>
-                
+
                 <p style="text-align: right;"> البريد الالكتروني / اسم الدخول</p>
-               <input type="text" name="user" class="form-control" style="text-align:right;" value="" required="" autocomplete="off">
-           
+               <input type="text" name="user" class="form-control @error('user') is-invalid @enderror" style="text-align:right;" value="{{old('user')}}" required="" autocomplete="off">
+               @error('user') <div class="invalid-feedback">{{$message}}</div> @enderror
                <br>
-                
+
                  <p style="text-align: right;"> كلمة السر</p>
-               <input type="text" name="pass" class="form-control" style="text-align:right;" value="" required="" autocomplete="off">
-           
+               <input type="password" name="pass" class="form-control @error('pass') is-invalid @enderror" style="text-align:right;" value="{{old('pass')}}" required="" autocomplete="new-password">
+               @error('pass') <div class="invalid-feedback">{{$message}}</div> @enderror
                <br>
                 
                 
