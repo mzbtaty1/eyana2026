@@ -52,11 +52,12 @@
                         <i class="ri-edit-2-line align-middle"></i>
                         </button>
                </a>
-                  <a href="#" onclick="Removeairline({{$visa->id}})">
-                  <button class="btn btn-soft-danger btn-sm dropdown" type="button" style="font-size: 16px;">
+                  <form id="delete-form-{{$visa->id}}" action="{{route('site.visas_delete', $visa->id)}}" method="POST" style="display:none;">
+                     @csrf
+                  </form>
+                  <button class="btn btn-soft-danger btn-sm dropdown" type="button" style="font-size: 16px;" onclick="confirmDeleteForm('delete-form-{{$visa->id}}', 'هل انت متأكد؟', 'سيتم حذف ذلك التأشيرة وازالة كل البيانات المرتبطه به')">
                         <i class="ri-delete-bin-line align-middle"></i>
                         </button>
-                  </a>
                    @endif
                </td>
             </tr>
@@ -64,34 +65,10 @@
             @endforeach
       </tbody>
              </table>
-   
+
           </div>
       </div>
    </div>
    <!--end col-->
 </div>
-<script>
-function Removeairline(id){
-    
-      swal({
-     title: "هل انت متأكد؟",
-     text: "سيتم حذف ذلك التأشيرة وازالة كل البيانات المرتبطه به",
-     icon: "warning",
-     buttons: true,
-     dangerMode: true,
-   })
-   .then((willDelete) => {
-     if (willDelete) {
-   //       var url = "http://teacher.cuoratech.com/aladmin_srp/sections/" + id + "/remove";
-   var url = "{{url('')}}/visas/" + id + "/delete";
-//                     alert(url);
-         window.location.href = url;
-         
-     } else {
-       swal("تم الغاء عملية الحذف بنجاح");
-     }
-   });
-    
-}
-</script>
 @endsection

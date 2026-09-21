@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Auth;
 use Redirect;
+use App\Http\Requests\StoreExpenseRequest;
+use App\Http\Requests\UpdateExpenseRequest;
 use App\Models\{
     Supplier,
     Log,
@@ -37,7 +39,7 @@ class ExpensesController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function save(Request $request)
+    public function save(StoreExpenseRequest $request)
     {
 //        dd($request);
         $create = Supplier::create([
@@ -104,7 +106,7 @@ class ExpensesController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request)
+    public function update(UpdateExpenseRequest $request)
     {
         $id = (int) $request->id;
 //        dd($request);

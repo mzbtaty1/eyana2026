@@ -60,35 +60,35 @@ Route::middleware(['auth' , 'check_status'])->group(function(){
     Route::get('/customers/create', [CustomersController::class , 'create'])->name('site.customers_create');
     Route::post('/customers/save', [CustomersController::class , 'save'])->name('site.customers_save');
     Route::get('/customers/{id}', [CustomersController::class , 'edit'])->name('site.customers_edit');
-    Route::get('/customers/{id}/delete', [CustomersController::class , 'delete'])->name('site.customers_delete');
+    Route::post('/customers/{id}/delete', [CustomersController::class , 'delete'])->name('site.customers_delete');
     Route::post('/customers/update', [CustomersController::class , 'update'])->name('site.customers_update');
     
     Route::get('/alerts', [AlertsController::class , 'index'])->name('site.alerts');
     Route::get('/alerts/create', [AlertsController::class , 'create'])->name('site.alerts_create');
     Route::post('/alerts/save', [AlertsController::class , 'save'])->name('site.alerts_save');
     Route::get('/alerts/{id}', [AlertsController::class , 'edit'])->name('site.alerts_edit');
-    Route::get('/alerts/{id}/delete', [AlertsController::class , 'delete'])->name('site.alerts_delete');
+    Route::post('/alerts/{id}/delete', [AlertsController::class , 'delete'])->name('site.alerts_delete');
     Route::post('/alerts/update', [AlertsController::class , 'update'])->name('site.alerts_update');
     
     Route::get('/expenses', [ExpensesController::class , 'index'])->name('site.expenses');
     Route::get('/expenses/create', [ExpensesController::class , 'create'])->name('site.expenses_create');
     Route::post('/expenses/save', [ExpensesController::class , 'save'])->name('site.expenses_save');
     Route::get('/expenses/{id}', [ExpensesController::class , 'edit'])->name('site.expenses_edit');
-    Route::get('/expenses/{id}/delete', [ExpensesController::class , 'delete'])->name('site.expenses_delete');
+    Route::post('/expenses/{id}/delete', [ExpensesController::class , 'delete'])->name('site.expenses_delete');
     Route::post('/expenses/update', [ExpensesController::class , 'update'])->name('site.expenses_update');
     
     Route::get('/visas', [VisaController::class , 'index'])->name('site.visas');
     Route::get('/visas/create', [VisaController::class , 'create'])->name('site.visas_create');
     Route::post('/visas/save', [VisaController::class , 'save'])->name('site.visas_save');
     Route::get('/visas/{id}', [VisaController::class , 'edit'])->name('site.visas_edit');
-    Route::get('/visas/{id}/delete', [VisaController::class , 'delete'])->name('site.visas_delete');
+    Route::post('/visas/{id}/delete', [VisaController::class , 'delete'])->name('site.visas_delete');
     Route::post('/visas/update', [VisaController::class , 'update'])->name('site.visas_update');
     
     Route::get('/airlines', [AirlineController::class , 'index'])->name('site.airlines');
     Route::get('/airlines/create', [AirlineController::class , 'create'])->name('site.airlines_create');
     Route::post('/airlines/save', [AirlineController::class , 'save'])->name('site.airlines_save');
     Route::get('/airlines/{id}', [AirlineController::class , 'edit'])->name('site.airlines_edit');
-    Route::get('/airlines/{id}/delete', [AirlineController::class , 'delete'])->name('site.airlines_delete');
+    Route::post('/airlines/{id}/delete', [AirlineController::class , 'delete'])->name('site.airlines_delete');
     Route::post('/airlines/update', [AirlineController::class , 'update'])->name('site.airlines_update');
     
     Route::get('/invoices', [InvoicesController::class, 'index'])->name('site.invoices');
@@ -178,14 +178,14 @@ Route::middleware(['auth' , 'check_status'])->group(function(){
     
     Route::get('/marketing-prices' , [MarketingController::class , 'index'])->name('site.marketing_prices');
     Route::get('/marketing-prices/print' , [MarketingController::class , 'print_all'])->name('site.marketing_prices_print');
-    Route::get('/marketing-prices/{id}/delete' , [MarketingController::class , 'delete'])->name('site.marketing_prices_delete');
+    Route::post('/marketing-prices/{id}/delete' , [MarketingController::class , 'delete'])->name('site.marketing_prices_delete');
     Route::get('/marketing-prices/all' , [MarketingController::class , 'all'])->name('site.marketing_prices_all');
     Route::get('/marketing-prices/create' , [MarketingController::class , 'create'])->name('site.marketing_prices_create');
     Route::post('/marketing-prices/save' , [MarketingController::class , 'store'])->name('site.marketing_prices_store');
     Route::get('/marketing-prices/titles' , [MarketingController::class , 'titles'])->name('site.marketing_titles');
     Route::get('/marketing-prices/titles/{id}' , [MarketingController::class , 'titles_edit'])->name('site.marketing_titles_edit');
     Route::post('/marketing-prices/titles/save_update' , [MarketingController::class , 'save_update'])->name('site.marketing_save_update');
-    Route::get('/marketing-prices/titles/{id}/remove' , [MarketingController::class , 'titles_remove'])->name('site.marketing_titles_remove');
+    Route::post('/marketing-prices/titles/{id}/remove' , [MarketingController::class , 'titles_remove'])->name('site.marketing_titles_remove');
     Route::get('/marketing-prices/title/create' , [MarketingController::class , 'title_create'])->name('site.marketing_title_create');
     Route::post('/marketing-prices/title/save' , [MarketingController::class , 'title_store'])->name('site.marketing_title_store');
     Route::get('/marketing-prices/{id}' , [MarketingController::class , 'show'])->name('site.marketing_prices_show');
@@ -209,21 +209,21 @@ Route::middleware(['auth' , 'check_status'])->group(function(){
     Route::get('/storages/create' , [StoragesController::class , 'create'])->name('site.storages_create');
     Route::post('/storages/save' , [StoragesController::class , 'save'])->name('site.storages_save');
     Route::get('/storages/{id}' , [StoragesController::class , 'edit'])->name('site.storages_edit');
-    Route::get('/storages/{id}/delete' , [StoragesController::class , 'delete'])->name('site.storages_delete');
+    Route::post('/storages/{id}/delete' , [StoragesController::class , 'delete'])->name('site.storages_delete');
     Route::post('/storages/update' , [StoragesController::class , 'update'])->name('site.storages_update');
     
     Route::get('/sub-storages' , [StoragesController::class , 'sub_index'])->name('site.sub_storages');
     Route::get('/sub-storages/create' , [StoragesController::class , 'sub_create'])->name('site.sub_storages_create');
     Route::post('/sub-storages/save' , [StoragesController::class , 'sub_save'])->name('site.sub_storages_save');
     Route::get('/sub-storages/{id}' , [StoragesController::class , 'sub_edit'])->name('site.sub_storages_edit');
-    Route::get('/sub-storages/{id}/delete' , [StoragesController::class , 'sub_delete'])->name('site.sub_storages_delete');
+    Route::post('/sub-storages/{id}/delete' , [StoragesController::class , 'sub_delete'])->name('site.sub_storages_delete');
     Route::post('/sub-storages/update' , [StoragesController::class , 'sub_update'])->name('site.sub_storages_update');
 
     Route::get('/collectors' , [CollectorsController::class , 'index'])->name('site.collectors');
     Route::get('/collectors/create' , [CollectorsController::class , 'create'])->name('site.collectors_create');
     Route::post('/collectors/save' , [CollectorsController::class , 'save'])->name('site.collectors_save');
     Route::get('/collectors/{id}' , [CollectorsController::class , 'edit'])->name('site.collectors_edit');
-    Route::get('/collectors/{id}/delete' , [CollectorsController::class , 'delete'])->name('site.collectors_delete');
+    Route::post('/collectors/{id}/delete' , [CollectorsController::class , 'delete'])->name('site.collectors_delete');
     Route::post('/collectors/update' , [CollectorsController::class , 'update'])->name('site.collectors_update');
     
     Route::get('/bonds' , [BondsController::class , 'index'])->name('site.bonds');

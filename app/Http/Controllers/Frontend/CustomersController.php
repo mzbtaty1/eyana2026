@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Auth;
 use Redirect;
+use App\Http\Requests\StoreCustomerRequest;
+use App\Http\Requests\UpdateCustomerRequest;
 use App\Models\{
     Supplier,
     Log,
@@ -37,7 +39,7 @@ class CustomersController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function save(Request $request)
+    public function save(StoreCustomerRequest $request)
     {
 //        dd($request);
         $create = Supplier::create([
@@ -107,10 +109,10 @@ class CustomersController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request)
+    public function update(UpdateCustomerRequest $request)
     {
         $id = (int) $request->id;
-        
+
         $Customer = Supplier::select('*')->where('id',$id)->get();
         abort_if(count($Customer) == 0 , 404);
         

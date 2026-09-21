@@ -5,6 +5,10 @@ namespace App\Http\Controllers\Frontend;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Auth;
+use App\Http\Requests\StoreMarketingPriceRequest;
+use App\Http\Requests\UpdateMarketingPriceRequest;
+use App\Http\Requests\StoreTitleRequest;
+use App\Http\Requests\UpdateTitleRequest;
 use App\Models\{
     MarketingPrice,
     Title,
@@ -17,25 +21,39 @@ class MarketingController extends Controller
      */
     public function index()
     {
-        $MarketingPrices = MarketingPrice::select('*')->orderBy('id','DESC')->get();
         $titles = Title::select('*')->orderBy('id','DESC')->where('usage_count' , '!=' , 0)->get();
-        return view('marketing_prices.all' , ["titles" => $titles]);
+        $pricesByTitle = $this->pricesGroupedByTitle($titles);
+        return view('marketing_prices.all' , ["titles" => $titles, "pricesByTitle" => $pricesByTitle]);
     }
-    
-    
-    
+
+
+
     public function print_all()
     {
-        $MarketingPrices = MarketingPrice::select('*')->orderBy('id','DESC')->get();
         $titles = Title::select('*')->orderBy('id','DESC')->where('usage_count' , '!=' , 0)->get();
-        return view('marketing_prices.all_print' , ["titles" => $titles]);
+        $pricesByTitle = $this->pricesGroupedByTitle($titles);
+        return view('marketing_prices.all_print' , ["titles" => $titles, "pricesByTitle" => $pricesByTitle]);
     }
-    
+
  public function all()
     {
-        $MarketingPrices = MarketingPrice::select('*')->orderBy('id','DESC')->get();
      $titles = Title::select('*')->orderBy('id','DESC')->where('usage_count' , '!=' , 0)->get();
-        return view('marketing_prices.all2' , ["titles" => $titles]);
+        $pricesByTitle = $this->pricesGroupedByTitle($titles);
+        return view('marketing_prices.all2' , ["titles" => $titles, "pricesByTitle" => $pricesByTitle]);
+    }
+
+    /**
+     * Batched replacement for the per-title MarketingPrice::where('title',...)
+     * query that used to run once per title inside each of the three list
+     * views (all/all2/all_print). Grouping preserves the travel_date ASC
+     * order from the single query, matching what each per-row query did.
+     */
+    private function pricesGroupedByTitle($titles)
+    {
+        return MarketingPrice::whereIn('title', $titles->pluck('id'))
+            ->orderBy('travel_date', 'ASC')
+            ->get()
+            ->groupBy('title');
     }
 
     /**
@@ -50,7 +68,7 @@ class MarketingController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+    public function store(StoreMarketingPriceRequest $request)
     {
 //        dd($request);
         
@@ -103,7 +121,7 @@ class MarketingController extends Controller
     /**
      * Show the form for editing the specified resource.
      */
-    public function title_store(Request $request)
+    public function title_store(StoreTitleRequest $request)
     {
 //        dd($request);
         
@@ -193,7 +211,7 @@ class MarketingController extends Controller
          $titles = Title::select('*')->orderBy('id','DESC')->get();
         return view('marketing_prices.show' , ["titles"=>$titles , "marketing_info" => $marketing_info]);
     }
-    public function update_save(Request $request){
+    public function update_save(UpdateMarketingPriceRequest $request){
 //        dd($request)
         $id = (int) $request->id;
          $marketing_info = MarketingPrice::select('*')->where('id',$id)->get();
@@ -257,7 +275,7 @@ class MarketingController extends Controller
         
         return view('marketing_prices.edit_title' , ["titles" => $titles, "title_info" => $title_info]);
     }
-    public function save_update(Request $request){
+    public function save_update(UpdateTitleRequest $request){
        $id = $request->id;
         
            $title_info = Title::select('*')->where('id',$id)->get();

@@ -74,37 +74,33 @@ $total_cumulative_balance += $AccountStatement->cumulative_balance;
                    
                    <?php
                 if($AccountStatement->trans_storage == 1){
-                    
-            $check_ticket = App\Models\Invoice::select('*')->where('es_id',$AccountStatement->es_id)->get();
-                    if(count($check_ticket) == 1){
+
+            $check_ticket = $invoicesByEsId[$AccountStatement->es_id] ?? null;
+                    if($check_ticket){
                         $std = 1; // Ticket
-                        $check_ticket = $check_ticket[0];
                     }else{
-                  $ticket_info = App\Models\Bond::select('*')->where('es_id' , $AccountStatement->es_id)->get();
-                  $ticket_info = $ticket_info[0];    
-                  $bond = $ticket_info;  
+                  $bond = $bondsByEsId[$AccountStatement->es_id] ?? null;
                         $std = 0; // Bond
                     }
                 }else{
-                
-                          $ticket_info = App\Models\Invoice::select('*')->where('es_id' , $AccountStatement->es_id)->get();
-                   $ticket_info = $ticket_info[0];
-                   $users = App\Models\TicketUser::select('*')->where('ticket_system_id' , $ticket_info->ticket_system_id)->get();
-                   
-                      
+
+                          $ticket_info = $invoicesByEsId[$AccountStatement->es_id] ?? null;
+                   $users = $ticket_info ? ($usersByTicketSystemId[$ticket_info->ticket_system_id] ?? collect()) : collect();
+
+
                       $total_client_net_pice = 0;
                       $total_client_bought_price = 0;
-                     
+
                       foreach($users as $user){
                           $total_client_net_pice += $user->client_net_pice;
                           $total_client_bought_price += $user->client_bought_price;
-                      }  
-                    
-                    
+                      }
+
+
                 }
-                 
-                   
-                   
+
+
+
                    ?>
                   <tr>
                      <td style="text-align: right;">{{$AccountStatement->es_id}}</td>
@@ -145,12 +141,10 @@ $total_cumulative_balance += $AccountStatement->cumulative_balance;
                       <td>
 
                       <?php
-
-        $check_storage = App\Models\Storage::select('*')->where('id',$AccountStatement->supp_client_id)->get();
-        abort_if(count($check_storage) == 0 , 404);
-        $storage_info = $check_storage[0];
+        $row_storage_info = $storagesById[$AccountStatement->supp_client_id] ?? null;
+        abort_if(!$row_storage_info , 404);
         ?>
-        {{$storage_info->name}}
+        {{$row_storage_info->name}}
                       </td>
                       <td>{{$AccountStatement->created_at}}</td>
                      
@@ -165,46 +159,19 @@ $total_cumulative_balance += $AccountStatement->cumulative_balance;
                          @else
                       
                           @if($bond->money_way == 1)
-                         دفع نقدي 
+                         دفع نقدي
                          @elseif($bond->money_way == 2)
                          تحويل بنكي
-                    <?php
-                         $bank_info = App\Models\Bank::select('*')->where('id',$bond->bank_id)->get();
-                         $bank_info = $bank_info[0];
-                         ?>
-                         {{$bank_info->bank_name}}
+                         {{ ($banksById[$bond->bank_id] ?? null)->bank_name ?? '' }}
                          @else
-                         تحصيل من المندوب : 
-                         <?php
-                         $collector_info = App\Models\Collector::select('*')->where('id',$bond->collector_info)->get();
-                         $collector_info = $collector_info[0];
-                         ?>
-                         {{$collector_info->name}}
-                         
+                         تحصيل من المندوب :
+                         {{ ($collectorsById[$bond->collector_info] ?? null)->name ?? '' }}
                          @endif
                          @endif
                          
                          
                       </td>
                       
-<!--
- <td style="text-align: right;">
-                         <?php
-                         $last_row = App\Models\AccountStatement::where('id', '<', $AccountStatement->id)->where('is_storage' , 1)->get();
-                         if(count($last_row) == 0){
-                             $t = $AccountStatement->debit_balance + $AccountStatement->credit_balance;
-                         }else{
-                             $last_row = $last_row[0];
-                             $t = $last_row->debit_balance + $last_row->credit_balance;
-                         }
-
-                         ?> 
-                         {{$AccountStatement->debit_balance + $AccountStatement->credit_balance}}
-                         {{$AccountStatement->debit_balance + $AccountStatement->credit_balance}}
-                      
-                      
-                      </td>
--->
                       <td style="text-align: right;">{{number_format($AccountStatement->debit_balance,2)}}
                        @if($AccountStatement->transaction_type == 2)
 <!--                         <br><span class="badge bg-primary my_badge">المرتجع لنا</span>-->
@@ -218,11 +185,10 @@ $total_cumulative_balance += $AccountStatement->cumulative_balance;
                       </td>
                   <td style="text-align: right;">
                     <?php
-                    $mem = App\Models\User::select('*')->where('id',$AccountStatement->added_by)->get();
-                    $mem = $mem[0];
+                    $mem = $usersById[$AccountStatement->added_by] ?? null;
                     ?>
-                    {{$mem->name}}
-                    
+                    {{$mem->name ?? ''}}
+
                       </td>
                       <?php
 //                      if($std == 1){

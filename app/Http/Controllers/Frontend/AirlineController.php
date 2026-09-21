@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Auth;
 use Redirect;
+use App\Http\Requests\StoreAirlineRequest;
+use App\Http\Requests\UpdateAirlineRequest;
 use App\Models\{
     Airline,
     Log,
@@ -35,7 +37,7 @@ class AirlineController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function save(Request $request)
+    public function save(StoreAirlineRequest $request)
     {
         $create = Airline::create([
             "airline_name" => $request->airline_name,
@@ -80,7 +82,7 @@ class AirlineController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request)
+    public function update(UpdateAirlineRequest $request)
     {
         $id = (int) $request->id;
         $airline_name = $request->airline_name;

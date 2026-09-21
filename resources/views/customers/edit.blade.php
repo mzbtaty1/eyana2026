@@ -20,32 +20,37 @@
                      <p>
                         اسم العميل
                      </p>
-                     <input type="text" name="name" value="{{$customer->name}}" placeholder="" class="form-control" style="text-align:right;">
+                     <input type="text" name="name" value="{{old('name', $customer->name)}}" placeholder="" class="form-control @error('name') is-invalid @enderror" style="text-align:right;">
+                     @error('name') <div class="invalid-feedback">{{$message}}</div> @enderror
                   </div>
                   <div class="col-6">
                      <p>
                         الايميل
                      </p>
-                     <input type="email" name="email" value="{{$customer->email}}" placeholder="" class="form-control" style="text-align:right;">
+                     <input type="email" name="email" value="{{old('email', $customer->email)}}" placeholder="" class="form-control @error('email') is-invalid @enderror" style="text-align:right;">
+                     @error('email') <div class="invalid-feedback">{{$message}}</div> @enderror
                   </div>
                </div>
                <p>
                   العنوان
                </p>
-               <input type="text" name="address" value="{{$customer->address}}" placeholder="" class="form-control" style="text-align:right;" required="">
+               <input type="text" name="address" value="{{old('address', $customer->address)}}" placeholder="" class="form-control @error('address') is-invalid @enderror" style="text-align:right;" required="">
+               @error('address') <div class="invalid-feedback d-block">{{$message}}</div> @enderror
                <br>
                <div class="row">
                   <div class="col-6 mb-3">
                      <p>
                         رقم الهاتف 1
                      </p>
-                     <input type="text" name="phone_1" inputmode="numeric" oninput="this.value = this.value.replace(/\D+/g, '')" value="{{$customer->phone_1}}" placeholder="" class="form-control" style="text-align:right;" required="">
+                     <input type="text" name="phone_1" inputmode="numeric" oninput="this.value = this.value.replace(/\D+/g, '')" value="{{old('phone_1', $customer->phone_1)}}" placeholder="" class="form-control @error('phone_1') is-invalid @enderror" style="text-align:right;" required="">
+                     @error('phone_1') <div class="invalid-feedback">{{$message}}</div> @enderror
                   </div>
                   <div class="col-6">
                      <p>
                         رقم الهاتف 2 (غير الزامي)
                      </p>
-                     <input type="text" name="phone_2" inputmode="numeric" oninput="this.value = this.value.replace(/\D+/g, '')" value="{{$customer->phone_2}}" placeholder="" class="form-control" style="text-align:right;">
+                     <input type="text" name="phone_2" inputmode="numeric" oninput="this.value = this.value.replace(/\D+/g, '')" value="{{old('phone_2', $customer->phone_2)}}" placeholder="" class="form-control @error('phone_2') is-invalid @enderror" style="text-align:right;">
+                     @error('phone_2') <div class="invalid-feedback">{{$message}}</div> @enderror
                   </div>
                </div>
                <div class="row">
@@ -53,13 +58,15 @@
                      <p>
                         رقم الباسبور
                      </p>
-                     <input type="text" name="passport_id" value="{{$customer->passport_id}}" placeholder="" class="form-control" style="text-align:right;">
+                     <input type="text" name="passport_id" value="{{old('passport_id', $customer->passport_id)}}" placeholder="" class="form-control @error('passport_id') is-invalid @enderror" style="text-align:right;">
+                     @error('passport_id') <div class="invalid-feedback">{{$message}}</div> @enderror
                   </div>
                   <div class="col-6">
                      <p>
                         تاريخ انتهاء الباسبور
                      </p>
-                     <input type="date" name="passport_expiration_date" value="{{$customer->passport_expiration_date}}" placeholder="" class="form-control" style="text-align:right;">
+                     <input type="date" name="passport_expiration_date" value="{{old('passport_expiration_date', $customer->passport_expiration_date)}}" placeholder="" class="form-control @error('passport_expiration_date') is-invalid @enderror" style="text-align:right;">
+                     @error('passport_expiration_date') <div class="invalid-feedback">{{$message}}</div> @enderror
                   </div>
                </div>
                <div class="row">
@@ -67,13 +74,15 @@
                      <p>
                         الرصيد الافتتاحي المدين
                      </p>
-                     <input type="text" name="debit_opening_balance" inputmode="numeric" oninput="this.value = this.value.replace(/\D+/g, '')" value="{{$customer->debit_opening_balance}}" placeholder="" class="form-control" style="text-align:right;" required="">
+                     <input type="text" name="debit_opening_balance" inputmode="numeric" oninput="this.value = this.value.replace(/\D+/g, '')" value="{{old('debit_opening_balance', $customer->debit_opening_balance)}}" placeholder="" class="form-control @error('debit_opening_balance') is-invalid @enderror" style="text-align:right;" required="">
+                     @error('debit_opening_balance') <div class="invalid-feedback">{{$message}}</div> @enderror
                   </div>
                   <div class="col-6">
                      <p>
-                        رصيد افتتاحى الدائن 
+                        رصيد افتتاحى الدائن
                      </p>
-                     <input type="text" name="opening_credit_balance" inputmode="numeric" oninput="this.value = this.value.replace(/\D+/g, '')" value="{{$customer->opening_credit_balance}}" placeholder="" class="form-control" style="text-align:right;">
+                     <input type="text" name="opening_credit_balance" inputmode="numeric" oninput="this.value = this.value.replace(/\D+/g, '')" value="{{old('opening_credit_balance', $customer->opening_credit_balance)}}" placeholder="" class="form-control @error('opening_credit_balance') is-invalid @enderror" style="text-align:right;">
+                     @error('opening_credit_balance') <div class="invalid-feedback">{{$message}}</div> @enderror
                   </div>
                </div>
                <div class="row">
@@ -81,27 +90,27 @@
                      <p>
                         الحالة
                      </p>
-                     <select name="status" class="form-control" style="text-align:right;" required="">
-                     <option value="0" @if($customer->status == 0) selected @endif>موقوف</option>
-                     <option value="1" @if($customer->status == 1) selected @endif>مفعل</option>
+                     <select name="status" class="form-control @error('status') is-invalid @enderror" style="text-align:right;" required="">
+                     <option value="0" @if(old('status', $customer->status) == 0) selected @endif>موقوف</option>
+                     <option value="1" @if(old('status', $customer->status) == 1) selected @endif>مفعل</option>
                      </select>
                   </div>
                   <div class="col-6">
                      <p>
                         النوع
                      </p>
-                     <select name="type" class="form-control" style="text-align:right;" required="">
-                     <option value="1" @if($customer->type == 1) selected @endif>فرد</option>
-                     <option value="2" @if($customer->type == 2) selected @endif>شركة</option>
+                     <select name="type" class="form-control @error('type') is-invalid @enderror" style="text-align:right;" required="">
+                     <option value="1" @if(old('type', $customer->type) == 1) selected @endif>فرد</option>
+                     <option value="2" @if(old('type', $customer->type) == 2) selected @endif>شركة</option>
                      </select>
                   </div>
                </div>
                   <p>
                         نوع الحساب
                      </p>
-                     <select name="acc_type" class="form-control" style="text-align:right;" required="">
-                     <option value="1" @if($customer->acc_type == 1) selected @endif>عميل</option>
-                     <option value="2" @if($customer->acc_type == 2) selected @endif>مورد</option>
+                     <select name="acc_type" class="form-control @error('acc_type') is-invalid @enderror" style="text-align:right;" required="">
+                     <option value="1" @if(old('acc_type', $customer->acc_type) == 1) selected @endif>عميل</option>
+                     <option value="2" @if(old('acc_type', $customer->acc_type) == 2) selected @endif>مورد</option>
                      </select>
                 <br>
                 
