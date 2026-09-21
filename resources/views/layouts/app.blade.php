@@ -33,6 +33,7 @@ $rname = Route::currentRouteName();
       <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
       <meta name="csrf-token" content="{{csrf_token()}}">
       <meta http-equiv="Pragma" content="no-cache" />
+      <script>window.MAPBOX_TOKEN = @json(config('services.mapbox.token'));</script>
       <!-- App favicon -->
       <link rel="shortcut icon" href="{{asset('assets/images/favicon.ico')}}">
       <!-- jsvectormap css -->  
