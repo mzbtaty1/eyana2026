@@ -9,6 +9,58 @@
         font-weight: normal;
   font-size: 12px;
     }
+    /* Controlled width for the grouped trip/passenger block: without this,
+       a booking with several long passenger names has no width to wrap
+       within, so the cell (and with it the whole DataTable, which has no
+       fixed table-layout) stretches to fit the longest unwrapped name
+       instead of wrapping inside the column. */
+    .ey-trip-info{
+        max-width: 420px;
+        overflow-wrap: break-word;
+        word-break: break-word;
+    }
+    .ey-trip-info > div{
+        margin-bottom: 3px;
+    }
+    .ey-trip-info > div:last-child{
+        margin-bottom: 0;
+    }
+    .ey-trip-info .ey-passenger{
+        padding-right: 10px;
+    }
+    /* Keep Latin passenger names / booking / ticket references from being
+       reversed by the surrounding RTL context. */
+    .ey-ltr{
+        direction: ltr;
+        unicode-bidi: isolate;
+        display: inline-block;
+        max-width: 100%;
+    }
+    .ey-details-line{
+        white-space: normal;
+    }
+    /* Columns: 1 رقم العملية, 2 نوع العملية, 3 تاريخ العملية, 4 نوع الطيران,
+       5 خط السير, 6 تاريخ السفر, 7 المسافر, 8 رقم الحجز, 9 مدين, 10 دائن, 11 الرصيد. */
+    #InvoicesTable td:nth-child(5){
+        max-width: 220px;
+        overflow-wrap: break-word;
+        word-break: break-word;
+    }
+    /* المسافر column: controlled width so a long name can never stretch the
+       surrounding DataTable, which has no fixed table-layout. */
+    #InvoicesTable td:nth-child(7){
+        max-width: 300px;
+        overflow-wrap: break-word;
+        word-break: break-word;
+    }
+    #InvoicesTable td:nth-child(8){
+        max-width: 140px;
+        overflow-wrap: break-word;
+        word-break: break-word;
+    }
+    #InvoicesTable td:nth-child(9), #InvoicesTable td:nth-child(10), #InvoicesTable td:nth-child(11){
+        white-space: nowrap;
+    }
 </style>
 <?php
 
@@ -25,35 +77,31 @@ $url2 = route('site.accounts_statement_print_excel' , [
    <div class="col-lg-12">
   
       <div class="card">
-         <div class="card-header">
-            <h5 class="card-title mb-0"> كشف حساب 
+         <x-page-header>
+            <x-slot:heading>
+                كشف حساب
              @if($st == 1)
                 @if($supplier->acc_type == 1) العميل @else المورد @endif
                 : <b>{{$supplier->name}}</b>
                 @else
                 عام
                 @endif
-                
-                
                  @if($date_from !== null && $date_to !== null)
             <br>
             بحث من تاريخ : {{$date_from}} الي {{$date_to}}
             @endif
-             </h5>
-             
-             
-              <button class="btn btn-dark" onclick="printdiv()" style="float: left;margin-top: -22px;">
+            </x-slot:heading>
+<button class="btn btn-dark" onclick="printdiv()">
                            <i class="ri-printer-line"></i> طباعة التقرير
                            </button>
              &nbsp;
              <a href="{{$url2}}">
-                  <button class="btn btn-primary" onclick="" style="float: left;margin-top: -22px;  margin-left: 7px;">
+                  <button class="btn btn-primary" onclick="">
                            <i class="ri-file-excel-2-line"></i> اصدار التقرير اكسيل
                            </button>
              </a>
-            
-         </div>
-         <div class="card-body">
+</x-page-header>
+<div class="card-body">
              @if($st == 1)
             <h5 class="card-title mb-0"> 
                 
@@ -82,17 +130,14 @@ $url2 = route('site.accounts_statement_print_excel' , [
                <table id="InvoicesTable" class="table table-bordered dt-responsive nowrap table-striped align-middle" style="width:100%">
                <thead> 
                   <tr>
-                     <th data-ordering="false" style="text-align: right;">#</th>
+                     <th data-ordering="false" style="text-align: right;">رقم العملية</th>
                      <th data-ordering="false" style="text-align: right;">نوع العملية</th>
                      <th data-ordering="false" style="text-align: right;">تاريخ العملية</th>
+                     <th data-ordering="false" style="text-align: right;">نوع الطيران</th>
+                     <th data-ordering="false" style="text-align: right;">خط السير</th>
                      <th data-ordering="false" style="text-align: right;">تاريخ السفر</th>
-                     <th data-ordering="false" style="text-align: right;color:white;" class="bg-danger">وجهة الاستلام / الوصول</th>
-                      
-                     <th data-ordering="false" style="text-align: right;">بيانات الركاب</th>
-                     <th data-ordering="false" style="text-align: right;">بيان العملية</th>
-                      
-                      
-              
+                     <th data-ordering="false" style="text-align: right;">المسافر</th>
+                     <th data-ordering="false" style="text-align: right;">رقم الحجز</th>
                      <th data-ordering="false" style="text-align: right;color:white;" class="bg-dark">مدين</th>
                      <th data-ordering="false" style="text-align: right;color:white;" class="bg-dark">دائن</th>
                              <th data-ordering="false" style="text-align: right;color:white;" class="bg-dark">الرصيد</th>
@@ -108,7 +153,10 @@ $url2 = route('site.accounts_statement_print_excel' , [
     @endif
 
     <?php
-    $total_blnc = 0;
+    // Seeded with the carried-forward historical balance (0 when there is no
+    // date filter, so the full statement is unaffected) so the running balance
+    // below continues from the account's real balance instead of restarting at 0.
+    $total_blnc = $opening_balance_for_period;
     $total_cumulative_balance = 0;
     foreach($AccountStatements as $AccountStatement){
         $total_cumulative_balance += $AccountStatement->cumulative_balance;
@@ -118,11 +166,18 @@ $url2 = route('site.accounts_statement_print_excel' , [
     <?php $x = 0; ?>
     @foreach($AccountStatements as $key => $AccountStatement)
     <?php
+    // Cumulative running balance: computed exactly once per accounting
+    // transaction (this AccountStatement row), exactly as before this change.
+    // The passenger breakdown rows below only DISPLAY this same value on
+    // their first row -- they never recompute or add to it again, so a
+    // multi-passenger invoice still advances the running balance by exactly
+    // one transaction's worth, never once per passenger.
     $closing = (int) $AccountStatement->debit_balance - (int) $AccountStatement->credit_balance;
     $total_blnc += $closing;
+    $total_blnc_display = number_format($total_blnc, 2);
 
     $ticket_info = null;
-    $users = [];
+    $users = collect();
     $bond = null;
 
     if($AccountStatement->trans_storage == 1){
@@ -138,25 +193,44 @@ $url2 = route('site.accounts_statement_print_excel' , [
     }
 
     $result = substr($AccountStatement->es_id, 0, 6);
+
+    if($AccountStatement->invoice_type == 1){ $type = "فواتير الطيران"; }
+    elseif($AccountStatement->invoice_type == 2){ $type = "فواتير تأشيرات"; }
+    elseif($AccountStatement->invoice_type == 3){ $type = "فواتير سياحه داخليه"; }
+    elseif($AccountStatement->invoice_type == 4){ $type = "فواتير سياحه خارجيه"; }
+    elseif($AccountStatement->invoice_type == 5){ $type = "فواتير سياحه دينيه"; }
+    elseif($AccountStatement->invoice_type == 6){ $type = "فواتير تأمينات السفر"; }
+    elseif($AccountStatement->invoice_type == 7){ $type = "فواتير تحاليل السفر"; }
+    elseif($AccountStatement->invoice_type == 8){ $type = "فواتير نقل سياحى"; }
+    elseif($AccountStatement->invoice_type == 9){ $type = "سند دفع"; }
+    elseif($AccountStatement->invoice_type == 10){ $type = "سند قبض"; }
+    elseif($AccountStatement->invoice_type == 11){ $type = "ارصدة"; }
+    elseif($AccountStatement->invoice_type == 12){ $type = "سداد فاتورة"; }
+    else { $type = "أخرى"; }
+
+    // Passenger breakdown only applies to flight/ticket transactions with
+    // real, resolvable TicketUser records. Everything else (bonds, invoices
+    // with no resolvable passenger rows, etc.) falls back to exactly one row,
+    // same as before this change.
+    $hasPassengerBreakdown = $AccountStatement->transaction_type == 1 && $ticket_info && $users->count() > 0;
+    $breakdownRows = $hasPassengerBreakdown ? $users->values() : collect([null]);
+
+    // client_net_pice sums to credit_balance (this account is owed) and
+    // client_bought_price sums to debit_balance (this account owes) --
+    // verified against real data (both sides of the same real transaction)
+    // before implementing this. Only the side that actually carries a
+    // nonzero transaction amount gets a per-passenger breakdown; the other
+    // stays blank, matching the transaction's own zero value on that side.
+    $debitHasAmount = $AccountStatement->debit_balance > 0;
+    $creditHasAmount = $AccountStatement->credit_balance > 0;
+
+    $mem = $usersById[$AccountStatement->added_by] ?? null;
     ?>
 
+    @foreach($breakdownRows as $rowIndex => $user)
     <tr>
         <td style="text-align: right;">{{$AccountStatement->es_id}}</td>
         <td style="text-align: right;">
-            <?php
-            if($AccountStatement->invoice_type == 1){ $type = "فواتير الطيران"; }
-            elseif($AccountStatement->invoice_type == 2){ $type = "فواتير تأشيرات"; }
-            elseif($AccountStatement->invoice_type == 3){ $type = "فواتير سياحه داخليه"; }
-            elseif($AccountStatement->invoice_type == 4){ $type = "فواتير سياحه خارجيه"; }
-            elseif($AccountStatement->invoice_type == 5){ $type = "فواتير سياحه دينيه"; }
-            elseif($AccountStatement->invoice_type == 6){ $type = "فواتير تأمينات السفر"; }
-            elseif($AccountStatement->invoice_type == 7){ $type = "فواتير تحاليل السفر"; }
-            elseif($AccountStatement->invoice_type == 8){ $type = "فواتير نقل سياحى"; }
-            elseif($AccountStatement->invoice_type == 9){ $type = "سند دفع"; }
-            elseif($AccountStatement->invoice_type == 10){ $type = "سند قبض"; }
-            elseif($AccountStatement->invoice_type == 11){ $type = "ارصدة"; }
-            elseif($AccountStatement->invoice_type == 12){ $type = "سداد فاتورة"; }
-            ?>
             @if($AccountStatement->transaction_type == 1)
                 تذاكر /
             @elseif($AccountStatement->transaction_type == 2)
@@ -179,110 +253,111 @@ $url2 = route('site.accounts_statement_print_excel' , [
 
         <td style="text-align: right;">
             @if($AccountStatement->transaction_type == 1 && $ticket_info)
+                <span class="ey-ltr">{{$ticket_info->invoice_airline}}</span>
+            @endif
+        </td>
+        <td style="text-align: right;">
+            @if($AccountStatement->transaction_type == 1 && $ticket_info)
+                <span class="ey-ltr">{{$ticket_info->from_location}} - {{$ticket_info->to_location}}</span>
+            @endif
+        </td>
+        <td style="text-align: right;">
+            @if($AccountStatement->transaction_type == 1 && $ticket_info)
                 {{$ticket_info->invoice_travel_date}}
-            @else
-                {{$AccountStatement->created_at}}
             @endif
         </td>
 
         <td>
-            @if($AccountStatement->transaction_type == 1 && $ticket_info)
-                {{$ticket_info->from_location}} - {{$ticket_info->to_location}}
+            @if($hasPassengerBreakdown)
+                <span class="ey-ltr">{{$user->client_name}}</span>
             @else
-                --
-            @endif
-        </td>
+                <div class="ey-trip-info">
+                    <div>
+                        @if($result == "FLY-RD")
+                            الغاء تذكرة {{$AccountStatement->es_id}}
+                        @elseif($result == "FLY-RS")
+                            اعادة اصدار تذكرة {{$AccountStatement->es_id}}
+                        @else
+                            {{$AccountStatement->transaction_txt}}
+                        @endif
+                    </div>
 
-        <td style="text-align: right;">
-            @if(in_array($AccountStatement->transaction_type, [1, 4]))
-                @foreach($users as $user)
-                    {{$user->client_name}}<br>
-                @endforeach
-            @else
-                --
-            @endif
-        </td>
-
-        <td style="text-align: right;">
-            @if($result == "FLY-RD")
-                الغاء تذكرة {{$AccountStatement->es_id}}
-            @elseif($result == "FLY-RS")
-                اعادة اصدار تذكرة {{$AccountStatement->es_id}}
-            @else
-                {{$AccountStatement->transaction_txt}}
-            @endif
-
-            @if($AccountStatement->transaction_type == 1 && $ticket_info)
-                / خط الطيران : {{$ticket_info->invoice_airline}}
-                <br>
-                ارقام الحجز :
-                @foreach($users as $user)
-                    {{$user->client_booking_id}} /
-                @endforeach
-                <br>
-                ارقام التذاكر :
-                @foreach($users as $user)
-                    {{$user->client_ticket_id}} /
-                @endforeach
-            @elseif($AccountStatement->transaction_type == 2 && $bond)
-                @if($bond->money_way == 1)
-                    دفع نقدي
-                @elseif($bond->money_way == 2)
-                    تحويل بنكي
-                    <?php
-                    $bank_info = $banksById[$bond->bank_id] ?? null;
-                    ?>
-                    @if($bank_info)
-                        {{$bank_info->bank_name}}
+                    @if($AccountStatement->transaction_type == 2 && $bond)
+                        <div>
+                            @if($bond->money_way == 1)
+                                دفع نقدي
+                            @elseif($bond->money_way == 2)
+                                تحويل بنكي
+                                <?php $bank_info = $banksById[$bond->bank_id] ?? null; ?>
+                                @if($bank_info){{$bank_info->bank_name}}@endif
+                            @else
+                                تحصيل من المندوب :
+                                <?php $collector_info = $collectorsById[$bond->collector_info] ?? null; ?>
+                                @if($collector_info){{$collector_info->name}}@endif
+                            @endif
+                            {{$bond->info}}
+                        </div>
                     @endif
-                @else
-                    تحصيل من المندوب :
-                    <?php
-                    $collector_info = $collectorsById[$bond->collector_info] ?? null;
-                    ?>
-                    @if($collector_info)
-                        {{$collector_info->name}}
-                    @endif
-                @endif
-                {{$bond->info}}
-            @endif
 
-            @if($AccountStatement->trans_storage == 1 && $AccountStatement->sub_id != 0)
-                <br>
-                <?php
-                $sub_id = (int) $AccountStatement->sub_id;
-                $min_info3 = $subStoragesById[$sub_id] ?? null;
-                ?>
-                @if($min_info3)
-                    خزينة فرعية : <b>{{$min_info3->name}}</b>
-                @endif
+                    @if($AccountStatement->trans_storage == 1 && $AccountStatement->sub_id != 0)
+                        <?php
+                        $sub_id = (int) $AccountStatement->sub_id;
+                        $min_info3 = $subStoragesById[$sub_id] ?? null;
+                        ?>
+                        @if($min_info3)
+                            <div>خزينة فرعية : <b>{{$min_info3->name}}</b></div>
+                        @endif
+                    @endif
+                </div>
             @endif
         </td>
 
-        <td style="text-align: right;">{{number_format($AccountStatement->debit_balance , 2)}}</td>
-        <td style="text-align: right;color:#ff7900;">{{number_format($AccountStatement->credit_balance , 2)}}</td>
-        <td style="text-align: right;">{{number_format($total_blnc , 2)}}</td>
+        <td style="text-align: right;">
+            @if($hasPassengerBreakdown)
+                <span class="ey-ltr">{{$user->client_booking_id}}</span>
+            @endif
+        </td>
 
         <td style="text-align: right;">
-            <?php
-            $mem = $usersById[$AccountStatement->added_by] ?? null;
-            ?>
-            @if($mem)
+            @if($hasPassengerBreakdown && $debitHasAmount)
+                {{number_format($user->client_bought_price, 2)}}
+            @elseif(!$hasPassengerBreakdown)
+                {{number_format($AccountStatement->debit_balance , 2)}}
+            @endif
+        </td>
+        <td style="text-align: right;color:#ff7900;">
+            @if($hasPassengerBreakdown && $creditHasAmount)
+                {{number_format($user->client_net_pice, 2)}}
+            @elseif(!$hasPassengerBreakdown)
+                {{number_format($AccountStatement->credit_balance , 2)}}
+            @endif
+        </td>
+        <td style="text-align: right;">
+            @if($rowIndex === 0)
+                {{$total_blnc_display}}
+            @endif
+        </td>
+
+        <td style="text-align: right;">
+            @if($rowIndex === 0 && $mem)
                 {{$mem->name}}
             @endif
         </td>
 
         @if(Auth::user()->account_type == 2)
             <td>
-                @if($AccountStatement->transaction_approved == 0)
-                    <button class="btn btn-primary" id="rvd_{{$AccountStatement->id}}" style="border-radius: 55px;font-size: 10px;" onclick="do_approved({{$AccountStatement->id}})">تأكيد العملية</button>
-                    <button class="btn btn-success" id="apprvd_{{$AccountStatement->id}}" style="border-radius: 55px;font-size: 10px;display:none;">تم التأكيد</button>
-                @else
-                    <button class="btn btn-success" style="border-radius: 55px;font-size: 10px;">تم التأكيد</button>
+                @if($rowIndex === 0)
+                    @if($AccountStatement->transaction_approved == 0)
+                        <button class="btn btn-primary" id="rvd_{{$AccountStatement->id}}" style="border-radius: 55px;font-size: 10px;" onclick="do_approved({{$AccountStatement->id}})">تأكيد العملية</button>
+                        <button class="btn btn-success" id="apprvd_{{$AccountStatement->id}}" style="border-radius: 55px;font-size: 10px;display:none;">تم التأكيد</button>
+                    @else
+                        <button class="btn btn-success" style="border-radius: 55px;font-size: 10px;">تم التأكيد</button>
+                    @endif
                 @endif
             </td>
         @endif
     </tr>
+    @endforeach
     <?php $x++; ?>
     @endforeach
 </tbody>
@@ -295,10 +370,12 @@ $url2 = route('site.accounts_statement_print_excel' , [
                        الاجمالي
                        </td>
                        <td></td>
-                       
-                       <td></td> <td></td> <td></td>
-                       
-                      <td></td> <td></td> <td></td>
+                       <td></td>
+                       <td></td>
+                       <td></td>
+                       <td></td>
+                       <td></td>
+                       <td></td>
 
                   <td style="text-align:center;  background-color: #198754 !important;color:white;">
                        {{number_format($total_debit_balance , 2)}}
@@ -309,12 +386,12 @@ $url2 = route('site.accounts_statement_print_excel' , [
                        </td>
                         @if($st == 1)
                             <td class="font-weight-bold" style="text-align:center;  background-color: #198754 !important;color:white;">
-                                
-                      {{number_format($total_debit_balance - $total_credit_balance , 2)}}
+
+                      {{number_format($total_blnc , 2)}}
                        </td>
                             @else
 <td class="font-weight-bold" style="text-align:center;  background-color: #198754 !important;color:white;">
-                                              {{number_format($total_debit_balance - $total_credit_balance , 2)}}
+                                              {{number_format($total_blnc , 2)}}
 
                        </td>
 
@@ -338,38 +415,29 @@ $url2 = route('site.accounts_statement_print_excel' , [
                             <td>{{number_format($supplier->debit_opening_balance , 2)}} جنيها</td>
                         </tr>
 @endif
-                       
-                            
-                      
+
+
+
+                        @if($date_from !== null && $date_to !== null)
                         <tr>
-                            <td>إجمالى المدين</td>
+                            <td>الرصيد الافتتاحي (بداية الفترة)</td>
+                            <td>{{number_format($opening_balance_for_period , 2)}} جنيها</td>
+                        </tr>
+                        @endif
+                        <tr>
+                            <td>إجمالى المدين@if($date_from !== null && $date_to !== null) للفترة @endif</td>
                             <td>{{number_format($total_debit_balance , 2)}} جنيها</td>
                         </tr>
                         <tr>
-                            <td>إجمالى الدائن</td>
+                            <td>إجمالى الدائن@if($date_from !== null && $date_to !== null) للفترة @endif</td>
                             <td>{{number_format($total_credit_balance , 2)}} جنيها</td>
                         </tr>
                         <tr class="table-dark">
-                            <td class="font-weight-bold">الإجمالى</td>
-                            @if($st == 1)
+                            <td class="font-weight-bold">@if($date_from !== null && $date_to !== null) الرصيد النهائي @else الإجمالى @endif</td>
                             <td class="font-weight-bold">
-                          
-@if(count($AccountStatements) == 1)
-                        {{number_format($total_debit_balance - $total_credit_balance , 2)}}          
-     @else
-<!--                                 {{$supplier->opening_credit_balance + $supplier->debit_opening_balance + $total_debit_balance - $total_credit_balance}} -->
-                 {{number_format($total_debit_balance - $total_credit_balance , 2)}}                         
-                                @endif
+                                {{number_format($total_blnc , 2)}}
                             جنيها
-                          
-
-                                 
                             </td>
-                            @else
-<td class="font-weight-bold">                 {{number_format($total_debit_balance - $total_credit_balance , 2)}}                         
- جنيها</td>
-
-                            @endif
                         </tr>
                     </tbody></table>
              

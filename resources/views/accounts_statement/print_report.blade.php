@@ -308,7 +308,10 @@ if($st == 0){
         </thead>
         <tbody>
             <?php
-            $total_blnc = 0;
+            // Seeded with the carried-forward historical balance (0 when there is no
+            // date filter, so the full statement is unaffected) so the running balance
+            // below continues from the account's real balance instead of restarting at 0.
+            $total_blnc = $opening_balance_for_period;
             $total_cumulative_balance = 0;
             foreach($AccountStatements as $AccountStatement){
                 $total_cumulative_balance += $AccountStatement->cumulative_balance;
@@ -540,7 +543,7 @@ if($st == 0){
                 <td colspan="8" style="text-align: center;">الإجمالي</td>
                 <td>{{number_format($total_debit_balance , 2)}}</td>
                 <td>{{number_format($total_credit_balance , 2)}}</td>
-                <td>{{number_format($total_debit_balance - $total_credit_balance,2)}}</td>
+                <td>{{number_format($total_blnc,2)}}</td>
             </tr>
         </tbody>
     </table>
@@ -558,28 +561,23 @@ if($st == 0){
                 <td class="summary-amount">{{number_format($supplier->debit_opening_balance , 2)}} جنيه</td>
             </tr>
             @endif
+            @if($date_from !== null && $date_to !== null)
             <tr>
-                <td class="summary-label">إجمالي المدين</td>
+                <td class="summary-label">الرصيد الافتتاحي (بداية الفترة)</td>
+                <td class="summary-amount">{{number_format($opening_balance_for_period , 2)}} جنيه</td>
+            </tr>
+            @endif
+            <tr>
+                <td class="summary-label">إجمالي المدين@if($date_from !== null && $date_to !== null) للفترة @endif</td>
                 <td class="summary-amount">{{number_format($total_debit_balance , 2)}} جنيه</td>
             </tr>
             <tr>
-                <td class="summary-label">إجمالي الدائن</td>
+                <td class="summary-label">إجمالي الدائن@if($date_from !== null && $date_to !== null) للفترة @endif</td>
                 <td class="summary-amount">{{number_format($total_credit_balance , 2)}} جنيه</td>
             </tr>
             <tr class="final-total">
-                <td class="summary-label">الإجمالي النهائي</td>
-                @if($st == 1)
-                    <td class="summary-amount">
-                        @if(count($AccountStatements) == 1)
-                            {{number_format($total_debit_balance - $total_credit_balance , 2)}}          
-                        @else
-                            {{number_format($total_debit_balance - $total_credit_balance , 2)}}                         
-                        @endif
-                        جنيه
-                    </td>
-                @else
-                    <td class="summary-amount">{{number_format($total_debit_balance - $total_credit_balance , 2)}} جنيه</td>
-                @endif
+                <td class="summary-label">@if($date_from !== null && $date_to !== null) الرصيد النهائي @else الإجمالي النهائي @endif</td>
+                <td class="summary-amount">{{number_format($total_blnc , 2)}} جنيه</td>
             </tr>
         </tbody>
     </table>

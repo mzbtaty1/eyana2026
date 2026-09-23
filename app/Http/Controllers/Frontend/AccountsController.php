@@ -35,6 +35,33 @@ class AccountsController extends Controller
     }
 
     /**
+     * Net balance (debit - credit) carried forward from every accounting
+     * transaction on this account/report dated before $date_from. Opening
+     * balances are themselves booked as ordinary dated AccountStatement rows
+     * (es_id "FLY-OPEN-BALANCE"), so this is a plain historical sum -- no
+     * separate addition of Supplier::opening_credit_balance/debit_opening_balance,
+     * which would double-count that same booked row.
+     */
+    private function accounts_statement_opening_balance($search_status, $invoice_beneficiaries, $date_from, $transaction_type = null)
+    {
+        $q = AccountStatement::where('is_storage', '!=', 1)->where('crt_date', '<', $date_from);
+
+        if ($search_status == 0) {
+            $q = $q->where('is_supp_account', '!=', 1);
+        } else {
+            $q = $q->where('supp_client_id', $invoice_beneficiaries);
+        }
+
+        if (isset($transaction_type)) {
+            $q = $q->where('transaction_type', $transaction_type);
+        }
+
+        $totals = $q->selectRaw('SUM(debit_balance) as d, SUM(credit_balance) as c')->first();
+
+        return ($totals->d ?? 0) - ($totals->c ?? 0);
+    }
+
+    /**
      * Store a newly created resource in storage.
      */
     public function accounts_statement_search(Request $request)
@@ -42,11 +69,11 @@ class AccountsController extends Controller
         $search_status = (int) $request->invoice_beneficiaries;
 
 //        dd($request);
-       
+
 
         $AccountStatements = AccountStatement::select('*')->where('is_storage', '!=' , 1);
 
-        
+
         
         if($search_status == 0){
             $supplier = [];
@@ -70,20 +97,29 @@ class AccountsController extends Controller
 //       dd($st , $AccountStatements->get());
         
         
-        if(isset($request->date_from) && isset($request->date_to)){
+        $isDateFiltered = isset($request->date_from) && isset($request->date_to);
+
+        if($isDateFiltered){
             $AccountStatements = $AccountStatements->whereBetween('crt_date' , [$request->date_from , $request->date_to]);
         }
-        
+
         if(isset($request->transaction_type)){
             $AccountStatements = $AccountStatements->where('transaction_type' , $request->transaction_type);
         }
-         
-        
+
+
         // $AccountStatements = $AccountStatements->orderBy('created_at','DESC');
         $AccountStatements = $AccountStatements->get();
-        
-        
-        
+
+        // Carried-forward balance: when a date range is selected, the period's
+        // running/closing balance must continue from the real historical balance
+        // as of the day before date_from, not restart at zero. Zero when there is
+        // no date filter, so the full (unfiltered) statement is unaffected.
+        $opening_balance_for_period = $isDateFiltered
+            ? $this->accounts_statement_opening_balance($search_status, $request->invoice_beneficiaries, $request->date_from, $request->transaction_type)
+            : 0;
+
+
         $total_debit_balance = 0;
         foreach ($AccountStatements as $AccountStatement) {
             $total_debit_balance += $AccountStatement->debit_balance;
@@ -123,6 +159,7 @@ class AccountsController extends Controller
             "supplier" => $supplier,
             "total_debit_balance" => $total_debit_balance,
             "total_credit_balance" => $total_credit_balance,
+            "opening_balance_for_period" => $opening_balance_for_period,
             "st" => $st,
             "bondsByEsId" => $bondsByEsId,
             "invoicesByEsId" => $invoicesByEsId,
@@ -180,20 +217,26 @@ class AccountsController extends Controller
 //       dd($st , $AccountStatements->get());
         
         
-        if(isset($request->date_from) && isset($request->date_to)){
-//            dd(0);
+        $isDateFiltered = isset($date_from) && isset($date_to);
+
+        if($isDateFiltered){
             $AccountStatements = $AccountStatements->whereBetween('crt_date' , [$date_from , $date_to]);
         }
-        
-        if(isset($request->transaction_type)){
+
+        if(isset($transaction_type)){
             $AccountStatements = $AccountStatements->where('transaction_type' , $transaction_type);
         }
-         
-        
+
+
         $AccountStatements = $AccountStatements->get();
-        
-        
-        
+
+        // See accounts_statement_search() for why this must be date-based, not
+        // Supplier::opening_credit_balance/debit_opening_balance (would double-count).
+        $opening_balance_for_period = $isDateFiltered
+            ? $this->accounts_statement_opening_balance($search_status, $invoice_beneficiaries, $date_from, $transaction_type)
+            : 0;
+
+
         $total_debit_balance = 0;
         foreach ($AccountStatements as $AccountStatement) {
             $total_debit_balance += $AccountStatement->debit_balance;
@@ -212,11 +255,12 @@ class AccountsController extends Controller
             "supplier" => $supplier,
             "total_debit_balance" => $total_debit_balance,
             "total_credit_balance" => $total_credit_balance,
+            "opening_balance_for_period" => $opening_balance_for_period,
             "st" => $st,
             "date_from" => $date_from,
             "date_to" => $date_to,
             ]);
-        
+
     }
     public function accounts_statement_print_excel($invoice_beneficiaries , $date_from = null , $date_to = null , $transaction_type = null){
 //        dd($invoice_beneficiaries , $date_from ,  $date_to, $transaction_type);
