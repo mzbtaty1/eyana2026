@@ -72,10 +72,9 @@
                      <th data-ordering="false" style="text-align: right;">بيان العملية</th>
                       
                       
-<!--                     <th data-ordering="false" style="text-align: right;color:white;" class="bg-dark">تراكمي</th>-->
                      <th data-ordering="false" style="text-align: right;color:white;" class="bg-dark">مدين</th>
                      <th data-ordering="false" style="text-align: right;color:white;" class="bg-dark">دائن</th>
-                      
+                     <th data-ordering="false" style="text-align: right;color:white;" class="bg-dark">الرصيد</th>
                      <th data-ordering="false" style="text-align: right;color:white;" class="bg-primary">الموظف</th>
                      <th data-ordering="false" style="text-align: right;color:white;" class="bg-primary">المطابقة</th>
 
@@ -83,7 +82,7 @@
                </thead>
                <tbody>
                    <?php
-                   
+
                     $total_cumulative_balance = 0;
                    $tota_debit_balance = 0;
                    $tota_credit_balance = 0;
@@ -92,11 +91,20 @@ $total_cumulative_balance += $AccountStatement->cumulative_balance;
                        $tota_debit_balance += $AccountStatement->debit_balance;
                        $tota_credit_balance += $AccountStatement->credit_balance;
  }
-                   
+
+                   // Running balance: seeded with the carried-forward opening balance (0
+                   // when there is no date filter), then recalculated fresh on every
+                   // request from the chronologically-ordered rows above -- so a
+                   // transaction added later but dated earlier lands in its real
+                   // position and everything after it recalculates automatically.
+                   $total_blnc = $opening_balance_for_period;
                    ?>
                   @foreach($AccountStatements as $AccountStatement)
-                   
+
                    <?php
+                    $closing = (int) $AccountStatement->debit_balance - (int) $AccountStatement->credit_balance;
+                    $total_blnc += $closing;
+
                 if($AccountStatement->trans_storage == 1){
 
             $check_ticket = $invoicesByEsId[$AccountStatement->es_id] ?? null;
@@ -152,6 +160,8 @@ $total_cumulative_balance += $AccountStatement->cumulative_balance;
                               $type = "ارصدة";
                           }elseif($AccountStatement->invoice_type == 12){
                               $type = "سداد فاتورة";
+                          }else{
+                              $type = "أخرى";
                           }
                           ?>
                          @if($AccountStatement->transaction_type == 1)
@@ -227,6 +237,7 @@ $total_cumulative_balance += $AccountStatement->cumulative_balance;
 <!--                         <br><span class="badge bg-primary my_badge">المسترد له</span>-->
                          @endif
                       </td>
+                      <td style="text-align: right;">{{number_format($total_blnc,2)}}</td>
                   <td style="text-align: right;">
                     <?php
                     $mem = $usersById[$AccountStatement->added_by] ?? null;
@@ -275,24 +286,29 @@ $total_cumulative_balance += $AccountStatement->cumulative_balance;
              
               <table class="table">
                         <tbody>
-                            
+                            @if($date_from !== null && $date_to !== null)
                             <tr>
-                            <td>اجمالي (دائن)</td>
+                            <td>الرصيد الافتتاحي (بداية الفترة)</td>
+                            <td>{{number_format($opening_balance_for_period , 2)}} جنيها</td>
+                        </tr>
+                            @endif
+                            <tr>
+                            <td>اجمالي (دائن)@if($date_from !== null && $date_to !== null) للفترة @endif</td>
                             <td>{{number_format($tota_credit_balance , 2)}} جنيها</td>
                         </tr>
    <tr>
-                            <td>اجمالي (مدين)</td>
+                            <td>اجمالي (مدين)@if($date_from !== null && $date_to !== null) للفترة @endif</td>
                             <td>{{number_format($tota_debit_balance , 2)}} جنيها</td>
                         </tr>
-                       
+
                             <tr class="table-dark">
-                            <td class="font-weight-bold">النهائي</td>
+                            <td class="font-weight-bold">@if($date_from !== null && $date_to !== null) الرصيد النهائي @else النهائي @endif</td>
 <td class="font-weight-bold">
-    {{number_format($tota_debit_balance - $tota_credit_balance , 2)}} جنيها
+    {{number_format($total_blnc , 2)}} جنيها
 </td>
-</tr>  
-                      
-                      
+</tr>
+
+
                     </tbody></table>
              
  

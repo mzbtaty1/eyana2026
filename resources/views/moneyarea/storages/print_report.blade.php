@@ -98,10 +98,9 @@ $title_1 = "كشف حساب خزينة";
                      <th data-ordering="false" style="text-align: right;">بيان العملية</th>
                       
                       
-<!--                     <th data-ordering="false" style="text-align: right;color:white;" class="bg-dark">تراكمي</th>-->
                      <th data-ordering="false" style="text-align: right;color:white;" class="bg-dark">مدين</th>
                      <th data-ordering="false" style="text-align: right;color:white;" class="bg-dark">دائن</th>
-                      
+                     <th data-ordering="false" style="text-align: right;color:white;" class="bg-dark">الرصيد</th>
 
                   </tr>
                </thead>
@@ -109,9 +108,18 @@ $title_1 = "كشف حساب خزينة";
                    <?php
 
                     $total_cumulative_balance = 0;
+                   $tota_debit_balance = 0;
+                   $tota_credit_balance = 0;
                    foreach($AccountStatements as $AccountStatement){
 $total_cumulative_balance += $AccountStatement->cumulative_balance;
+                       $tota_debit_balance += $AccountStatement->debit_balance;
+                       $tota_credit_balance += $AccountStatement->credit_balance;
  }
+
+                   // Running balance: same logic as the screen (moneyarea.storages.acc_all)
+                   // -- seeded with the carried-forward opening balance, recalculated fresh
+                   // from the chronologically-ordered rows on every request.
+                   $total_blnc = $opening_balance_for_period;
 
                    // Batch-fetch every per-row lookup once instead of inside the loop (was N+1:
                    // up to 5 queries per row across Bond/Invoice/TicketUser/Storage/Bank/Collector).
@@ -145,6 +153,9 @@ $total_cumulative_balance += $AccountStatement->cumulative_balance;
                   @foreach($AccountStatements as $AccountStatement)
 
                    <?php
+                    $closing = (int) $AccountStatement->debit_balance - (int) $AccountStatement->credit_balance;
+                    $total_blnc += $closing;
+
                 if($AccountStatement->trans_storage == 1){
                   $ticket_info = $bonds_by_es_id->get($AccountStatement->es_id) ?? new App\Models\Bond();
                   $bond = $ticket_info;
@@ -197,6 +208,12 @@ $total_cumulative_balance += $AccountStatement->cumulative_balance;
                               $type = "سند دفع";
                           }elseif($AccountStatement->invoice_type == 10){
                               $type = "سند قبض";
+                          }elseif($AccountStatement->invoice_type == 11){
+                              $type = "ارصدة";
+                          }elseif($AccountStatement->invoice_type == 12){
+                              $type = "سداد فاتورة";
+                          }else{
+                              $type = "أخرى";
                           }
                           ?>
                          @if($AccountStatement->transaction_type == 1)
@@ -282,23 +299,50 @@ $total_cumulative_balance += $AccountStatement->cumulative_balance;
                       
                       </td>
 -->
-                      <td style="text-align: right;">{{$AccountStatement->debit_balance}}
-                     
-                         
+                      <td style="text-align: right;">{{number_format($AccountStatement->debit_balance, 2)}}
+
+
                       </td>
-                     <td style="text-align: right;">{{$AccountStatement->credit_balance}}
-                      
+                     <td style="text-align: right;">{{number_format($AccountStatement->credit_balance, 2)}}
+
                       </td>
-              
-                      
-                   
+                      <td style="text-align: right;">{{number_format($total_blnc, 2)}}</td>
                   </tr>
                   @endforeach
+                  <tr class="table-dark">
+                      <td colspan="4" style="text-align: center; font-weight: bold;">الإجمالي</td>
+                      <td style="text-align: right; font-weight: bold;">{{number_format($tota_debit_balance, 2)}}</td>
+                      <td style="text-align: right; font-weight: bold;">{{number_format($tota_credit_balance, 2)}}</td>
+                      <td style="text-align: right; font-weight: bold;">{{number_format($total_blnc, 2)}}</td>
+                  </tr>
                </tbody>
             </table>
-             
+
+            <table class="table" style="margin-top: 15px;">
+                <tbody>
+                    @if($date_from !== null && $date_to !== null)
+                    <tr>
+                        <td>الرصيد الافتتاحي (بداية الفترة)</td>
+                        <td>{{number_format($opening_balance_for_period, 2)}} جنيها</td>
+                    </tr>
+                    @endif
+                    <tr>
+                        <td>اجمالي (دائن)@if($date_from !== null && $date_to !== null) للفترة @endif</td>
+                        <td>{{number_format($tota_credit_balance, 2)}} جنيها</td>
+                    </tr>
+                    <tr>
+                        <td>اجمالي (مدين)@if($date_from !== null && $date_to !== null) للفترة @endif</td>
+                        <td>{{number_format($tota_debit_balance, 2)}} جنيها</td>
+                    </tr>
+                    <tr class="table-dark">
+                        <td class="font-weight-bold">@if($date_from !== null && $date_to !== null) الرصيد النهائي @else النهائي @endif</td>
+                        <td class="font-weight-bold">{{number_format($total_blnc, 2)}} جنيها</td>
+                    </tr>
+                </tbody>
+            </table>
+
              </div>
-        
+
     </div>
 
 

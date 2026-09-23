@@ -51,6 +51,26 @@ class StoragesController extends Controller
         return view('moneyarea.storages.all_get' , ["storages" => $storages]);
     }
 
+    /**
+     * Net balance (debit - credit) carried forward from every storage
+     * ledger transaction dated before $date_from. Mirrors
+     * AccountsController::accounts_statement_opening_balance() -- see
+     * that method for why this must be a plain date-based sum rather
+     * than any separately-stored opening-balance value.
+     */
+    private function storage_statement_opening_balance($st, $storage_id, $date_from)
+    {
+        $q = AccountStatement::where('is_storage', 1)->where('crt_date', '<', $date_from);
+
+        if ($st == 1) {
+            $q = $q->where('supp_client_id', $storage_id);
+        }
+
+        $totals = $q->selectRaw('SUM(debit_balance) as d, SUM(credit_balance) as c')->first();
+
+        return ($totals->d ?? 0) - ($totals->c ?? 0);
+    }
+
     public function acc_get(Request $request){
         
         $id = $request->storage_id;
@@ -80,16 +100,27 @@ class StoragesController extends Controller
         
         
 
-        if(isset($request->date_from) && isset($request->date_to)){
+        $isDateFiltered = isset($request->date_from) && isset($request->date_to);
+
+        if($isDateFiltered){
             $AccountStatements = $AccountStatements->whereBetween('crt_date' , [$request->date_from , $request->date_to]);
         }
-        
+
         if(isset($request->transaction_type)){
             $AccountStatements = $AccountStatements->where('transaction_type' , $request->transaction_type);
         }
-         
-        
-        $AccountStatements = $AccountStatements->get();
+
+
+        // Chronological ledger order -- see AccountsController::accounts_statement_search()
+        // for why this must be a real date sort (crt_date, then id as a deterministic
+        // tiebreaker) rather than default/insertion order.
+        $AccountStatements = $AccountStatements->orderBy('crt_date', 'asc')->orderBy('id', 'asc')->get();
+
+        // Carried-forward opening balance for the selected period; 0 when unfiltered
+        // so the full (unfiltered) statement is unaffected.
+        $opening_balance_for_period = $isDateFiltered
+            ? $this->storage_statement_opening_balance($st, $request->storage_id, $request->date_from)
+            : 0;
 
         // Batched replacement for what used to be up to 6 per-row lookup
         // queries (Invoice-or-Bond by es_id, TicketUser, Storage,
@@ -121,6 +152,7 @@ class StoragesController extends Controller
             "AccountStatements" => $AccountStatements,
             "storage_info" => $storage_info,
             "st" => $st,
+            "opening_balance_for_period" => $opening_balance_for_period,
             "invoicesByEsId" => $invoicesByEsId,
             "bondsByEsId" => $bondsByEsId,
             "usersByTicketSystemId" => $usersByTicketSystemId,
@@ -163,7 +195,9 @@ class StoragesController extends Controller
         
         
 
-        if(isset($date_from) && isset($date_to)){
+        $isDateFiltered = isset($date_from) && isset($date_to);
+
+        if($isDateFiltered){
             $AccountStatements = $AccountStatements->whereBetween('crt_date' , [$date_from , $date_to]);
         }
 
@@ -172,13 +206,19 @@ class StoragesController extends Controller
         }
 
 
-        $AccountStatements = $AccountStatements->get();
+        // See acc_get() for why this must be a real chronological sort.
+        $AccountStatements = $AccountStatements->orderBy('crt_date', 'asc')->orderBy('id', 'asc')->get();
+
+        $opening_balance_for_period = $isDateFiltered
+            ? $this->storage_statement_opening_balance($st, $storage_id, $date_from)
+            : 0;
 //        dd($AccountStatements);
 //        dd($st);
         return view('moneyarea.storages.print_report', [
             "AccountStatements" => $AccountStatements,
             "storage_info" => $storage_info,
             "st" => $st,
+            "opening_balance_for_period" => $opening_balance_for_period,
 "date_from" => $date_from,
 "date_to" => $date_to,
         ]);
