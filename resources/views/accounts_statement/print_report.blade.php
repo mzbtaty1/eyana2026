@@ -66,8 +66,17 @@ if($st == 0){
         font-family: 'Arial', sans-serif;
         border-collapse: collapse;
         width: 100%;
+        table-layout: fixed;
         margin: 10px 0;
         border: 3px solid #333;
+    }
+
+    #professional-table thead {
+        display: table-header-group; /* repeat header row on every printed page */
+    }
+
+    #professional-table tr {
+        page-break-inside: avoid;
     }
 
     #professional-table th {
@@ -87,6 +96,12 @@ if($st == 0){
         font-weight: bold;
         vertical-align: top;
         line-height: 1.3;
+        word-break: break-word;
+        overflow-wrap: break-word;
+    }
+
+    .ey-details-line{
+        white-space: normal;
     }
 
     #professional-table tr:nth-child(even) {
@@ -97,33 +112,56 @@ if($st == 0){
         line-height: 1.2;
         font-weight: bold;
     }
-    
+
     .inline-info {
         display: inline;
         margin-left: 8px;
     }
-    
+
     .passenger-names {
         margin-top: 3px;
         font-weight: bold;
     }
-    
-    .amount-debit {
+
+    /* table-layout:fixed already caps this column's width; this is an extra
+       safety net so a long passenger name can never push a cell wider than
+       its fixed column even under an edge case. */
+    .ey-trip-info{
+        max-width: 420px;
+        overflow-wrap: break-word;
+        word-break: break-word;
+    }
+    .ey-trip-info > div{
+        margin-bottom: 3px;
+    }
+    .ey-trip-info > div:last-child{
+        margin-bottom: 0;
+    }
+    .ey-trip-info .ey-passenger{
+        padding-right: 10px;
+    }
+    .ey-ltr{
+        direction: ltr;
+        unicode-bidi: isolate;
+        display: inline-block;
+        max-width: 100%;
+    }
+    .amount-debit, .amount-credit, .amount-balance {
         color: #000;
         font-weight: bold;
         text-align: center;
     }
-    
-    .amount-credit {
-        color: #000;
-        font-weight: bold;
-        text-align: center;
-    }
-    
-    .amount-balance {
-        color: #000;
-        font-weight: bold;
-        text-align: center;
+
+    /* #professional-table td (an ID + element selector) is more specific than a
+       plain class selector, so it was winning over the class rule above and
+       still breaking these numbers mid-value despite nowrap. Match/exceed its
+       specificity here instead of relying on source order. */
+    #professional-table td.amount-debit,
+    #professional-table td.amount-credit,
+    #professional-table td.amount-balance {
+        white-space: nowrap !important;
+        word-break: normal !important;
+        overflow-wrap: normal !important;
     }
     
     .total-row {
@@ -137,6 +175,12 @@ if($st == 0){
         padding: 10px 4px !important;
         font-size: 11px !important;
         font-weight: bold !important;
+    }
+
+    #professional-table tr.total-row td {
+        white-space: nowrap !important;
+        word-break: normal !important;
+        overflow-wrap: normal !important;
     }
     
     .summary-table {
@@ -164,11 +208,20 @@ if($st == 0){
         font-weight: bold;
         color: #333;
         text-align: center;
+        white-space: nowrap;
     }
     
     .summary-table .final-total {
         background: #333;
         color: white;
+    }
+
+    /* .summary-amount's own `color: #333` (above) otherwise beats the inherited
+       white from .final-total, since an explicit rule on the cell itself always
+       wins over an inherited value -- making this row's amount invisible (dark
+       text on the row's dark background). Target the cell directly instead. */
+    .summary-table .final-total .summary-amount {
+        color: white !important;
     }
     
     @media print {
@@ -204,7 +257,9 @@ if($st == 0){
 <div class="page_print">
     <!-- Header Section -->
     <div class="header-section">
-        <img src="{{asset('assets/images/flymix_colored.png')}}" class="company-logo" alt="Company Logo">
+        {{-- logo-dark.png is an unused Velzon starter-template asset; flymix_colored.png
+             is the actual Eyana brand logo used app-wide. --}}
+        <img src="{{asset('assets/images/flymix_colored.png')}}" class="company-logo" alt="Eyana">
         <div>
             <h1 class="header-title">
                 كشف حساب 
@@ -238,13 +293,17 @@ if($st == 0){
     <table id="professional-table" dir="rtl">
         <thead>
             <tr>
-                <th style="width: 10%;">رقم العملية</th>
-                <th style="width: 15%;">نوع العملية</th>
-                <th style="width: 12%;">تاريخ العملية</th>
-                <th style="width: 43%;">بيان العملية</th>
-                <th style="width: 7%;">مدين</th>
-                <th style="width: 7%;">دائن</th>
-                <th style="width: 6%;">الرصيد</th>
+                <th style="width: 6%;">رقم العملية</th>
+                <th style="width: 7%;">نوع العملية</th>
+                <th style="width: 6%;">تاريخ العملية</th>
+                <th style="width: 8%;">نوع الطيران</th>
+                <th style="width: 11%;">خط السير</th>
+                <th style="width: 7%;">تاريخ السفر</th>
+                <th style="width: 16%;">المسافر</th>
+                <th style="width: 8%;">رقم الحجز</th>
+                <th style="width: 11%;">مدين</th>
+                <th style="width: 11%;">دائن</th>
+                <th style="width: 9%;">الرصيد</th>
             </tr>
         </thead>
         <tbody>
@@ -254,58 +313,117 @@ if($st == 0){
             foreach($AccountStatements as $AccountStatement){
                 $total_cumulative_balance += $AccountStatement->cumulative_balance;
             }
+
+            // Batch-fetch every per-row lookup once instead of inside the loop (was N+1:
+            // up to 5 queries per row across Bond/Invoice/TicketUser/Bank/Collector/SubStorage).
+            $storage_es_ids = [];
+            $invoice_es_ids = [];
+            foreach ($AccountStatements as $as_row) {
+                if ($as_row->trans_storage == 1) {
+                    $storage_es_ids[] = $as_row->es_id;
+                } elseif ($as_row->is_supp_account == 0) {
+                    $invoice_es_ids[] = $as_row->es_id;
+                }
+            }
+
+            $bonds_by_es_id = App\Models\Bond::whereIn('es_id', array_unique($storage_es_ids))->get()
+                ->groupBy('es_id')->map(function($g){ return $g->first(); });
+
+            $invoices_by_es_id = App\Models\Invoice::whereIn('es_id', array_unique($invoice_es_ids))->get()
+                ->groupBy('es_id')->map(function($g){ return $g->first(); });
+
+            $ticket_system_ids = $invoices_by_es_id->pluck('ticket_system_id')->unique()->filter()->values()->all();
+            $ticket_users_by_ticket_system_id = App\Models\TicketUser::whereIn('ticket_system_id', $ticket_system_ids)->get()
+                ->groupBy('ticket_system_id');
+
+            $bank_ids = $bonds_by_es_id->where('money_way', 2)->pluck('bank_id')->unique()->filter()->values()->all();
+            $banks_by_id = App\Models\Bank::whereIn('id', $bank_ids)->get()->keyBy('id');
+
+            $collector_ids = $bonds_by_es_id->reject(function($b){ return in_array($b->money_way, [1, 2]); })
+                ->pluck('collector_info')->unique()->filter()->values()->all();
+            $collectors_by_id = App\Models\Collector::whereIn('id', $collector_ids)->get()->keyBy('id');
+
+            $sub_storage_ids = [];
+            foreach ($AccountStatements as $as_row) {
+                if ($as_row->trans_storage == 1 && $as_row->sub_id != 0) {
+                    $sub_storage_ids[] = (int) $as_row->sub_id;
+                }
+            }
+            $sub_storages_by_id = App\Models\SubStorage::whereIn('id', array_unique($sub_storage_ids))->get()->keyBy('id');
             ?>
 
             <?php $x = 0; ?>
             @foreach($AccountStatements as $key => $AccountStatement)
             <?php
+            // Cumulative running balance: computed exactly once per accounting
+            // transaction (this AccountStatement row), exactly as before this
+            // change. Passenger breakdown rows below only DISPLAY this same
+            // value on their first row -- never recomputed or added again --
+            // so a multi-passenger invoice still advances the running balance
+            // by exactly one transaction's worth, never once per passenger.
             $closing = (int) $AccountStatement->debit_balance - (int) $AccountStatement->credit_balance;
             $total_blnc += $closing;
+            $total_blnc_display = number_format($total_blnc, 2);
+
+            $ticket_info = null;
+            $users = collect();
+            $bond = null;
 
             if($AccountStatement->trans_storage == 1){
-                $ticket_info = App\Models\Bond::select('*')->where('es_id' , $AccountStatement->es_id)->get();
-                $ticket_info = $ticket_info[0];    
-                $bond = $ticket_info;    
+                // Defensive fallback: guards against a row where transaction_type implies a
+                // bond but no matching Bond row exists (pre-existing data/view edge case, not
+                // introduced by this batch -- see Batch E report).
+                $ticket_info = $bonds_by_es_id->get($AccountStatement->es_id) ?? new App\Models\Bond();
+                $bond = $ticket_info;
             }else{
                 if($AccountStatement->is_supp_account == 0){
-                    $ticket_info = App\Models\Invoice::select('*')->where('es_id' , $AccountStatement->es_id)->get();
-                    $ticket_info = $ticket_info[0];
-                    $users = App\Models\TicketUser::select('*')->where('ticket_system_id' , $ticket_info->ticket_system_id)->get();
-                    
-                    $total_client_net_pice = 0;
-                    $total_client_bought_price = 0;
-                    
-                    foreach($users as $user){
-                        $total_client_net_pice += $user->client_net_pice;
-                        $total_client_bought_price += $user->client_bought_price;
-                    }  
-                }  
+                    $ticket_info = $invoices_by_es_id->get($AccountStatement->es_id) ?? new App\Models\Invoice();
+                    $users = $ticket_users_by_ticket_system_id->get($ticket_info->ticket_system_id, collect());
+                }
             }
-            
+
             $result = substr($AccountStatement->es_id, 0, 6);
-            ?> 
+
+            if($AccountStatement->invoice_type == 1){ $type = "فواتير الطيران"; }
+            elseif($AccountStatement->invoice_type == 2){ $type = "فواتير تأشيرات"; }
+            elseif($AccountStatement->invoice_type == 3){ $type = "فواتير سياحة داخلية"; }
+            elseif($AccountStatement->invoice_type == 4){ $type = "فواتير سياحة خارجية"; }
+            elseif($AccountStatement->invoice_type == 5){ $type = "فواتير سياحة دينية"; }
+            elseif($AccountStatement->invoice_type == 6){ $type = "فواتير تأمينات السفر"; }
+            elseif($AccountStatement->invoice_type == 7){ $type = "فواتير تحاليل السفر"; }
+            elseif($AccountStatement->invoice_type == 8){ $type = "فواتير نقل سياحي"; }
+            elseif($AccountStatement->invoice_type == 9){ $type = "سند دفع"; }
+            elseif($AccountStatement->invoice_type == 10){ $type = "سند قبض"; }
+            elseif($AccountStatement->invoice_type == 11){ $type = "أرصدة"; }
+            elseif($AccountStatement->invoice_type == 12){ $type = "سداد فاتورة"; }
+            else { $type = "أخرى"; }
+
+            // Passenger breakdown only applies to flight/ticket transactions with
+            // real, resolvable TicketUser records. Everything else (bonds, the
+            // special opening-balance row, invoices with no resolvable passenger
+            // rows) falls back to exactly one row, same as before this change.
+            $isOpeningBalanceRow = $AccountStatement->es_id == "FLY-OPEN-BALANCE";
+            $hasPassengerBreakdown = !$isOpeningBalanceRow && $AccountStatement->transaction_type == 1 && $ticket_info && $users->count() > 0;
+            $breakdownRows = $hasPassengerBreakdown ? $users->values() : collect([null]);
+
+            // client_net_pice sums to credit_balance (this account is owed) and
+            // client_bought_price sums to debit_balance (this account owes) --
+            // verified against real data (both sides of the same real transaction)
+            // before implementing this. Only the side that actually carries a
+            // nonzero transaction amount gets a per-passenger breakdown; the
+            // other stays blank, matching the transaction's own zero value.
+            $debitHasAmount = $AccountStatement->debit_balance > 0;
+            $creditHasAmount = $AccountStatement->credit_balance > 0;
+            ?>
+            @foreach($breakdownRows as $rowIndex => $user)
             <tr>
-                @if($AccountStatement->es_id == "FLY-OPEN-BALANCE")
-                    <td colspan="4" style="text-align: center; font-weight: bold; background: #f0f0f0;">الأرصدة الافتتاحية</td>
+                @if($isOpeningBalanceRow)
+                    <td colspan="8" style="text-align: center; font-weight: bold; background: #f0f0f0;">الأرصدة الافتتاحية</td>
                 @else
                     <td style="font-weight: bold;">{{$AccountStatement->es_id}}</td>
                     <td>
-                        <?php
-                        if($AccountStatement->invoice_type == 1){ $type = "فواتير الطيران"; }
-                        elseif($AccountStatement->invoice_type == 2){ $type = "فواتير تأشيرات"; }
-                        elseif($AccountStatement->invoice_type == 3){ $type = "فواتير سياحة داخلية"; }
-                        elseif($AccountStatement->invoice_type == 4){ $type = "فواتير سياحة خارجية"; }
-                        elseif($AccountStatement->invoice_type == 5){ $type = "فواتير سياحة دينية"; }
-                        elseif($AccountStatement->invoice_type == 6){ $type = "فواتير تأمينات السفر"; }
-                        elseif($AccountStatement->invoice_type == 7){ $type = "فواتير تحاليل السفر"; }
-                        elseif($AccountStatement->invoice_type == 8){ $type = "فواتير نقل سياحي"; }
-                        elseif($AccountStatement->invoice_type == 9){ $type = "سند دفع"; }
-                        elseif($AccountStatement->invoice_type == 10){ $type = "سند قبض"; }
-                        elseif($AccountStatement->invoice_type == 11){ $type = "أرصدة"; }
-                        elseif($AccountStatement->invoice_type == 12){ $type = "سداد فاتورة"; }
-                        ?>
                         @if($AccountStatement->transaction_type == 1)
-                            تذاكر / 
+                            تذاكر /
                         @elseif($AccountStatement->transaction_type == 2)
                             سندات /
                         @elseif($AccountStatement->transaction_type == 3)
@@ -315,90 +433,114 @@ if($st == 0){
                         @endif
                         {{$type}}
                     </td>
-                    
+
                     <td>
-                        @if($AccountStatement->transaction_type == 1) 
+                        @if($AccountStatement->transaction_type == 1 && $ticket_info)
                             {{$ticket_info->invoice_date}}
                         @else
                             {{$AccountStatement->created_at}}
                         @endif
                     </td>
-                    
-                    <td>
-                        <div class="transaction-details">
-                            @if($result == "FLY-RD")
-                                إلغاء تذكرة {{$AccountStatement->es_id}}
-                            @elseif($result == "FLY-RS")
-                                إعادة إصدار تذكرة {{$AccountStatement->es_id}}
-                            @else
-                                {{$AccountStatement->transaction_txt}}
-                            @endif
-                            
-                            @if($AccountStatement->transaction_type == 1)
-                                <span class="inline-info">خط الطيران: {{$ticket_info->invoice_airline}}</span>
-                                <span class="inline-info">وجهة السفر: {{$ticket_info->from_location}} - {{$ticket_info->to_location}}</span>
-                                <span class="inline-info">أرقام الحجز: 
-                                    @foreach($users as $user) 
-                                        {{$user->client_booking_id}}@if(!$loop->last) / @endif
-                                    @endforeach
-                                </span>
 
-                                <div class="passenger-names">
-                                    الركاب: @foreach($users as $user) 
-                                        {{$user->client_name}}@if(!$loop->last) / @endif
-                                    @endforeach
+                    <td>
+                        @if($AccountStatement->transaction_type == 1 && $ticket_info)
+                            <span class="ey-ltr">{{$ticket_info->invoice_airline}}</span>
+                        @endif
+                    </td>
+                    <td>
+                        @if($AccountStatement->transaction_type == 1 && $ticket_info)
+                            <span class="ey-ltr">{{$ticket_info->from_location}} - {{$ticket_info->to_location}}</span>
+                        @endif
+                    </td>
+                    <td>
+                        @if($AccountStatement->transaction_type == 1 && $ticket_info)
+                            {{$ticket_info->invoice_travel_date}}
+                        @endif
+                    </td>
+
+                    <td>
+                        @if($hasPassengerBreakdown)
+                            <span class="ey-ltr">{{$user->client_name}}</span>
+                        @else
+                            <div class="ey-trip-info">
+                                <div>
+                                    @if($result == "FLY-RD")
+                                        إلغاء تذكرة {{$AccountStatement->es_id}}
+                                    @elseif($result == "FLY-RS")
+                                        إعادة إصدار تذكرة {{$AccountStatement->es_id}}
+                                    @else
+                                        {{$AccountStatement->transaction_txt}}
+                                    @endif
                                 </div>
-                            @endif
-                            
-                            @if($AccountStatement->transaction_type == 2)
-                                @if($bond->money_way == 1)
-                                    دفع نقدي 
-                                @elseif($bond->money_way == 2)
-                                    تحويل بنكي
-                                    <?php
-                                    $bank_info = App\Models\Bank::select('*')->where('id',$bond->bank_id)->get();
-                                    $bank_info = $bank_info[0];
-                                    ?>
-                                    - {{$bank_info->bank_name}}
-                                @else
-                                    تحصيل من المندوب: 
-                                    <?php
-                                    $collector_info = App\Models\Collector::select('*')->where('id',$bond->collector_info)->get();
-                                    $collector_info = $collector_info[0];
-                                    ?>
-                                    {{$collector_info->name}}
+
+                                @if($AccountStatement->transaction_type == 2 && $bond)
+                                    <div>
+                                    @if($bond->money_way == 1)
+                                        دفع نقدي
+                                    @elseif($bond->money_way == 2)
+                                        تحويل بنكي
+                                        <?php
+                                        $bank_info = $banks_by_id->get($bond->bank_id) ?? new App\Models\Bank();
+                                        ?>
+                                        - {{$bank_info->bank_name}}
+                                    @else
+                                        تحصيل من المندوب:
+                                        <?php
+                                        $collector_info = $collectors_by_id->get($bond->collector_info) ?? new App\Models\Collector();
+                                        ?>
+                                        {{$collector_info->name}}
+                                    @endif
+                                    </div>
                                 @endif
-                            @endif
-                            
-                            @if($AccountStatement->trans_storage == 1 && $AccountStatement->sub_id != 0)
-                                <?php
-                                $sub_id = (int) $AccountStatement->sub_id;
-                                $min_info3 = App\Models\SubStorage::select('*')->where('id' , $sub_id)->get();
-                                $min_info3 = $min_info3[0];
-                                ?>
-                                <span class="inline-info">خزينة فرعية: {{$min_info3->name}}</span>
-                            @endif
-                        </div>
+
+                                @if($AccountStatement->trans_storage == 1 && $AccountStatement->sub_id != 0)
+                                    <?php
+                                    $sub_id = (int) $AccountStatement->sub_id;
+                                    $min_info3 = $sub_storages_by_id->get($sub_id) ?? new App\Models\SubStorage();
+                                    ?>
+                                    <div>خزينة فرعية: {{$min_info3->name}}</div>
+                                @endif
+                            </div>
+                        @endif
+                    </td>
+
+                    <td>
+                        @if($hasPassengerBreakdown)
+                            <span class="ey-ltr">{{$user->client_booking_id}}</span>
+                        @endif
+                    </td>
+
+                    <td class="amount-debit">
+                        @if($hasPassengerBreakdown && $debitHasAmount)
+                            {{number_format($user->client_bought_price, 2)}}
+                        @elseif(!$hasPassengerBreakdown)
+                            {{number_format($AccountStatement->debit_balance , 2)}}
+                        @endif
+                    </td>
+                    <td class="amount-credit">
+                        @if($hasPassengerBreakdown && $creditHasAmount)
+                            {{number_format($user->client_net_pice, 2)}}
+                        @elseif(!$hasPassengerBreakdown)
+                            {{number_format($AccountStatement->credit_balance , 2)}}
+                        @endif
+                    </td>
+                    <td class="amount-balance">
+                        @if($rowIndex === 0)
+                            {{$total_blnc_display}}
+                        @endif
                     </td>
                 @endif
-                
-                <td class="amount-debit">{{number_format($AccountStatement->debit_balance , 2)}}</td>
-                <td class="amount-credit">{{number_format($AccountStatement->credit_balance , 2)}}</td>
-                <td class="amount-balance">{{number_format($total_blnc , 2)}}</td>
             </tr>
+            @endforeach
             <?php $x++; ?>
             @endforeach
             
             <!-- Total Row -->
             <tr class="total-row">
-                <td colspan="4" style="text-align: center;">الإجمالي</td>
+                <td colspan="8" style="text-align: center;">الإجمالي</td>
                 <td>{{number_format($total_debit_balance , 2)}}</td>
                 <td>{{number_format($total_credit_balance , 2)}}</td>
-                @if($st == 1)
-                    <td>{{number_format($supplier->opening_credit_balance + $supplier->debit_opening_balance + $total_debit_balance - $total_credit_balance,2)}}</td>
-                @else
-                    <td>{{number_format($total_debit_balance - $total_credit_balance,2)}}</td>
-                @endif
+                <td>{{number_format($total_debit_balance - $total_credit_balance,2)}}</td>
             </tr>
         </tbody>
     </table>
@@ -441,6 +583,8 @@ if($st == 0){
             </tr>
         </tbody>
     </table>
+
+    <x-print-footer :note="$title_1" />
 </div>
 
 @endsection
