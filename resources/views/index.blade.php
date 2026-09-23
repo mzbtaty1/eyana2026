@@ -220,12 +220,12 @@
 
 <script>
    let table = new DataTable('#InvoicesTable', {
+       // This table has only 3 columns (#, اسم الحساب, رصيد). The columnDefs
+       // below used to target column indices 10/11/13, which don't exist here
+       // (leftover from a much wider table elsewhere in the app) -- DataTables
+       // built a malformed column object for those out-of-range targets,
+       // throwing "col.fnGetData is not a function" on every dashboard load.
        ordering: false,
-       columnDefs: [
-           { target: 10, visible: false },
-           { target: 11, visible: false },
-           { target: 13, visible: false },
-       ],
        responsive: true,
        layout: {
            topStart: {
