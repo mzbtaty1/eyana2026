@@ -333,9 +333,12 @@ $url2 = route('site.accounts_statement_print_excel' , [
             @endif
         </td>
         <td style="text-align: right;">
-            @if($rowIndex === 0)
-                {{$total_blnc_display}}
-            @endif
+            {{-- Repeated on every passenger row of this same booking so the
+            balance column is never blank; this is display-only -- the
+            transaction itself is still counted exactly once above ($closing /
+            $total_blnc are computed once per AccountStatement row, not once
+            per passenger). --}}
+            {{$total_blnc_display}}
         </td>
 
         <td style="text-align: right;">

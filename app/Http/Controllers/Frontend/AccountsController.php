@@ -108,8 +108,14 @@ class AccountsController extends Controller
         }
 
 
-        // $AccountStatements = $AccountStatements->orderBy('created_at','DESC');
-        $AccountStatements = $AccountStatements->get();
+        // Chronological ledger order: the running balance below is recalculated
+        // fresh on every request from this order, so a transaction added later
+        // but dated earlier (a backdated invoice) must still land in its real
+        // date position -- not wherever it happened to be inserted. crt_date is
+        // the same field the date filter and opening-balance calc use, so this
+        // is "the" accounting date throughout. id is a deterministic tiebreaker
+        // for same-day rows, using the existing auto-increment primary key.
+        $AccountStatements = $AccountStatements->orderBy('crt_date', 'asc')->orderBy('id', 'asc')->get();
 
         // Carried-forward balance: when a date range is selected, the period's
         // running/closing balance must continue from the real historical balance
@@ -228,7 +234,9 @@ class AccountsController extends Controller
         }
 
 
-        $AccountStatements = $AccountStatements->get();
+        // See accounts_statement_search() for why this must be a real chronological
+        // sort (by crt_date, then id) rather than default/insertion order.
+        $AccountStatements = $AccountStatements->orderBy('crt_date', 'asc')->orderBy('id', 'asc')->get();
 
         // See accounts_statement_search() for why this must be date-based, not
         // Supplier::opening_credit_balance/debit_opening_balance (would double-count).

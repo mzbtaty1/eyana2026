@@ -528,9 +528,9 @@ if($st == 0){
                         @endif
                     </td>
                     <td class="amount-balance">
-                        @if($rowIndex === 0)
-                            {{$total_blnc_display}}
-                        @endif
+                        {{-- Repeated on every passenger row of this same booking, same as
+                        the screen -- display-only, the transaction is still counted once. --}}
+                        {{$total_blnc_display}}
                     </td>
                 @endif
             </tr>
