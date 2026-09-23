@@ -60,7 +60,7 @@ $rname = Route::currentRouteName();
       
       
       
-          <script src="https://emposys.khadamaat.org/public/assets/dselect.js?v={{rand()}}"></script>
+          <script src="{{asset('assets/dselect.js')}}?v={{file_exists(public_path('assets/dselect.js')) ? filemtime(public_path('assets/dselect.js')) : 1}}"></script>
 
        
       <link href="https://cdn.datatables.net/2.0.8/css/dataTables.dataTables.css" rel="stylesheet">
@@ -686,11 +686,11 @@ $rname = Route::currentRouteName();
           
          
       
-      // Guarded: dselect.js loads from an external domain
-      // (emposys.khadamaat.org) that isn't always reachable, and most of
-      // these target elements only exist on invoice-related pages. Without
-      // these guards, calling dselect() on a missing element or before the
-      // script has loaded throws an uncaught exception on every page load.
+      // Guarded: most of these target elements only exist on invoice-related
+      // pages, and dselect.js may not have finished loading yet on a slow
+      // connection. Without these guards, calling dselect() on a missing
+      // element or before the script has loaded throws an uncaught
+      // exception on every page load.
       if (typeof dselect === 'function') {
          [select_box_element, select_box_element2, select_box_element3, select_box_element4, select_box2_t2, select_boxt2, invoice_group]
             .forEach(function (el) {

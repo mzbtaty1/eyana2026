@@ -82,7 +82,7 @@ $(document).ready(function() {
    </div>
    <!--end col-->
 </div>
- <script src="https://emposys.khadamaat.org/public/assets/dselect.js"></script>
+ <script src="{{asset('assets/dselect.js')}}"></script>
  
 
 <script type="text/javascript">
