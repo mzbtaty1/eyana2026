@@ -1,19 +1,15 @@
 @extends('layouts.app')
 @section('content')
 @section('title' , "بحث كشف حساب")
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js" integrity="sha512-894YE6QWD5I59HgZOGReFYm4dnWc1Qt5NtvYSaNcOP+u1T9qYdvdihz0PPSiiqn/+/3e7Jo4EaG7TubfWGUrMQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-
-
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-<!-- JS for searching -->
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-
-<script>
-// .js-example-basic-single declare this class into your select box
-$(document).ready(function() {
-    $('.js-example-basic-single').select2();
-});
-</script>
+{{--
+    This page previously loaded a second, independent Select2 setup (its own
+    jQuery, CDN, and .select2() call) on top of dselect() being called on the
+    same field -- two competing widgets on one select, which is why the
+    dropdown didn't reliably open/search. dselect.js (loaded below, local
+    copy, already proven working on invoices/create.blade.php and others) is
+    the chosen implementation here; Select2 provided no capability dselect
+    doesn't already have, so it's removed rather than reconciled.
+--}}
 
 <div class="row">
    <div class="col-lg-12">
@@ -30,7 +26,7 @@ $(document).ready(function() {
                <p>
                     المورد / المستفيد
                      </p>
-<select class="js-example-basic-single" name="invoice_beneficiaries" id="invoice_group_id" style="text-align:right;" required>
+<select name="invoice_beneficiaries" id="accounts_statement_beneficiary" style="text-align:right;" required>
                           <option value="0">كشف حساب عام</option>
                   @foreach($suppliers as $supplier)
                   <option value="{{$supplier->id}}">{{$supplier->name}} - @if($supplier->acc_type == 1) عميل @elseif($supplier->acc_type == 2) مورد @else مصروفات @endif</option>
@@ -88,7 +84,7 @@ $(document).ready(function() {
 <script type="text/javascript">
     
     
- var invoice_beneficiaries = document.querySelector('#invoice_group_id');
+ var invoice_beneficiaries = document.querySelector('#accounts_statement_beneficiary');
   dselect(invoice_beneficiaries, {
             search: true
         });
