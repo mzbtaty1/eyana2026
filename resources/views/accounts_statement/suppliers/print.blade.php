@@ -54,17 +54,14 @@ $title = "كشف حساب موردين " . \Str::random(8);
 <!--    <button class="btn btn-primary" style="width:100%;" id="printBtn" onclick="do_print()">اضغط هنا للطباعة</button>-->
     <div class="border_print">
     
-    <img src="{{asset('assets/images/flymix_colored.png')}}"  style="  width: 154px;">
-        <h5 style="  float: right;  text-align: right;  line-height: 31px;">
-        كشف حساب موردين
-        
-            
-        </h5>
-       
-        <hr>
-        
+    <x-print-header
+        title="كشف حساب موردين"
+        :date-from="$sts != 0 ? ($date_from ?? null) : null"
+        :date-to="$sts != 0 ? ($date_to ?? null) : null"
+    />
+
         <div class="t">
-              <table id="InvoicesTable" class="table table-bordered dt-responsive nowrap table-striped align-middle" style="width:100%" dir="rtl">
+              <table id="InvoicesTable" class="table table-bordered dt-responsive nowrap table-striped align-middle ey-print-table" style="width:100%" dir="rtl">
                     
                   
                     
@@ -82,32 +79,30 @@ $title = "كشف حساب موردين " . \Str::random(8);
                </thead>
                 <tbody>
                    <?php
-                   
+
                    $x = 1;
+
+                   // Batch the per-supplier credit/debit totals in one grouped query instead of
+                   // one AccountStatement query per supplier row (was N+1). SUM() over the same
+                   // filtered rows is numerically identical to the previous PHP accumulation.
+                   $supplier_ids_for_totals = $suppliers->pluck('id')->all();
+                   $totals_query = App\Models\AccountStatement::whereIn('supp_client_id', $supplier_ids_for_totals)
+                       ->where('is_storage', '!=', 1);
+                   if ($sts != 0) {
+                       $totals_query = $totals_query->whereBetween('crt_date', [$date_from, $date_to]);
+                   }
+                   $totals_by_supplier = $totals_query
+                       ->selectRaw('supp_client_id, SUM(credit_balance) as total_credit, SUM(debit_balance) as total_debit')
+                       ->groupBy('supp_client_id')
+                       ->get()
+                       ->keyBy('supp_client_id');
                    ?>
                     @foreach($suppliers as $supplier)
-                    
+
                      <?php
-                          $trsnactions = App\Models\AccountStatement::select('*')
-                          ->where('supp_client_id' , $supplier->id)
-                          ->where('is_storage', '!=' , 1);
-                          
-                      
-                    if($sts == 0){
-                     
-                    }else{
-                           $trsnactions = $trsnactions->whereBetween('crt_date' , [$date_from , $date_to]);
-                    }  
-                   
-                      $trsnactions = $trsnactions->get();
-                      $total_credit = 0;
-                      $total_debit = 0;
-                      
-                    foreach($trsnactions as $trsnaction){
-                        $total_credit += $trsnaction->credit_balance;
-                        $total_debit += $trsnaction->debit_balance;
-                    }  
-                      
+                      $supplier_totals_row = $totals_by_supplier->get($supplier->id);
+                      $total_credit = $supplier_totals_row->total_credit ?? 0;
+                      $total_debit = $supplier_totals_row->total_debit ?? 0;
                       ?>
                     
                                 @if($total_debit - $total_credit == 0)
@@ -151,7 +146,9 @@ $title = "كشف حساب موردين " . \Str::random(8);
 
 
 </div>
-      <script src="https://cuoratech.com/assets/jquery-3.7.0.slim.min.js?v=6655"></script> 
+
+<x-print-footer note="كشف حساب موردين" />
+      <script src="https://cuoratech.com/assets/jquery-3.7.0.slim.min.js?v=6655"></script>
   <script>
         window.onload = setTimeout(function(){
     

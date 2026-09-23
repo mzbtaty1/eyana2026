@@ -163,15 +163,15 @@ class StoragesController extends Controller
         
         
 
-        if(isset($request->date_from) && isset($request->date_to)){
+        if(isset($date_from) && isset($date_to)){
             $AccountStatements = $AccountStatements->whereBetween('crt_date' , [$date_from , $date_to]);
         }
-        
-        if(isset($request->transaction_type)){
+
+        if(isset($transaction_type)){
             $AccountStatements = $AccountStatements->where('transaction_type' , $transaction_type);
         }
-         
-        
+
+
         $AccountStatements = $AccountStatements->get();
 //        dd($AccountStatements);
 //        dd($st);

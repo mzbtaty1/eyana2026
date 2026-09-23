@@ -5,19 +5,15 @@
    <div class="col-lg-12">
   
       <div class="card">
-         <div class="card-header">
-            <h5 class="card-title mb-0"> اضافة بنك جديد </h5>
-         </div>
-         <div class="card-body">
+         <x-page-header title="اضافة بنك جديد" />
+<div class="card-body">
             <form action="{{route('site.banks_save')}}" method="POST" autocomplete="off">
                @csrf
-               @if($errors->any())
-               <div class="alert alert-info"><i class="ri-file-info-line"></i> {{$errors->first()}}</div>
-               @endif
+@include('components.flash-messages')
 
                <p>
                     اسم البنك
-                <rtag>(*)</rtag>
+                <span class="text-danger">*</span>
                 </p>
                      <input type="text" name="bank_name" value="{{old('bank_name')}}" placeholder="اسم البنك" class="form-control @error('bank_name') is-invalid @enderror" style="text-align:right;" required="">
                      @error('bank_name') <div class="invalid-feedback">{{$message}}</div> @enderror
@@ -25,7 +21,7 @@
 
                  <p>
                     رصيد البنك
-                <rtag>(*)</rtag>
+                <span class="text-danger">*</span>
                 </p>
                      <input type="text" name="bank_balance" value="{{old('bank_balance')}}" placeholder="رصيد البنك" class="form-control @error('bank_balance') is-invalid @enderror" style="text-align:right;" required="">
                      @error('bank_balance') <div class="invalid-feedback">{{$message}}</div> @enderror

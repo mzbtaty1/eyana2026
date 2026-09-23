@@ -10,23 +10,11 @@
   font-size: 12px;
     }
 </style>
+<x-page-header title="القاصة اليومية - بحث بتاريخ اليوم : {{date('Y/m/d')}}" />
 <div class="row">
    <div class="col-lg-12">
-  
+
       <div class="card">
-         <div class="card-header">
-            <h5 class="card-title mb-0"> 
-                القاصة اليومية  - بحث بتاريخ اليوم : {{date('Y/m/d')}}
-             </h5>
-<!--
-             <a href="{{route('site.bonds_create')}}">
-             <button class="btn btn-primary" style="float: left;margin-top: -22px;">
-                 <i class="ri-file-add-line"></i>
-                 اضافة سندات  
-                 </button>
-             </a>
--->
-         </div>
          <div class="card-body">
           
              
@@ -34,7 +22,6 @@
                <table id="InvoicesTable" class="table table-bordered dt-responsive nowrap table-striped align-middle" style="width:100%">
                <thead>
                   <tr>
-                     <th data-ordering="false" style="text-align: right;">#</th>
                      <th data-ordering="false" style="text-align: right;">نوع العملية</th>
                       
                      <th data-ordering="false" style="text-align: right;">بيان العملية</th>
@@ -91,44 +78,66 @@
                        }else{
                             $total_bonds_2 += $bond->amount;
                        }
-                      
+
                    }
-                   
+
+                   // Batch-fetch every per-row lookup once instead of inside the loop (was N+1:
+                   // up to 5 queries per row across Storage/Supplier/SubStorage/Bank/Collector/User).
+                   $storage_ids_dr = [];
+                   $supplier_ids_dr = [];
+                   $sub_storage_ids_dr = [];
+                   foreach ($bonds as $b_row) {
+                       if ($b_row->from_type == "storage") { $storage_ids_dr[] = $b_row->from_account; }
+                       else { $supplier_ids_dr[] = $b_row->from_account; }
+                       if ($b_row->to_type == "storage") { $storage_ids_dr[] = $b_row->to_account; }
+                       else { $supplier_ids_dr[] = $b_row->to_account; }
+                       if ($b_row->sub_id != null && (int) $b_row->sub_id != 0) {
+                           $sub_storage_ids_dr[] = (int) $b_row->sub_id;
+                       }
+                   }
+                   $storages_by_id_dr = App\Models\Storage::whereIn('id', array_unique($storage_ids_dr))->get()->keyBy('id');
+                   $suppliers_by_id_dr = App\Models\Supplier::whereIn('id', array_unique($supplier_ids_dr))->get()->keyBy('id');
+                   $sub_storages_by_id_dr = App\Models\SubStorage::whereIn('id', array_unique($sub_storage_ids_dr))->get()->keyBy('id');
+
+                   $bank_ids_dr = $bonds->where('money_way', 2)->pluck('bank_id')->unique()->filter()->values()->all();
+                   $banks_by_id_dr = App\Models\Bank::whereIn('id', $bank_ids_dr)->get()->keyBy('id');
+
+                   $collector_ids_dr = $bonds->reject(function($b){ return in_array($b->money_way, [1, 2]); })
+                       ->pluck('collector_info')->unique()->filter()->values()->all();
+                   $collectors_by_id_dr = App\Models\Collector::whereIn('id', $collector_ids_dr)->get()->keyBy('id');
+
+                   $user_ids_dr = $bonds->pluck('created_by')->unique()->filter()->values()->all();
+                   $users_by_id_dr = App\Models\User::whereIn('id', $user_ids_dr)->get()->keyBy('id');
                    ?>
                    <tr>
-                   
-                   <td style="text-align: right;">
+
+                   <td colspan="2" style="text-align: right;">
                        الرصيد السابق
                        </td>
-                <td>--</td>
-                <td>--</td>
-               
+
                        <td style="text-align: right;">{{number_format($total_bonds_als,2)}}</td>
-                       
+
                        <td>--</td>
                        <td>--</td>
                        <td>--</td>
-                       
+
                    </tr>
                    <tr>
-                   
-                   <td style="text-align: right;">
+
+                   <td colspan="2" style="text-align: right;">
                        الرصيد السابق
                     أمس : {{$yas_date2}}
                        </td>
-                <td>--</td>
-                <td>--</td>
-               
+
                        <td style="text-align: right;">{{number_format($total_bonds,2)}}</td>
-                       
+
                        <td>--</td>
                        <td>--</td>
                        <td>--</td>
-                       
+
                    </tr>
                   @foreach($bonds as $bond)
                   <tr>
-                     <td style="text-align: right;">{{$bond->es_id}}</td>
                      <td style="text-align: right;">
                       <?php
                          if($bond->type == 1){
@@ -136,45 +145,41 @@
                          }else{
                              $type = "سند قبض";
                          }
-    
+
                          ?>
                          {{$type}}
                       </td>
                      <td style="text-align: right;">
-                      
-                      تحويل من 
+
+                      تحويل من
                          @if($bond->from_type == "storage")
                          خزينة
                          <?php
-                         $min_info = App\Models\Storage::select('*')->where('id' , $bond->from_account)->get();
-                         $min_info = $min_info[0];
+                         $min_info = $storages_by_id_dr->get($bond->from_account) ?? new App\Models\Storage();
                          ?>
                          @else
                          حساب
                          <?php
-                         $min_info = App\Models\Supplier::select('*')->where('id' , $bond->from_account)->get();
-                         $min_info = $min_info[0];
+                         $min_info = $suppliers_by_id_dr->get($bond->from_account) ?? new App\Models\Supplier();
                          ?>
                          @endif
                          <b>{{$min_info->name}}</b>
-                         
-                         
+
+
                          لصالح
                           @if($bond->to_type == "storage")
                          خزينة
-                         
+
                           <?php
-                         $min_info2 = App\Models\Storage::select('*')->where('id' , $bond->to_account)->get();
-                         $min_info2 = $min_info2[0];
+                         $min_info2 = $storages_by_id_dr->get($bond->to_account) ?? new App\Models\Storage();
                          ?>
-                         
+
                          @else
                          حساب
                          <?php
-                         $min_info2 = App\Models\Supplier::select('*')->where('id' , $bond->to_account)->get();
-                         $min_info2 = $min_info2[0];
+                         $min_info2 = $suppliers_by_id_dr->get($bond->to_account) ?? new App\Models\Supplier();
                          ?>
-                         @endif 
+                         @endif
                           <b>{{$min_info2->name}}</b>
                          @if($bond->sub_id == null)
                          @else
@@ -182,20 +187,21 @@
                          <?php
                          $sub_id = (int) $bond->sub_id;
                          if($sub_id == 0){
-                             
+
                          }else{
-                             $min_info3 = App\Models\SubStorage::select('*')->where('id' , $bond->sub_id)->get();
-                         $min_info3 = $min_info3[0];
-                             
+                             $min_info3 = $sub_storages_by_id_dr->get($sub_id) ?? new App\Models\SubStorage();
+
                          }
-                         
+
                          ?>
                          @if($sub_id == 0)
                          @else
                          خزينة فرعية : <b>{{$min_info3->name}}</b>
                          @endif
                          @endif
-                         
+                         @if($bond->es_id)
+                         <div class="text-muted" style="font-size:11px;">المرجع: {{$bond->es_id}}</div>
+                         @endif
                       </td>
                      <td style="text-align: right;">{{number_format($bond->amount,2)}}</td>
                      <td style="text-align: right;">
@@ -204,24 +210,20 @@
                          @elseif($bond->money_way == 2)
                          تحويل بنكي
                     <?php
-                         $bank_info = App\Models\Bank::select('*')->where('id',$bond->bank_id)->get();
-                         $bank_info = $bank_info[0];
+                         $bank_info = $banks_by_id_dr->get($bond->bank_id) ?? new App\Models\Bank();
                          ?>
                          {{$bank_info->bank_name}}
                          @else
-                         تحصيل من المندوب : 
+                         تحصيل من المندوب :
                          <?php
-                         $collector_info = App\Models\Collector::select('*')->where('id',$bond->collector_info)->get();
-                         $collector_info = $collector_info[0];
+                         $collector_info = $collectors_by_id_dr->get($bond->collector_info) ?? new App\Models\Collector();
                          ?>
                          {{$collector_info->name}}
-                         
+
                          @endif
                       </td>
                     <?php
-                      $user_inf = App\Models\User::select('*')->where('id',$bond->created_by)->get();
-                      $user_inf = $user_inf[0];
-                          
+                      $user_inf = $users_by_id_dr->get($bond->created_by) ?? new App\Models\User();
                       ?>
                    <td style="text-align: right;">{{$user_inf->name}}</td>
                    <td>

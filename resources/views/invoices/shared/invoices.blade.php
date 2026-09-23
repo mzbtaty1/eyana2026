@@ -1,9 +1,7 @@
 @extends('layouts.app')
 @section('content')
 @section('title' , 'الفواتير المشتركة')
-    @if($errors->any())
-<div class="alert alert-info"><i class="ri-file-info-line"></i> {{$errors->first()}}</div>
-@endif 
+@include('components.flash-messages')
 
 <style>
     .buttons-collection{
@@ -19,10 +17,10 @@
    <div class="col-lg-12">
        
       <div class="card">
-         <div class="card-header">
+         <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
             <h5 class="card-title mb-0">قائمة الفواتير المشتركة</h5>
              <a href="{{route('site.shared_invoices_create')}}">
-             <button class="btn btn-primary" style="float: left;margin-top: -22px;">
+             <button class="btn btn-primary">
                  <i class="ri-file-add-line"></i>
                  اضافة فاتورة مشتركة
                  </button>

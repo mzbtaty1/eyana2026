@@ -5,16 +5,12 @@
    <div class="col-lg-12">
   
       <div class="card">
-         <div class="card-header">
-            <h5 class="card-title mb-0">تفاصيل المصروف : ({{$supplier->name}}) </h5>
-         </div>
-         <div class="card-body">
+         <x-page-header title="تفاصيل المصروف : ({{$supplier->name}})" />
+<div class="card-body">
             <form action="{{route('site.expenses_update')}}" method="POST" autocomplete="off">
                @csrf
                <input type="hidden" value="{{$supplier->id}}" name="id">
-                      @if($errors->any())
-<div class="alert alert-info"><i class="ri-file-info-line"></i> {{$errors->first()}}</div>
-@endif
+@include('components.flash-messages')
                <div class="row">
                   <div class="">
                      <p>

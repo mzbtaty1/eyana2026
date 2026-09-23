@@ -1,24 +1,27 @@
 @extends('layouts.app')
 @section('content')
 @section('title' , 'كشف حساب بنك')
-    @if($errors->any())
-<div class="alert alert-info"><i class="ri-file-info-line"></i> {{$errors->first()}}</div>
-@endif
+@include('components.flash-messages')
+<x-page-header title="كشف حساب بنك : {{$bank_info->bank_name}}">
+   <span class="ey-no-print d-inline-flex gap-2">
+      <button type="button" class="btn btn-outline-dark" onclick="window.print()">
+         <i class="ri-printer-line"></i> طباعة
+      </button>
+      <a href="{{route('site.banks_create')}}">
+         <button class="btn btn-primary">
+            <i class="ri-file-add-line"></i>
+            اضافة بنك جديد
+         </button>
+      </a>
+   </span>
+</x-page-header>
 <div class="row">
    <div class="col-lg-12">
 
       <div class="card">
-         <div class="card-header">
-            <h5 class="card-title mb-0"> كشف حساب بنك : {{$bank_info->bank_name}}</h5>
-             <a href="{{route('site.banks_create')}}">
-             <button class="btn btn-primary" style="float: left;margin-top: -22px;">
-                 <i class="ri-file-add-line"></i>
-                 اضافة بنك جديد
-                 </button>
-             </a>
-         </div>
          <div class="card-body">
 
+            <div class="ey-no-print">
             <form method="GET" action="{{route('site.bank_account_transactions', $bank_info->id)}}" class="row g-2 mb-3">
                 <div class="col-auto">
                     <label class="col-form-label">من تاريخ</label>
@@ -36,6 +39,11 @@
                     <button type="submit" class="btn btn-primary">عرض</button>
                 </div>
             </form>
+            </div>
+
+            <p class="d-none d-print-block text-muted mb-2">
+                الفترة: {{ $date_from ?: '—' }} : {{ $date_to ?: '—' }} — تاريخ الطباعة: {{ now()->format('Y-m-d H:i') }}
+            </p>
 
             <div class="row mb-3">
                 <div class="col-md-3">
@@ -76,15 +84,14 @@
                <thead>
                   <tr>
                      <th data-ordering="false" style="text-align:right;">التاريخ</th>
-                     <th data-ordering="false" style="text-align:right;">البيان</th>
-                     <th data-ordering="false" style="text-align:right;">المرجع</th>
+                     <th data-ordering="false" style="text-align:right;">البيان / المرجع</th>
                      <th data-ordering="false" style="text-align:right;">مدين</th>
                      <th data-ordering="false" style="text-align:right;">دائن</th>
                      <th data-ordering="false" style="text-align:right;">الرصيد بعد العملية</th>
                      <th data-ordering="false" style="text-align:right;">الحالة</th>
                   </tr>
                   <tr class="table-secondary">
-                     <td colspan="5"><b>رصيد افتتاحي{{ $date_from ? ' بتاريخ '.$date_from : '' }}</b></td>
+                     <td colspan="4"><b>رصيد افتتاحي{{ $date_from ? ' بتاريخ '.$date_from : '' }}</b></td>
                      <td style="text-align:right;"><b>{{number_format($opening_balance,2)}}</b></td>
                      <td>--</td>
                   </tr>
@@ -93,8 +100,12 @@
                   @foreach($entries as $entry)
                   <tr @if($entry->is_voided) class="text-muted" style="text-decoration: line-through;" @endif>
                      <td style="text-align:right;">{{ \Illuminate\Support\Carbon::parse($entry->transaction_date)->format('Y-m-d') }}</td>
-                     <td>{{$entry->description}}</td>
-                     <td style="text-align:right;">{{$entry->reference}}</td>
+                     <td>
+                        {{$entry->description}}
+                        @if($entry->reference)
+                        <br><span class="text-muted small">المرجع: {{$entry->reference}}</span>
+                        @endif
+                     </td>
                      <td style="text-align:right;">{{ $entry->debit > 0 ? number_format($entry->debit,2) : '--' }}</td>
                      <td style="text-align:right;">{{ $entry->credit > 0 ? number_format($entry->credit,2) : '--' }}</td>
                      <td style="text-align:right;">{{number_format($entry->running_balance,2)}}</td>
@@ -114,7 +125,7 @@
                </tbody>
                 <tfoot>
                 <tr>
-                        <td colspan="3" style="text-align:right;">الاجمالي</td>
+                        <td colspan="2" style="text-align:right;">الاجمالي</td>
                     <td style="text-align:right;color:white;" class="bg-dark">{{number_format($total_debit,2)}}</td>
                     <td style="text-align:right;color:white;" class="bg-dark">{{number_format($total_credit,2)}}</td>
                     <td style="text-align:right;"><b>{{number_format($closing_balance,2)}} (رصيد ختامي)</b></td>

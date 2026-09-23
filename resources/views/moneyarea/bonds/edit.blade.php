@@ -68,10 +68,8 @@ $bond = $check_bond;
    <div class="col-lg-12">
   
       <div class="card">
-         <div class="card-header">
-            <h5 class="card-title mb-0"> تعديل سند القبض : {{$check_bond->es_id}} </h5>
-         </div>
-         <div class="card-body">
+         <x-page-header title="تعديل سند القبض : {{$check_bond->es_id}}" />
+<div class="card-body">
             <form action="{{route('site.bonds_save_update')}}" method="POST" autocomplete="off" enctype='multipart/form-data'>
                @csrf
                @if($errors->any())

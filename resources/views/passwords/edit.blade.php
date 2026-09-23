@@ -5,17 +5,13 @@
    <div class="col-lg-12">
 
       <div class="card">
-         <div class="card-header">
-            <h5 class="card-title mb-0"> تعديل بيانات الحساب </h5>
-         </div>
-         <div class="card-body">
+         <x-page-header title="تعديل بيانات الحساب" />
+<div class="card-body">
 
               <form action="{{route('site.password_update')}}" method="POST" autocomplete="off">
                @csrf
                <input type="hidden" name="id" value="{{$password_info->id}}">
-               @if($errors->any())
-               <div class="alert alert-info"><i class="ri-file-info-line"></i> {{$errors->first()}}</div>
-               @endif
+@include('components.flash-messages')
                 <p style="text-align: right;"> رابط الموقع</p>
                <input type="text" name="url" class="form-control @error('url') is-invalid @enderror" style="text-align:right;" value="{{old('url', $password_info->url)}}" required="" autocomplete="off">
                @error('url') <div class="invalid-feedback">{{$message}}</div> @enderror

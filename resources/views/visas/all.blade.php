@@ -1,26 +1,23 @@
 @extends('layouts.app')
 @section('content')
 @section('title' , 'التأشيرات')
-    @if($errors->any())
-<div class="alert alert-info"><i class="ri-file-info-line"></i> {{$errors->first()}}</div>
-@endif 
+@include('components.flash-messages')
 <div class="row">
    <div class="col-lg-12">
        
       <div class="card">
-         <div class="card-header">
-            <h5 class="card-title mb-0">قائمة التأشيرات</h5>
-                          @if(Auth::user()->account_type == 2)
+         <x-page-header title="قائمة التأشيرات">
+@if(Auth::user()->account_type == 2)
 
              <a href="{{route('site.visas_create')}}">
-             <button class="btn btn-primary" style="float: left;margin-top: -22px;">
+             <button class="btn btn-primary">
                  <i class="ri-file-add-line"></i>
                  اضافة تأشيرة جديدة
                  </button>
              </a>
              @endif
-         </div>
-         <div class="card-body">
+</x-page-header>
+<div class="card-body">
              
             <table id="myTable" class="table table-bordered dt-responsive nowrap table-striped align-middle" style="width:100%">
                <thead>

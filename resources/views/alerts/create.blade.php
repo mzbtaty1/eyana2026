@@ -5,15 +5,11 @@
    <div class="col-lg-12">
   
       <div class="card">
-         <div class="card-header">
-            <h5 class="card-title mb-0"> اضافة اشعار جديد </h5>
-         </div>
-         <div class="card-body">
+         <x-page-header title="اضافة اشعار جديد" />
+<div class="card-body">
             <form action="{{route('site.alerts_save')}}" method="POST" autocomplete="off">
                @csrf
-               @if($errors->any())
-               <div class="alert alert-info"><i class="ri-file-info-line"></i> {{$errors->first()}}</div>
-               @endif
+@include('components.flash-messages')
            <p>
                 نص الاشعار
                 </p>

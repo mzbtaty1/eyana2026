@@ -28,14 +28,14 @@ swal("", "{{$errors->first()}}", "info");
                   <div class="col-6 mb-3">
                      <p>
                         تاريخ الفاتورة
-                        <rtag>(*)</rtag>
+                        <span class="text-danger">*</span>
                      </p>
                      <input type="date" name="invoice_date" value="{{date('Y-m-d')}}" placeholder="تاريخ الفاتورة" class="form-control" style="text-align:right;">
                   </div>
                   <div class="col-6">
                     <p>
                         تاريخ السفر
-                        <rtag>(*)</rtag>
+                        <span class="text-danger">*</span>
                      </p>
                      <input type="date" name="invoice_travel_date" value="" placeholder="تاريخ السفر" class="form-control" style="text-align:right;" required>
                   </div>
@@ -51,14 +51,14 @@ swal("", "{{$errors->first()}}", "info");
       <div class="col-6 mb-3">
          <p>
             واجهة الاستلام 
-      <rtag>(*)</rtag>
+      <span class="text-danger">*</span>
           </p>
             <input type="text" name="from_location" value="{{$invoice_info->from_location}}" placeholder="واجهة الاستلام" class="form-control" style="text-align:right;" required="">
       </div>
       <div class="col-6">
          <p>
             واجهة الوصول 
-         <rtag>(*)</rtag>
+         <span class="text-danger">*</span>
           </p>
             <input type="text" name="to_location" value="{{$invoice_info->to_location}}" placeholder="واجهة الوصول" class="form-control" style="text-align:right;" required="">
       </div>
@@ -71,7 +71,7 @@ swal("", "{{$errors->first()}}", "info");
       <div class="col-6 mb-3">
          <p>
             مالك التذكرة
-      <rtag>(*)</rtag>
+      <span class="text-danger">*</span>
           </p>
             <select class="form-control" name="invoice_account_1">
           @foreach($members as $member)
@@ -85,7 +85,7 @@ swal("", "{{$errors->first()}}", "info");
       <div class="col-6">
          <p>
             بائع التذكرة
-         <rtag>(*)</rtag>
+         <span class="text-danger">*</span>
           </p>
  <select class="form-control" name="invoice_account_2">
           @foreach($members as $member)
@@ -100,7 +100,7 @@ swal("", "{{$errors->first()}}", "info");
     </div>
                  <p>
                         خط الطيران
-                 <rtag>(*)</rtag>     
+                 <span class="text-danger">*</span>     
                 </p>
                      <select class="form-control" name="invoice_airline" id="invoice_airline" style="text-align:right;" required>
                          @foreach($airlines as $airline)
@@ -126,7 +126,7 @@ swal("", "{{$errors->first()}}", "info");
                              ?>
                <p>
                   اسم العميل (المستفيد)
-                  <rtag>(*)</rtag>
+                  <span class="text-danger">*</span>
                </p>
                <select class="form-control" name="invoice_beneficiaries" id="invoice_group_id" style="text-align:right;" required>
                   @foreach($suppliers as $supplier)
@@ -138,7 +138,7 @@ swal("", "{{$errors->first()}}", "info");
                   <tr>
                      <th>
                         اسم المورد (المنفذ)  
-                        <rtag>(*)</rtag>
+                        <span class="text-danger">*</span>
                      </th>
                      <th>
                         التكلفة  
@@ -182,7 +182,7 @@ swal("", "{{$errors->first()}}", "info");
                </table>
                <p>
                   تصنيف الفاتورة
-                  <rtag>(*)</rtag>
+                  <span class="text-danger">*</span>
                </p>
                <select class="form-control" style="text-align:right;" name="invoice_section" required>
                   <option value="1" @if($invoice_info->invoice_section == 1) selected @endif>فواتير الطيران</option>
@@ -205,7 +205,7 @@ swal("", "{{$errors->first()}}", "info");
                   <div class="col-6">
                      <p>
                         العملة
-                        <rtag>(*)</rtag>
+                        <span class="text-danger">*</span>
                      </p>
                      <select class="form-control" style="text-align:right;" name="invoice_currency" required>
                        
@@ -231,7 +231,7 @@ swal("", "{{$errors->first()}}", "info");
                <br>
                <h6 style="font-size: 16px;">
                   معلومات الفاتوره
-                  <rtag>(*)</rtag><br>
+                  <span class="text-danger">*</span><br>
                    <tag style="font-size: 14px;">رقم الهاتف اختياري</tag>
 
                </h6>

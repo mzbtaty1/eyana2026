@@ -2,9 +2,7 @@
 @section('content')
 @section('title', 'الفواتير')
 
-@if($errors->any())
-<div class="alert alert-info"><i class="ri-file-info-line"></i> {{$errors->first()}}</div>
-@endif 
+@include('components.flash-messages')
 
 <style>
     /* تحسينات الخطوط والأداء */

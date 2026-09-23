@@ -27,14 +27,14 @@ swal("", "{{$errors->first()}}", "info");
                   <div class="col-6 mb-3">
                      <p>
                         تاريخ الفاتورة
-                        <rtag>(*)</rtag>
+                        <span class="text-danger">*</span>
                      </p>
                      <input type="date" name="invoice_date" value="{{date('Y-m-d')}}" placeholder="تاريخ الفاتورة" class="form-control" style="text-align:right;" required>
                   </div>
                   <div class="col-6">
                     <p>
                         تاريخ السفر
-                        <rtag>(*)</rtag>
+                        <span class="text-danger">*</span>
                      </p>
                      <input type="date" name="invoice_travel_date" value="" placeholder="تاريخ السفر" class="form-control" style="text-align:right;" required>
                   </div>
@@ -48,14 +48,14 @@ swal("", "{{$errors->first()}}", "info");
       <div class="col-6 mb-3">
          <p>
             واجهة الاستلام 
-      <rtag>(*)</rtag>
+      <span class="text-danger">*</span>
           </p>
             <input type="text" name="from_location" placeholder="واجهة الاستلام" class="form-control" style="text-align:right;" required="">
       </div>
       <div class="col-6">
          <p>
             واجهة الوصول 
-         <rtag>(*)</rtag>
+         <span class="text-danger">*</span>
           </p>
             <input type="text" name="to_location" placeholder="واجهة الوصول" class="form-control" style="text-align:right;" required="">
       </div>
@@ -69,7 +69,7 @@ swal("", "{{$errors->first()}}", "info");
       <div class="col-6 mb-3">
          <p>
             مالك التذكرة
-      <rtag>(*)</rtag>
+      <span class="text-danger">*</span>
             
           </p>
             <select class="form-control" name="invoice_account_1">
@@ -84,7 +84,7 @@ swal("", "{{$errors->first()}}", "info");
       <div class="col-6">
          <p>
             بائع التذكرة
-         <rtag>(*)</rtag>
+         <span class="text-danger">*</span>
           </p>
  <select class="form-control" name="invoice_account_2">
           @foreach($members as $member)
@@ -102,7 +102,7 @@ swal("", "{{$errors->first()}}", "info");
       <div class="col-6 mb-3">
          <p>
 نسبة مالك التذكرة
-      <rtag>(*)</rtag>
+      <span class="text-danger">*</span>
             
           </p>
            <input type="text" name="invoice_account_1_comm" placeholder="مثال : 50" class="form-control" style="text-align:right;" required="" value="7">          
@@ -111,7 +111,7 @@ swal("", "{{$errors->first()}}", "info");
          <p>
              نسبة
             بائع التذكرة
-         <rtag>(*)</rtag>
+         <span class="text-danger">*</span>
           </p>
            <input type="text" name="invoice_account_2_comm" placeholder="مثال : 50" class="form-control" style="text-align:right;" required="" value="3">           
       </div>
@@ -120,7 +120,7 @@ swal("", "{{$errors->first()}}", "info");
     
                  <p>
                         خط الطيران
-                 <rtag>(*)</rtag>     
+                 <span class="text-danger">*</span>     
                 </p>
                      <select class="form-control" name="invoice_airline" id="invoice_airline" style="text-align:right;" required>
                          @foreach($airlines as $airline)
@@ -137,7 +137,7 @@ swal("", "{{$errors->first()}}", "info");
                 <br>
                <p>
                   اسم العميل (المستفيد)
-                  <rtag>(*)</rtag>
+                  <span class="text-danger">*</span>
                </p>
                <select class="form-control" name="invoice_beneficiaries" id="invoice_beneficiaries" style="text-align:right;" required>
                   @foreach($suppliers as $supplier)
@@ -149,7 +149,7 @@ swal("", "{{$errors->first()}}", "info");
                   <tr>
                      <th>
                         اسم المورد (المنفذ)  
-                        <rtag>(*)</rtag>
+                        <span class="text-danger">*</span>
                      </th>
                      <th>
                         التكلفة  
@@ -171,7 +171,7 @@ swal("", "{{$errors->first()}}", "info");
                </table>
                <p>
                   تصنيف الفاتورة
-                  <rtag>(*)</rtag>
+                  <span class="text-danger">*</span>
                </p>
                <select class="form-control" style="text-align:right;" name="invoice_section" required>
                   <option value="1">فواتير الطيران</option>
@@ -194,7 +194,7 @@ swal("", "{{$errors->first()}}", "info");
                   <div class="col-6"> 
                      <p>
                         العملة
-                        <rtag>(*)</rtag>
+                        <span class="text-danger">*</span>
                      </p>
                      <select class="form-control" style="text-align:right;" name="invoice_currency" required>
                         <option value="جنية مصري">جنية مصري</option>
@@ -210,13 +210,13 @@ swal("", "{{$errors->first()}}", "info");
                <p>
                   ملف / صورة التذكرة
                   (المسموح : JPG , PNG , JPEG , PDF فقط)
-                   <rtag>(*)</rtag>
+                   <span class="text-danger">*</span>
                </p>
                <input type="file" class="form-control" name="myPoster" accept="image/jpeg,image/jpg,image/png,application/pdf" required="">
                <br>
                <h6 style="font-size: 16px;">
                   معلومات الفاتوره
-                  <rtag>(*)</rtag>
+                  <span class="text-danger">*</span>
                     <br>
                    <tag style="font-size: 14px;">رقم الهاتف اختياري</tag>
 

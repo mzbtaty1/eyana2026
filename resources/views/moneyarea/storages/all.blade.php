@@ -1,17 +1,14 @@
 @extends('layouts.app')
 @section('content')
 @section('title' , 'الخزائن وحسابات البنوك')
-    @if($errors->any())
-<div class="alert alert-info"><i class="ri-file-info-line"></i> {{$errors->first()}}</div>
-@endif 
+@include('components.flash-messages')
 <div class="row">
    <div class="col-lg-12">
        
       <div class="card">
-         <div class="card-header">
-            <h5 class="card-title mb-0">قائمة الخزائن وحسابات البنوك</h5>
-             <a href="{{route('site.sub_storages')}}">
-             <button class="btn btn-secondary" style="float: left;margin-top: -22px;">
+         <x-page-header title="قائمة الخزائن وحسابات البنوك">
+<a href="{{route('site.sub_storages')}}">
+             <button class="btn btn-secondary">
                  <i class="ri-file-add-line"></i>
                    الخزائن الفرعية 
                  </button>
@@ -19,17 +16,15 @@
 <!--
              
              <a href="{{route('site.storages_create')}}">
-             <button class="btn btn-primary" style="float: left;margin-top: -22px;  margin-left: 8px;">
+             <button class="btn btn-primary">
                  <i class="ri-file-add-line"></i>
                  اضافة خزنة 
                  </button>
              </a>
              
 -->
-             
-             
-         </div>
-         <div class="card-body">
+</x-page-header>
+<div class="card-body">
              
             <table id="myTable" class="table table-bordered dt-responsive nowrap table-striped align-middle" style="width:100%">
                <thead>

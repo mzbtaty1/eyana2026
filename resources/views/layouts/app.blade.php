@@ -36,7 +36,11 @@ $rname = Route::currentRouteName();
       <script>window.MAPBOX_TOKEN = @json(config('services.mapbox.token'));</script>
       <!-- App favicon -->
       <link rel="shortcut icon" href="{{asset('assets/images/favicon.ico')}}">
-      <!-- jsvectormap css -->  
+      <!-- Cairo: Arabic-friendly typeface for the 2026 visual system -->
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+      <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+      <!-- jsvectormap css -->
       <link href="{{asset('assets/libs/jsvectormap/css/jsvectormap.min.css')}}" rel="stylesheet" type="text/css" />
       <!--Swiper slider css-->
       <link href="{{asset('assets/libs/swiper/swiper-bundle.min.css')}}" rel="stylesheet" type="text/css" />
@@ -49,7 +53,7 @@ $rname = Route::currentRouteName();
       <!-- App Css-->
       <link href="{{asset('assets/css/app.min.css')}}" rel="stylesheet" type="text/css" />
       <!-- custom Css-->
-      <link href="{{asset('assets/css/custom.min.css')}}" rel="stylesheet" type="text/css" />
+      <link href="{{asset('assets/css/custom.min.css')}}?v={{file_exists(public_path('assets/css/custom.min.css')) ? filemtime(public_path('assets/css/custom.min.css')) : 1}}" rel="stylesheet" type="text/css" />
 
       <script src="https://cdnjs.cloudflare.com/ajax/libs/sweetalert/2.1.2/sweetalert.min.js" integrity="sha512-AA1Bzp5Q0K1KanKKmvN/4d3IRKVlv9PYgwFPvm32nPO6QS8yH1HO7LbgB1pgiOxPtfeg5zEn2ba64MUcqJx6CA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
       <script src="{{asset('assets/jquery-3.7.0.slim.min.js')}}"></script> 
@@ -94,6 +98,30 @@ $rname = Route::currentRouteName();
          body{
          print-color-adjust: exact;
          -webkit-print-color-adjust: exact;
+         }
+
+         /* Eyana print baseline for screens without a dedicated print view: hide chrome,
+            keep only the report content. Mark screen-only controls with .ey-no-print
+            (filter forms, action buttons, etc.) to hide them too. */
+         @media print{
+             #page-topbar,
+             .app-menu.navbar-menu,
+             .ey-no-print,
+             #phpdebugbar,
+             .phpdebugbar,
+             .phpdebugbar-openhandler-overlay{
+                 display: none !important;
+             }
+             .main-content{
+                 margin: 0 !important;
+             }
+             .vertical-menu, #layout-wrapper{
+                 background: #fff !important;
+             }
+             @page{
+                 size: A4;
+                 margin: 12mm;
+             }
          }
       </style>
        <link rel="stylesheet" href="https://cdn.datatables.net/buttons/3.1.1/css/buttons.dataTables.css">
@@ -404,9 +432,6 @@ $rname = Route::currentRouteName();
                               <a href="{{route('site.invoices_lite')}}" class="nav-link" data-key="t-basic-tables">فواتير اخر 3 شهور</a>
                            </li>
                            <li class="nav-item">
-                              <a href="{{route('site.invoices')}}" class="nav-link" data-key="t-basic-tables">كل الفواتير (قديم)</a>
-                           </li>
-                           <li class="nav-item">
                               <a href="{{route('site.invoices_daily_report')}}" class="nav-link" data-key="t-basic-tables">التقرير اليومي</a>
                            </li>
                            <li class="nav-item">
@@ -521,17 +546,6 @@ $rname = Route::currentRouteName();
                                الاشعارات والتنبيهات
                                </a>
                            </li>
-<!--
-                           <li class="nav-item">
-                              <a href="{{route('site.marketing_prices')}}" class="nav-link" data-key="t-basic-tables">تسويق شركات</a>
-                           </li>
-                           <li class="nav-item">
-                              <a href="{{route('site.marketing_prices_create')}}" class="nav-link" data-key="t-grid-js">انشاء جديد</a>
-                           </li>
-                           <li class="nav-item">
-                              <a href="{{route('site.marketing_title_create')}}" class="nav-link" data-key="t-grid-js">انشاء بيان جديد</a>
-                           </li>
--->
                         </ul>
                      </div>
                   </li>
@@ -672,35 +686,55 @@ $rname = Route::currentRouteName();
           
          
       
-      dselect(select_box_element, {
-            search: true
-        });
-         
-        
-         
-        dselect(select_box_element2, {
-            search: true
-        });
-         dselect(select_box_element3, {
-            search: true
-        });
-              dselect(select_box_element4, {
-            search: true
-        });
-         dselect(select_box2_t2, {
-            search: true
-        });
-           dselect(select_boxt2, {
-            search: true
-        });
-         
-           dselect(invoice_group, {
-            search: true
-        });
-         
-         
-       
-   </script>  
+      // Guarded: dselect.js loads from an external domain
+      // (emposys.khadamaat.org) that isn't always reachable, and most of
+      // these target elements only exist on invoice-related pages. Without
+      // these guards, calling dselect() on a missing element or before the
+      // script has loaded throws an uncaught exception on every page load.
+      if (typeof dselect === 'function') {
+         [select_box_element, select_box_element2, select_box_element3, select_box_element4, select_box2_t2, select_boxt2, invoice_group]
+            .forEach(function (el) {
+               if (el) {
+                  dselect(el, { search: true });
+               }
+            });
+      }
+
+      // Sidebar active-page highlighting. The compiled app.js bundle in this
+      // build never included Velzon's own menu-active-state feature (no
+      // "mm-active" logic present at all), so the sidebar never showed which
+      // page you're on. Matches each menu link's URL against the current
+      // path, picks the most specific match, marks it active, and expands
+      // its parent accordion section if it's nested inside one.
+      (function () {
+         var current = window.location.pathname.replace(/\/+$/, '') || '/';
+         var best = null;
+         document.querySelectorAll('.app-menu .navbar-nav .nav-link[href]').forEach(function (link) {
+            var raw = link.getAttribute('href');
+            if (!raw || raw.charAt(0) === '#') {
+               return;
+            }
+            var linkPath = link.pathname.replace(/\/+$/, '') || '/';
+            var isMatch = linkPath === current || (linkPath !== '/' && current.indexOf(linkPath + '/') === 0);
+            if (isMatch && (!best || linkPath.length > best.pathLen)) {
+               best = { link: link, pathLen: linkPath.length };
+            }
+         });
+         if (best) {
+            best.link.classList.add('active');
+            var section = best.link.closest('.menu-dropdown');
+            while (section) {
+               section.classList.add('show');
+               var toggle = document.querySelector('[aria-controls="' + section.id + '"]');
+               if (toggle) {
+                  toggle.classList.remove('collapsed');
+                  toggle.setAttribute('aria-expanded', 'true');
+               }
+               section = toggle ? toggle.closest('.menu-dropdown') : null;
+            }
+         }
+      })();
+   </script>
    </body>
 
 <!--

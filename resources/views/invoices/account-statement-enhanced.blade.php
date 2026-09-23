@@ -45,7 +45,7 @@
 <div class="row">
     <div class="col-lg-12">
         <div class="card">
-            <div class="card-header">
+            <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
                 <h5 class="card-title mb-0">
                     كشف حساب محسن - 
                     @if($st == 1)
@@ -61,7 +61,7 @@
                     @endif
                 </h5>
                 
-                <button class="btn btn-dark" onclick="printdiv()" style="float: left;margin-top: -22px;">
+                <button class="btn btn-dark" onclick="printdiv()">
                     <i class="ri-printer-line"></i> طباعة التقرير
                 </button>
             </div>

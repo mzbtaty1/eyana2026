@@ -53,10 +53,8 @@ $(document).ready(function() {
    <div class="col-lg-12">
   
       <div class="card">
-         <div class="card-header">
-            <h5 class="card-title mb-0"> اضافة سند جديد </h5>
-         </div>
-         <div class="card-body">
+         <x-page-header title="اضافة سند جديد" />
+<div class="card-body">
             <form action="{{route('site.bonds_save')}}" method="POST" autocomplete="off" enctype='multipart/form-data'>
                @csrf
                @if($errors->any())

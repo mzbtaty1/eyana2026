@@ -56,7 +56,7 @@ swal("", "{{$errors->first()}}", "info");
 
                         تاريخ الفاتورة
 
-                        <rtag>(*)</rtag>
+                        <span class="text-danger">*</span>
 
                      </p>
 
@@ -70,7 +70,7 @@ swal("", "{{$errors->first()}}", "info");
 
                         تاريخ السفر
 
-                        <rtag>(*)</rtag>
+                        <span class="text-danger">*</span>
 
                      </p>
 
@@ -100,7 +100,7 @@ swal("", "{{$errors->first()}}", "info");
 
             واجهة الاستلام 
 
-      <rtag>(*)</rtag>
+      <span class="text-danger">*</span>
 
           </p>
 
@@ -114,7 +114,7 @@ swal("", "{{$errors->first()}}", "info");
 
             واجهة الوصول 
 
-         <rtag>(*)</rtag>
+         <span class="text-danger">*</span>
 
           </p>
 
@@ -130,7 +130,7 @@ swal("", "{{$errors->first()}}", "info");
 
                         خط الطيران
 
-                 <rtag>(*)</rtag>     
+                 <span class="text-danger">*</span>     
 
                 </p>
 
@@ -182,7 +182,7 @@ swal("", "{{$errors->first()}}", "info");
 
                   اسم العميل (المستفيد)
 
-                  <rtag>(*)</rtag>
+                  <span class="text-danger">*</span>
 
                </p>
 
@@ -206,7 +206,7 @@ swal("", "{{$errors->first()}}", "info");
 
                         اسم المورد (المنفذ)  
 
-                        <rtag>(*)</rtag>
+                        <span class="text-danger">*</span>
 
                      </th>
 
@@ -294,7 +294,7 @@ swal("", "{{$errors->first()}}", "info");
 
                   تصنيف الفاتورة
 
-                  <rtag>(*)</rtag>
+                  <span class="text-danger">*</span>
 
                </p>
 
@@ -340,7 +340,7 @@ swal("", "{{$errors->first()}}", "info");
 
                         العملة
 
-                        <rtag>(*)</rtag>
+                        <span class="text-danger">*</span>
 
                      </p>
 
@@ -392,7 +392,7 @@ swal("", "{{$errors->first()}}", "info");
 
                   معلومات الفاتوره
 
-                  <rtag>(*)</rtag>
+                  <span class="text-danger">*</span>
 
                </h6>
 

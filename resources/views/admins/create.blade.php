@@ -5,11 +5,11 @@
    <div class="col-lg-12">
   
       <div class="card">
-         <div class="card-header">
+         <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
             <h5 class="card-title mb-0"> اضافة حساب جديد </h5>
 <!--
                <a href="{{route('site.marketing_title_create')}}">
-             <button class="btn btn-primary" style="float: left;margin-top: -22px;">
+             <button class="btn btn-primary">
                  <i class="ri-file-add-line"></i>
                  اضافة بيان جديد
                  </button>

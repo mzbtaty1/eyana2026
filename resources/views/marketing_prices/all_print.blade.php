@@ -42,15 +42,8 @@
 
     <div class="border_print">
     
-    <img src="{{asset('assets/images/flymix_colored.png')}}"  style="  width: 154px;">
-        <h5 style="  float: right;  text-align: right;  line-height: 31px;">
-        قائمة تسويق الشركات
-        
-            
-        </h5>
-       
-        <hr>
-        
+    <x-print-header title="قائمة تسويق الشركات" />
+
         <div class="t">
               <table id="InvoicesTable" class="table table-bordered dt-responsive nowrap table-striped align-middle" style="width:100%">
                                   @foreach($titles as $title)

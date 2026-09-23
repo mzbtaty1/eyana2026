@@ -6,18 +6,14 @@
    <div class="col-lg-12">
   
       <div class="card">
-         <div class="card-header">
-            <h5 class="card-title mb-0"> تعديل خط الطيران </h5>
-         </div>
-         <div class="card-body">
+         <x-page-header title="تعديل خط الطيران" />
+<div class="card-body">
             <form action="{{route('site.visas_update')}}" method="POST" autocomplete="off">
                @csrf
          <input type="hidden" name="id" value="{{$visa->id}}">
                 
              <input type="hidden" name="id" value="{{$visa_info->id}}">
-               @if($errors->any())
-               <div class="alert alert-info"><i class="ri-file-info-line"></i> {{$errors->first()}}</div>
-               @endif
+@include('components.flash-messages')
                 <p style="text-align: right;"> اسم التأشيرة</p>
                <input type="text" name="visa_name" class="form-control @error('visa_name') is-invalid @enderror" value="{{old('visa_name', $visa_info->visa_name)}}" style="text-align:right;" required="">
                @error('visa_name') <div class="invalid-feedback">{{$message}}</div> @enderror

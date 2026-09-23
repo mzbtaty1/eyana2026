@@ -5,18 +5,14 @@
    <div class="col-lg-12">
    
       <div class="card">
-         <div class="card-header">
-            <h5 class="card-title mb-0"> اضافة خزنة فرعية جديدة </h5>
-         </div>
-         <div class="card-body">
+         <x-page-header title="اضافة خزنة فرعية جديدة" />
+<div class="card-body">
             <form action="{{route('site.sub_storages_save')}}" method="POST" autocomplete="off">
                @csrf
-               @if($errors->any())
-               <div class="alert alert-info"><i class="ri-file-info-line"></i> {{$errors->first()}}</div>
-               @endif
+@include('components.flash-messages')
                <p>
                     الخزينة الرئيسية
-                <rtag>(*)</rtag>
+                <span class="text-danger">*</span>
                 </p>
  <select class="form-select @error('main_storage') is-invalid @enderror" name="main_storage" required>
                @foreach($storages as $storage)
@@ -27,14 +23,14 @@
                 <br>
                 <p>
                     اسم الخزنة
-                <rtag>(*)</rtag>
+                <span class="text-danger">*</span>
                 </p>
                      <input type="text" name="name" value="{{old('name')}}" placeholder="اسم الخزنة" class="form-control @error('name') is-invalid @enderror" style="text-align:right;" required="">
                      @error('name') <div class="invalid-feedback">{{$message}}</div> @enderror
                 <br>
                 <p>
                     النوع
-                <rtag>(*)</rtag>
+                <span class="text-danger">*</span>
                 </p>
                     <select class="form-select @error('type') is-invalid @enderror" name="type" required>
                 <option value="1" @if(old('type')==='1') selected @endif>نقدي</option>
@@ -61,7 +57,7 @@
                 <br>
                 <p>
                     الرصيد
-                <rtag>(*)</rtag>
+                <span class="text-danger">*</span>
                 </p>
                      <input type="text" name="balance" value="{{old('balance', '0')}}" placeholder="الرصيد" class="form-control @error('balance') is-invalid @enderror" style="text-align:right;" required="">
                      @error('balance') <div class="invalid-feedback">{{$message}}</div> @enderror

@@ -5,15 +5,11 @@
    <div class="col-lg-12">
   
       <div class="card">
-         <div class="card-header">
-            <h5 class="card-title mb-0"> اضافة بيانات تأشيرة جديدة </h5>
-         </div>
-         <div class="card-body">
+         <x-page-header title="اضافة بيانات تأشيرة جديدة" />
+<div class="card-body">
             <form action="{{route('site.visas_save')}}" method="POST" autocomplete="off">
                @csrf
-               @if($errors->any())
-               <div class="alert alert-info"><i class="ri-file-info-line"></i> {{$errors->first()}}</div>
-               @endif
+@include('components.flash-messages')
                  <p style="text-align: right;"> اسم التأشيرة</p>
                <input type="text" name="visa_name" value="{{old('visa_name')}}" class="form-control @error('visa_name') is-invalid @enderror" style="text-align:right;" required="">
                @error('visa_name') <div class="invalid-feedback">{{$message}}</div> @enderror

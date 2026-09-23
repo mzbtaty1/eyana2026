@@ -9,12 +9,37 @@
         font-weight: normal;
   font-size: 12px;
     }
+    /* Controlled width for the grouped trip/passenger block: without this, a
+       booking with several long passenger names has no width to wrap within,
+       so the cell (and with it the whole DataTable, which has no fixed
+       table-layout) stretches to fit the longest unwrapped name instead of
+       wrapping inside the column. */
+    .ey-trip-info{
+        max-width: 420px;
+        overflow-wrap: break-word;
+        word-break: break-word;
+    }
+    .ey-trip-info > div{
+        margin-bottom: 3px;
+    }
+    .ey-trip-info > div:last-child{
+        margin-bottom: 0;
+    }
+    .ey-trip-info .ey-passenger{
+        padding-right: 10px;
+    }
+    .ey-ltr{
+        direction: ltr;
+        unicode-bidi: isolate;
+        display: inline-block;
+        max-width: 100%;
+    }
 </style>
 <div class="row">
    <div class="col-lg-12">
   
       <div class="card">
-         <div class="card-header">
+         <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
             <h5 class="card-title mb-0"> كشف حساب 
              @if($st == 1)
                 خزينة : {{$storage_info->name}}
@@ -27,7 +52,7 @@
 
              
                              
-     <button class="btn btn-dark" onclick="printdiv()" style="float: left;margin-top: -22px;">
+     <button class="btn btn-dark" onclick="printdiv()">
                            <i class="ri-printer-line"></i> طباعة التقرير
                            </button>
          </div>
@@ -40,7 +65,6 @@
                <table id="InvoicesTable" class="table table-bordered dt-responsive nowrap table-striped align-middle" style="width:100%">
                <thead>
                   <tr>
-                     <th data-ordering="false" style="text-align: right;">#</th>
                      <th data-ordering="false" style="text-align: right;">نوع العملية</th>
                      <th data-ordering="false" style="text-align: right;">الخزينة المنفذه</th>
                      <th data-ordering="false" style="text-align: right;">تاريخ العملية</th>
@@ -103,7 +127,6 @@ $total_cumulative_balance += $AccountStatement->cumulative_balance;
 
                    ?>
                   <tr>
-                     <td style="text-align: right;">{{$AccountStatement->es_id}}</td>
                      <td style="text-align: right;"><?php
                           if($AccountStatement->invoice_type == 1){
                               $type = "فواتير الطيران";
@@ -152,24 +175,45 @@ $total_cumulative_balance += $AccountStatement->cumulative_balance;
                     
                       
                      <td style="text-align: right;">
-                         {{$AccountStatement->transaction_txt}}
-                        <br>
-                   @if($std == 1)
-                         سداد لصالح تذكرة
+                         <div class="ey-trip-info">
+                         @if($AccountStatement->transaction_type == 1 && $AccountStatement->trans_storage != 1 && $ticket_info)
+                             <div><b>حجز الرحلة:</b> {{$AccountStatement->transaction_txt}}</div>
+                             <div><b>المسافر:</b>
+                                 @foreach($users as $user)
+                                 <div class="ey-passenger ey-ltr">{{$user->client_name}}</div>
+                                 @endforeach
+                             </div>
+                             <div class="ey-ltr">
+                                 <b>التفاصيل:</b>
+                                 {{$ticket_info->invoice_airline}}
+                                 | {{$ticket_info->from_location}} - {{$ticket_info->to_location}}
+                                 | حجز: @foreach($users as $user){{$user->client_booking_id}}@if(!$loop->last)/@endif @endforeach
+                                 | تذكرة: @foreach($users as $user){{$user->client_ticket_id}}@if(!$loop->last)/@endif @endforeach
+                             </div>
+                             <div><b>تاريخ السفر:</b> {{$ticket_info->invoice_travel_date}}</div>
                          @else
-                      
-                          @if($bond->money_way == 1)
-                         دفع نقدي
-                         @elseif($bond->money_way == 2)
-                         تحويل بنكي
-                         {{ ($banksById[$bond->bank_id] ?? null)->bank_name ?? '' }}
-                         @else
-                         تحصيل من المندوب :
-                         {{ ($collectorsById[$bond->collector_info] ?? null)->name ?? '' }}
+                             <div>
+                                 {{$AccountStatement->transaction_txt}}
+                                 <br>
+                                 @if($std == 1)
+                                     سداد لصالح تذكرة
+                                 @else
+                                     @if($bond->money_way == 1)
+                                         دفع نقدي
+                                     @elseif($bond->money_way == 2)
+                                         تحويل بنكي
+                                         {{ ($banksById[$bond->bank_id] ?? null)->bank_name ?? '' }}
+                                     @else
+                                         تحصيل من المندوب :
+                                         {{ ($collectorsById[$bond->collector_info] ?? null)->name ?? '' }}
+                                     @endif
+                                 @endif
+                             </div>
+                             @if($AccountStatement->es_id)
+                             <div class="text-muted" style="font-size:11px;">المرجع: {{$AccountStatement->es_id}}</div>
+                             @endif
                          @endif
-                         @endif
-                         
-                         
+                         </div>
                       </td>
                       
                       <td style="text-align: right;">{{number_format($AccountStatement->debit_balance,2)}}

@@ -61,24 +61,8 @@ $title = "Print $bond->es_id";
 <div class="">
 
     <div class="border_print">
-    
-    <img src="{{asset('assets/images/flymix_colored.png')}}"  style="  width: 154px;">
-        <h5 style="  float: right;  text-align: right;  line-height: 31px;" dir="rtl">
-السندات / <?php
-                         if($bond->type == 1){
-                             $type = "سند دفع";
-                         }else{
-                             $type = "سند قبض";
-                         }
-    
-                         ?>
-                         {{$type}}
-        <br>
-        مسلسل السند : {{$bond->es_id}}
-            
-        </h5>
-       
-        <br> <br>
+
+    <x-print-header title="السندات - {{ $type }}" :heading="'مسلسل السند: '.$bond->es_id" />
         
      
         <div class="bg_d">
@@ -191,9 +175,9 @@ $title = "Print $bond->es_id";
         
     </div>
 
-   
+
 </div>
 
-
+<x-print-footer :note="$type" />
 
 @endsection

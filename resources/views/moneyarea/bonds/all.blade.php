@@ -14,25 +14,21 @@
    <div class="col-lg-12">
   
       <div class="card">
-         <div class="card-header">
-            <h5 class="card-title mb-0"> 
-                السندات
-             </h5>
-             <a href="{{route('site.bonds_create')}}">
-             <button class="btn btn-primary" style="float: left;margin-top: -22px;">
+         <x-page-header title="السندات">
+<a href="{{route('site.bonds_create')}}">
+             <button class="btn btn-primary">
                  <i class="ri-file-add-line"></i>
                  اضافة سندات  
                  </button>
              </a>
-         </div>
-         <div class="card-body">
+</x-page-header>
+<div class="card-body">
           
              
           <div class="table-responsive">
                <table id="InvoicesTable" class="table table-bordered dt-responsive nowrap table-striped align-middle" style="width:100%">
                <thead>
                   <tr>
-                     <th data-ordering="false" style="text-align: right;">#</th>
                      <th data-ordering="false" style="text-align: right;">نوع العملية</th>
                      <th data-ordering="false" style="text-align: right;">تاريخ العملية</th>
                       
@@ -62,11 +58,6 @@
                    ?>
                   @foreach($bonds as $bond)
                   <tr>
-                     <td>
-                      <a href="{{asset($bond->file_path)}}">
-                         {{$bond->es_id}}
-                         </a>
-                      </td>
                      <td>
                       <?php
                          if($bond->type == 1){
@@ -126,6 +117,9 @@
                          @endif
                         <br>
                           {{$bond->info}}
+                         @if($bond->es_id)
+                         <div class="text-muted" style="font-size:11px;">المرجع: <a href="{{asset($bond->file_path)}}">{{$bond->es_id}}</a></div>
+                         @endif
                       </td>
                      <td>{{number_format($bond->amount,2)}}</td>
                      <td>

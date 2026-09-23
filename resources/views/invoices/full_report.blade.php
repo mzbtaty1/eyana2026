@@ -1,13 +1,11 @@
 @extends('layouts.app')
 @section('content')
 @section('title' , "بحث تقرير الفواتير")
+<x-page-header title="تقرير الفواتير - بحث" />
 <div class="row">
    <div class="col-lg-12">
-  
+
       <div class="card">
-         <div class="card-header">
-            <h5 class="card-title mb-0"> بحث تقرير الفواتير </h5>
-         </div>
          <div class="card-body">
             <form action="{{route('site.invoices_full_report_get')}}" method="POST" autocomplete="off">
                @csrf

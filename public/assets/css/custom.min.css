@@ -1,2 +1,439 @@
-
 /*# sourceMappingURL=custom.min.css.map */
+
+/* ==========================================================================
+   Eyana app-specific design-system additions.
+   Layered on top of the existing Velzon theme (app.min.css) — refines and
+   extends it rather than replacing it, so the theme's own color/spacing/
+   shadow system stays the single source of truth.
+   ========================================================================== */
+
+.ey-page-header {
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--vz-border-color);
+}
+
+.ey-page-header h4 {
+    font-weight: 600;
+}
+
+/* ==========================================================================
+   Table redesign — one consistent treatment applied everywhere via the
+   theme's existing .table/.table-bordered classes, no per-page markup
+   changes needed. Row-separator lines instead of a full grid, more
+   breathing room per row, a calmer header treatment.
+   ========================================================================== */
+
+.table > :not(caption) > * > * {
+    padding: 0.85rem 0.9rem;
+    vertical-align: middle;
+}
+
+.table thead th {
+    background-color: var(--vz-light);
+    color: var(--vz-secondary-color);
+    font-size: 0.8rem;
+    font-weight: 600;
+    border-bottom-width: 1px;
+    white-space: nowrap;
+}
+
+/* Row-separator table instead of a full grid: keep horizontal lines,
+   drop the vertical cell borders .table-bordered adds by default. */
+.table-bordered > :not(caption) > * {
+    border-width: 0;
+}
+.table-bordered > :not(caption) > * > * {
+    border-width: 0 0 1px 0;
+}
+
+.table-hover > tbody > tr:hover > * {
+    background-color: var(--vz-light);
+}
+
+.table td .btn.dropdown {
+    line-height: 1;
+}
+
+/* ==========================================================================
+   Typography — Arabic-friendly font hierarchy.
+   app.min.css ships its own RTL font choice hardcoded as
+   `* { font-family: "Noto Kufi Arabic", sans-serif !important; }` — a
+   Kufic-style face, geometric/angular by design, which reads heavier and
+   less refined in dense data tables and forms than a modern naskh-style
+   UI face. Cairo replaces it: same full Arabic+Latin coverage, built
+   specifically for business/product UI, with a real weight range for an
+   actual heading/body hierarchy. Matched specificity (universal selector,
+   !important) is required to beat the theme's rule; custom.min.css loads
+   after app.min.css so this wins the tie.
+   ========================================================================== */
+
+:root {
+    --vz-font-family-primary: "Cairo", "Public Sans", sans-serif;
+    --vz-font-family-secondary: "Cairo", "Public Sans", sans-serif;
+}
+
+* {
+    font-family: var(--vz-font-family-primary) !important;
+}
+
+body {
+    line-height: 1.65;
+    letter-spacing: normal;
+}
+
+h1, h2, h3, h4, h5, h6,
+.h1, .h2, .h3, .h4, .h5, .h6 {
+    letter-spacing: normal;
+}
+
+h1, .h1 { font-weight: 800; }
+h2, .h2 { font-weight: 700; }
+h3, .h3 { font-weight: 700; }
+h4, .h4 { font-weight: 700; }
+h5, .h5 { font-weight: 600; }
+h6, .h6 { font-weight: 600; }
+
+.fw-medium { font-weight: 600 !important; }
+.fw-semibold { font-weight: 700 !important; }
+
+/* ==========================================================================
+   Navbar — calmer surface, clearer separation from page content.
+   ========================================================================== */
+
+#page-topbar {
+    box-shadow: 0 1px 0 var(--vz-border-color);
+}
+
+#page-topbar .navbar-header {
+    height: 4.25rem;
+}
+
+.topbar-user .dropdown-btn .fs-13 {
+    font-weight: 600;
+}
+
+/* ==========================================================================
+   Sidebar — same dark surface and Velzon menu tokens, refined for a more
+   premium feel: subtle depth, a real active-item accent instead of a flat
+   translucent tint, and more breathing room between items.
+   ========================================================================== */
+
+.app-menu.navbar-menu {
+    background: var(--vz-vertical-menu-bg);
+    background: linear-gradient(180deg, var(--vz-vertical-menu-bg) 0%, color-mix(in srgb, var(--vz-vertical-menu-bg) 85%, black) 100%);
+    box-shadow: -1px 0 0 rgba(0, 0, 0, 0.08) inset;
+}
+
+.app-menu .navbar-nav .nav-link {
+    border-radius: 0.5rem;
+    margin: 0.1rem 0.75rem;
+    padding-top: 0.55rem;
+    padding-bottom: 0.55rem;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.app-menu .navbar-nav .nav-link.active,
+.app-menu .navbar-nav .nav-link[aria-expanded="true"] {
+    background-color: var(--vz-vertical-menu-item-active-bg);
+    box-shadow: 3px 0 0 0 #fff inset;
+}
+
+.app-menu .menu-title {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: normal;
+    opacity: 0.6;
+}
+
+/* ==========================================================================
+   Dashboard — consistent card rhythm and a calmer alert banner to match the
+   rest of the redesigned surface.
+   ========================================================================== */
+
+.card-animate {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.card-animate:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0.5rem 1.25rem rgba(0, 0, 0, 0.08);
+}
+
+.alert.alert-primary {
+    border: 0;
+    border-inline-start: 3px solid var(--vz-primary);
+    background-color: rgba(var(--vz-primary-rgb), 0.08);
+    background-color: color-mix(in srgb, var(--vz-primary) 8%, transparent);
+}
+
+/* ==========================================================================
+   Buttons — same Bootstrap/Velzon variant classes (.btn-primary, .btn-soft-*,
+   .btn-outline-*, sizes, icon-only), refined with consistent radius, weight,
+   hover elevation and clear disabled/focus states. No markup changes: every
+   existing button keeps its exact class, action and URL.
+   ========================================================================== */
+
+.btn {
+    border-radius: 0.5rem;
+    font-weight: 600;
+    letter-spacing: normal;
+    transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.btn-sm { border-radius: 0.4rem; }
+.btn-lg { border-radius: 0.65rem; }
+
+.btn-primary, .btn-success, .btn-danger, .btn-info, .btn-warning, .btn-secondary, .btn-dark {
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.btn:not(.btn-link):not(.btn-close):not(:disabled):not(.disabled):hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+}
+
+.btn:not(.btn-link):active {
+    transform: translateY(0);
+}
+
+.btn:disabled, .btn.disabled {
+    opacity: 0.55;
+    transform: none;
+    box-shadow: none;
+}
+
+.btn:focus-visible {
+    box-shadow: 0 0 0 0.2rem rgba(var(--vz-primary-rgb), 0.25);
+}
+
+/* Icon-only buttons (row actions, topbar icons): square, centered glyph. */
+.btn.btn-sm:has(> i:only-child),
+.btn.btn-sm:has(> svg:only-child) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.1rem;
+    height: 2.1rem;
+    padding: 0;
+    margin-inline-end: 0.35rem;
+}
+
+/* ==========================================================================
+   Status badges — one consistent soft-pill treatment for every status
+   already expressed with Bootstrap's bg-* utility (invoice/payment status,
+   active/inactive, visa status, type tags, alerts). Same values, same
+   markup — only the visual weight changes, from solid fills to a calmer
+   tinted-background/colored-text pill using the theme's own *-subtle and
+   *-text-emphasis tokens.
+   ========================================================================== */
+
+.badge {
+    font-weight: 700;
+    font-size: 0.72rem;
+    letter-spacing: normal;
+    padding: 0.4em 0.7em;
+    border-radius: 0.4rem;
+}
+
+.badge.bg-success { background-color: var(--vz-success-bg-subtle) !important; color: var(--vz-success-text-emphasis) !important; }
+.badge.bg-danger  { background-color: var(--vz-danger-bg-subtle) !important; color: var(--vz-danger-text-emphasis) !important; }
+.badge.bg-warning { background-color: var(--vz-warning-bg-subtle) !important; color: var(--vz-warning-text-emphasis) !important; }
+.badge.bg-info    { background-color: var(--vz-info-bg-subtle) !important; color: var(--vz-info-text-emphasis) !important; }
+.badge.bg-primary { background-color: var(--vz-primary-bg-subtle) !important; color: var(--vz-primary-text-emphasis) !important; }
+.badge.bg-secondary { background-color: var(--vz-secondary-bg-subtle) !important; color: var(--vz-secondary-text-emphasis) !important; }
+.badge.bg-dark    { background-color: var(--vz-dark-bg-subtle) !important; color: var(--vz-dark) !important; }
+
+/* ==========================================================================
+   Forms — global control styling so every form in the system (simple or
+   complex) picks up the new visual language automatically, with zero markup
+   changes. Structure, field order, JS behavior and validation logic are
+   untouched; only spacing, radius, borders and focus states change.
+   ========================================================================== */
+
+.form-control, .form-select {
+    border-radius: 0.5rem;
+    border-color: var(--vz-border-color);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: var(--vz-primary);
+    box-shadow: 0 0 0 0.2rem rgba(var(--vz-primary-rgb), 0.15);
+}
+
+.form-label {
+    font-weight: 600;
+    font-size: 0.85rem;
+    margin-bottom: 0.4rem;
+}
+
+.form-text {
+    font-size: 0.78rem;
+}
+
+.form-check-input {
+    border-radius: 0.3rem;
+}
+
+.form-check-input:checked {
+    background-color: var(--vz-primary);
+    border-color: var(--vz-primary);
+}
+
+.input-group-text {
+    border-radius: 0.5rem;
+    background-color: var(--vz-light);
+    font-weight: 600;
+}
+
+.form-control.is-invalid, .was-validated .form-control:invalid {
+    border-color: var(--vz-danger);
+}
+
+.form-control.is-valid, .was-validated .form-control:valid {
+    border-color: var(--vz-success);
+}
+
+/* Section containers: forms already live inside .card — give every card a
+   slightly softer, more consistent shell instead of touching each form's
+   own structure. */
+.card {
+    border-radius: 0.75rem;
+}
+
+.card-header {
+    font-weight: 700;
+    background-color: var(--vz-light);
+}
+
+/* ==========================================================================
+   Batch A remainder — dropdowns, confirmation dialogs, DataTables chrome
+   (filter/length/pagination/info/empty state). Everything below targets
+   classes the app already renders (Bootstrap dropdowns, the "sweetalert"
+   v2 library used by confirmDeleteForm(), DataTables 2.0.8's own generated
+   controls) — no markup changes, no JS behavior changes.
+   ========================================================================== */
+
+/* Dropdown menus */
+.dropdown-menu {
+    border: 1px solid var(--vz-border-color);
+    border-radius: 0.6rem;
+    box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.12);
+    padding: 0.4rem;
+}
+
+.dropdown-item {
+    border-radius: 0.4rem;
+    padding: 0.5rem 0.75rem;
+    font-weight: 500;
+    transition: background-color 0.12s ease;
+}
+
+.dropdown-item:hover, .dropdown-item:focus {
+    background-color: var(--vz-light);
+}
+
+/* Confirmation dialogs (sweetalert v2 — used by confirmDeleteForm() site-wide) */
+.sweet-alert {
+    border-radius: 0.9rem;
+    box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.18);
+}
+
+.sweet-alert h2 {
+    font-weight: 700;
+}
+
+.sweet-alert button {
+    border-radius: 0.5rem !important;
+    font-weight: 600 !important;
+    padding: 0.55rem 1.4rem !important;
+    box-shadow: none !important;
+}
+
+.sweet-overlay {
+    background-color: rgba(33, 37, 41, 0.45);
+}
+
+/* DataTables chrome: search box, length selector, pagination, info line,
+   empty-state message. Search/sort/pagination behavior is unchanged —
+   this only restyles the controls DataTables itself already renders.
+   DataTables 2.0.8 (confirmed live) uses .dt-search/.dt-length/.dt-info/
+   .dt-paging-button — NOT the older dataTables_filter/paginate_button
+   names, which this build never renders. Legacy selectors kept alongside
+   as a harmless no-op fallback in case an older DataTables version is
+   ever loaded somewhere. */
+.dt-search .dt-input,
+.dt-length .dt-input,
+.dataTables_wrapper .dataTables_filter input,
+.dataTables_wrapper .dataTables_length select {
+    border-radius: 0.5rem;
+    border: 1px solid var(--vz-border-color);
+    padding: 0.4rem 0.75rem;
+}
+
+.dt-search .dt-input:focus,
+.dt-length .dt-input:focus,
+.dataTables_wrapper .dataTables_filter input:focus,
+.dataTables_wrapper .dataTables_length select:focus {
+    outline: none;
+    border-color: var(--vz-primary);
+    box-shadow: 0 0 0 0.2rem rgba(var(--vz-primary-rgb), 0.15);
+}
+
+.dt-info,
+.dataTables_wrapper .dataTables_info {
+    color: var(--vz-secondary-color);
+    font-size: 0.85rem;
+}
+
+.dt-paging-button,
+.dataTables_wrapper .dataTables_paginate .paginate_button {
+    border-radius: 0.4rem !important;
+    margin-inline-start: 0.2rem;
+    padding: 0.35rem 0.75rem !important;
+    border: 1px solid transparent !important;
+    background: transparent !important;
+}
+
+.dt-paging-button.current,
+.dataTables_wrapper .dataTables_paginate .paginate_button.current {
+    background: var(--vz-primary) !important;
+    border-color: var(--vz-primary) !important;
+    color: #fff !important;
+}
+
+.dt-paging-button:not(.current):not(.disabled):hover,
+.dataTables_wrapper .dataTables_paginate .paginate_button:not(.current):not(.disabled):hover {
+    background: var(--vz-light) !important;
+    border-color: var(--vz-border-color) !important;
+}
+
+.dt-paging-button.disabled,
+.dataTables_wrapper .dataTables_paginate .paginate_button.disabled {
+    opacity: 0.4;
+}
+
+.dt-empty,
+.dataTables_empty {
+    padding: 2.5rem 1rem !important;
+    color: var(--vz-secondary-color);
+    font-weight: 500;
+}
+
+/* Bootstrap server-rendered pagination, where it's used instead of DataTables */
+.pagination .page-link {
+    border-radius: 0.4rem;
+    margin-inline-end: 0.2rem;
+    border-color: var(--vz-border-color);
+}
+
+.pagination .page-item.active .page-link {
+    background-color: var(--vz-primary);
+    border-color: var(--vz-primary);
+}
+
+/* Field-level validation messages */
+.invalid-feedback {
+    font-size: 0.8rem;
+    font-weight: 600;
+}
