@@ -882,6 +882,11 @@ class InvoiceController extends Controller
                 ]);
             }
 
+            // Any other invoice is never deleted while vouchers are still linked to it.
+            if ($blocker = CounterInvoiceDeletion::linkedVouchersBlocker($invoice)) {
+                return response()->json(['success' => false, 'message' => $blocker], 422);
+            }
+
             // P1.2: refuse to delete an invoice that has already received payment --
             // deleting it would silently orphan the paid amount in Storage/Bank with
             // no invoice, ledger row, or trace of where the money came from.

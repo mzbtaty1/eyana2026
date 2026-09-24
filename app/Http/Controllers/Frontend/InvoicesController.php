@@ -1693,11 +1693,14 @@ $invoices = Invoice::select('*')
             ->get();
 
         // Counter Customer invoice: the linked vouchers that deletion will reverse,
-        // or why it can't be deleted now
+        // or why it can't be deleted now. Any other invoice: blocked while vouchers
+        // are still linked to it.
         $counterDeletion = null;
         if (CounterInvoiceDeletion::applies($invoice_info)) {
             $linkedBonds = CounterInvoiceDeletion::linkedBonds($invoice_info);
             $counterDeletion = ['bonds' => $linkedBonds, 'blocker' => CounterInvoiceDeletion::blocker($invoice_info, $linkedBonds)];
+        } elseif ($blocker = CounterInvoiceDeletion::linkedVouchersBlocker($invoice_info)) {
+            $counterDeletion = ['bonds' => collect(), 'blocker' => $blocker];
         }
 
         return view('invoices.remove', [
@@ -1731,6 +1734,11 @@ $invoices = Invoice::select('*')
                 return redirect()->route('site.invoices_remove', $invoice_info->es_id)->withErrors(['msg' => $error]);
             }
             return redirect()->route('site.invoices');
+        }
+
+        // Any other invoice is never deleted while vouchers are still linked to it.
+        if ($blocker = CounterInvoiceDeletion::linkedVouchersBlocker($invoice_info)) {
+            return redirect()->route('site.invoices_remove', $invoice_info->es_id)->withErrors(['msg' => $blocker]);
         }
 
         $remove = Invoice::select('*')

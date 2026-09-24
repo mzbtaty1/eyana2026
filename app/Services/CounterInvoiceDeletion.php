@@ -21,6 +21,9 @@ use Illuminate\Support\Facades\{Auth, DB};
  *  - the amount paid on the invoice doesn't match its payment vouchers,
  *  - a voucher has no active treasury / bank entry to reverse (e.g. older than
  *    those ledgers) or its treasury / bank no longer exists.
+ *
+ * Any other (non-counter) invoice is never deleted while vouchers are still
+ * linked to it (linkedVouchersBlocker): nothing reverses them there.
  */
 class CounterInvoiceDeletion
 {
@@ -33,6 +36,20 @@ class CounterInvoiceDeletion
     public static function linkedBonds($invoice)
     {
         return Bond::where('invoice_id', (int) $invoice->id)->orderBy('id')->get();
+    }
+
+    /**
+     * Non-counter invoices: why the invoice can't be deleted because vouchers are
+     * still linked to it (Arabic), or null. Deleting it would leave them orphaned.
+     */
+    public static function linkedVouchersBlocker($invoice): ?string
+    {
+        $bonds = self::linkedBonds($invoice);
+        if ($bonds->isEmpty()) {
+            return null;
+        }
+        $list = $bonds->map(fn ($b) => ($b->es_id ?: 'رقم ' . $b->id) . ' (' . number_format((float) $b->amount, 2) . ')')->implode('، ');
+        return "لا يمكن حذف الفاتورة {$invoice->es_id} لأن عليها سندات مرتبطة بها: $list. برجاء عكس / تصحيح هذه السندات أولاً.";
     }
 
     /** Why the invoice can't be deleted now (Arabic), or null. */
