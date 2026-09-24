@@ -41,7 +41,8 @@ swal("", "{{$errors->first()}}", "info");
                         تاريخ الفاتورة
                         <span class="text-danger">*</span>
                      </p>
-                     <input type="date" name="invoice_date" value="{{$invoice_info->invoice_date}}" placeholder="تاريخ الفاتورة" class="form-control" style="text-align:right;">
+                     <input type="date" name="invoice_date" value="{{$invoice_info->invoice_date}}" placeholder="تاريخ الفاتورة" class="form-control" style="text-align:right;" readonly>
+                     <small class="text-muted">تاريخ الفاتورة الأصلي لا يتغير؛ أي تعديل مالي يُسجل بتاريخ اليوم.</small>
                   </div>
                   <div class="col-6">
                     <p>

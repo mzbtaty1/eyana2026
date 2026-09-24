@@ -11,6 +11,12 @@
          اضافة فاتورة
       </button>
    </a>
+   <a href="{{route('site.shared_invoices_create')}}">
+      <button class="btn btn-outline-dark">
+         <i class="ri-team-line"></i>
+         إضافة فاتورة مشتركة
+      </button>
+   </a>
 </x-page-header>
 
 <style>
@@ -114,314 +120,135 @@
 window.authAccountType = {{ Auth::user()->account_type }};
 
 $(document).ready(function () {
-    $.ajax({
-        url: '{{ route("site.invoices_json_3months") }}',
-        method: 'GET',
-        success: function (response) {
-            if (!response || !response.data || !Array.isArray(response.data)) {
-                alert('البيانات غير صحيحة أو فارغة');
-                return;
+    // Server-side processing: only the visible page is loaded from
+    // site.invoices_list_data (search, ordering and paging run in SQL).
+    const esc = function (v) { return $('<div>').text(v == null ? '' : String(v)).html(); };
+    $('#invoicesTable').DataTable({
+        serverSide: true,
+        processing: true,
+        ajax: {
+            url: '{{ route("site.invoices_list_data") }}',
+            error: function (xhr) {
+                console.error("فشل في تحميل البيانات:", xhr.responseText);
+                alert("فشل في تحميل البيانات من الخادم.");
             }
-
-            let data = response.data;
-            console.log(data);
-
-            // ترتيب البيانات حسب تاريخ الفاتورة من الأحدث للأقدم
-            data.sort(function(a, b) {
-                let dateA = new Date(a.invoice_date || a.created_at);
-                let dateB = new Date(b.invoice_date || b.created_at);
-                return dateB - dateA; // الأحدث أولاً
-            });
-
-            const table = $('#invoicesTable').DataTable({
-                data: data,
-                order: [[2, 'desc']], // ترتيب حسب تاريخ الفاتورة (العمود الثالث الآن)
-                columns: [
-                    {
-                        data: 'es_id',
-                        title: 'ES ID',
-                        render: function(data, type, row) {
-                            let esIdDisplay = data;
-                            if (row.invoice_ticket_file) {
-                                const fileUrl = `/public/storage/${row.invoice_ticket_file.replace('storage/', '')}`;
-                                esIdDisplay = `<a href="${fileUrl}" target="_blank">${data}</a>`;
-                            }
-                            return esIdDisplay;
-                        }
-                    },
-                    {
-                        data: 'es_id',
-                        title: 'حالة الفاتورة',
-                        render: function(data, type, row) {
-                            if (data && data.startsWith('FLY-RD')) {
-                                return '<span class="cancelled-badge">إلغاء</span>';
-                            }
-                            return '<span class="badge bg-success">فعالة</span>';
-                        }
-                    },
-                    { 
-                        data: 'invoice_date', 
-                        title: 'تاريخ الفاتورة',
-                        render: function(data, type, row) {
-                            return data || row.created_at || '-';
-                        }
-                    },
-                    { data: 'invoice_travel_date', title: 'تاريخ السفر' },
-                    {
-                        data: null,
-                        title: 'اسم المورد',
-                        render: function (data, type, row) {
-                            if (!row.ticket_vendors || !Array.isArray(row.ticket_vendors)) return '';
-                            return row.ticket_vendors
-                                .filter(v => v?.supplier?.name)
-                                .map(v => v.supplier.name)
-                                .join(" / ");
-                        }
-                    },
-                    {
-                        data: null,
-                        title: 'اسم المستفيد',
-                        render: function (data, type, row) {
-                            return row?.beneficiaries?.name || '';
-                        }
-                    },
-                    {
-                        data: 'custom_users',
-                        title: 'المستخدمين',
-                        render: function (data, type, row) {
-                            if (!row.users || !Array.isArray(row.users)) return '';
-                            return row.users.map(u => `
-                                <strong>${u.client_name}</strong><br>
-                                حجز: ${u.client_booking_id || '-'} | تذكرة: ${u.client_ticket_id || '-'}<br>
-                            `).join('');
-                        }
-                    },
-                    {
-                        data: 'combined_location',
-                        title: 'الاستلام / الوصول',
-                        render: function (data, type, row) {
-                            const from = row.from_location || '';
-                            const to = row.to_location || '';
-                            return from || to ? `${from} / ${to}` : '';
-                        }
-                    },
-                    {
-                        data: 'combined_client_net_pice',
-                        title: 'التكلفة',
-                        render: function (data, type, row) {
-                            // للفواتير الملغاة (FLY-RD)
-                            if (row.es_id && row.es_id.startsWith("FLY-RD")) {
-                                const mostarad = (row.account_statements || []).find(st =>
-                                    parseFloat(st.credit_balance) > 0 && parseFloat(st.debit_balance) === 0
-                                );
-                                return mostarad ? parseFloat(mostarad.credit_balance).toFixed(2) : "0.00";
-                            }
-
-                            // للفواتير العادية
-                            return (row.users || []).reduce((sum, user) => {
-                                return sum + parseFloat(user.client_net_pice || 0);
-                            }, 0).toFixed(2);
-                        }
-                    },
-                    {
-                        data: 'combined_client_net_pice',
-                        title: 'البيع',
-                        render: function (data, type, row) {
-                            // للفواتير الملغاة (FLY-RD)
-                            if (row.es_id && row.es_id.startsWith("FLY-RD")) {
-                                const mortaga = (row.account_statements || []).find(st =>
-                                    parseFloat(st.debit_balance) > 0 && parseFloat(st.credit_balance) === 0
-                                );
-                                return mortaga ? parseFloat(mortaga.debit_balance).toFixed(2) : "0.00";
-                            }
-
-                            // للفواتير العادية
-                            return (row.users || []).reduce((sum, user) => {
-                                return sum + parseFloat(user.client_bought_price || 0);
-                            }, 0).toFixed(2);
-                        }
-                    },
-                    {
-                        data: 'profit_or_loss',
-                        title: 'الربح',
-                        render: function (data, type, row) {
-                            // للفواتير الملغاة (FLY-RD)
-                            if (row.es_id && row.es_id.startsWith("FLY-RD")) {
-                                const mostarad = (row.account_statements || []).find(st =>
-                                    parseFloat(st.credit_balance) > 0 && parseFloat(st.debit_balance) === 0
-                                );
-                                const mortaga = (row.account_statements || []).find(st =>
-                                    parseFloat(st.debit_balance) > 0 && parseFloat(st.credit_balance) === 0
-                                );
-
-                                const net = mostarad ? parseFloat(mostarad.credit_balance) : 0;
-                                const bought = mortaga ? parseFloat(mortaga.debit_balance) : 0;
-
-                                return (bought - net).toFixed(2);
-                            }
-
-                            // للفواتير العادية
-                            const net = (row.users || []).reduce((sum, user) => {
-                                return sum + parseFloat(user.client_net_pice || 0);
-                            }, 0);
-                            const bought = (row.users || []).reduce((sum, user) => {
-                                return sum + parseFloat(user.client_bought_price || 0);
-                            }, 0);
-                            const diff = bought - net;
-                            return `${diff.toFixed(2)}`;
-                        }
-                    },
-                    {
-                        data: 'creator_name',
-                        title: 'الموظف',
-                        render: function (data, type, row) {
-                            return row.creator && row.creator.name ? row.creator.name : '-';
-                        }
-                    },
-                    {
-                        data: 'payment_and_action',
-                        title: 'حالة السداد',
-                        render: function (data, type, row) {
-                            const id = row.id;
-                            const moneyPay = parseFloat(row.invoice_money_pay || 0);
-                            const totalBought = (row.users || []).reduce((sum, user) => {
-                                return sum + parseFloat(user.client_bought_price || 0);
-                            }, 0);
-                            const invoiceStatus = parseInt(row.invoice_status || 0);
-                            const isAccountType2 = window.authAccountType === 2;
-
-                            let badge = '';
-                            if (moneyPay === 0) {
-                                badge = `<span class="badge bg-dark my_badge">لم يتم السداد</span>`;
-                            } else if (moneyPay < totalBought) {
-                                badge = `<span class="badge bg-secondary my_badge">سداد جزئي</span>`;
-                            } else {
-                                badge = `<span class="badge bg-success my_badge">تم السداد</span>`;
-                            }
-
-                            let buttons = '';
-                            if (isAccountType2) {
-                                if (invoiceStatus === 0) {
-                                    buttons = `
-                                        <button class="btn btn-primary mt-1" id="rvd_${id}" 
-                                                style="border-radius: 55px;font-size: 10px;" 
-                                                onclick="do_approved(${id})">
-                                            تأكيد العملية
-                                        </button>
-                                        <button class="btn btn-success mt-1" id="apprvd_${id}" 
-                                                style="border-radius: 55px;font-size: 10px;display:none;">
-                                            تم التأكيد
-                                        </button>
-                                    `;
-                                } else {
-                                    buttons = `
-                                        <button class="btn btn-success mt-1" 
-                                                style="border-radius: 55px;font-size: 10px;">
-                                            تم التأكيد
-                                        </button>
-                                    `;
-                                }
-                            }
-
-                            return `
-                                <div style="text-align: center;">
-                                    ${badge}<br>
-                                    ${buttons}
-                                </div>
-                            `;
-                        }
-                    },
-                    {
-                        data: 'actions_dropdown',
-                        title: 'اجراء',
-                        orderable: false,
-                        render: function (data, type, row) {
-                            const id = row.id;
-                            const es_id = row.es_id;
-                            const moneyPay = parseFloat(row.invoice_money_pay || 0);
-                            const totalBought = (row.users || []).reduce((sum, user) => {
-                                return sum + parseFloat(user.client_bought_price || 0);
-                            }, 0);
-                            const invoiceStatus = parseInt(row.invoice_status || 0);
-                            const accountType = window.authAccountType;
-
-                            let html = `
-                                <div class="dropdown">
-                                    <button class="btn btn-soft-secondary btn-sm dropdown-toggle" 
-                                            type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                        <i class="ri-more-fill align-middle"></i>
-                                    </button>
-                                    <ul class="dropdown-menu dropdown-menu-end">
-                                        <li>
-                                            <a href="/invoices/${id}/show" class="dropdown-item">
-                                                <i class="ri-eye-fill align-bottom me-2 text-muted"></i> تفاصيل
-                                            </a>
-                                        </li>
-                            `;
-
-                            if (accountType === 2 || invoiceStatus === 0) {
-                                html += `
-                                    <li>
-                                        <a href="/invoices/${id}/edit" class="dropdown-item">
-                                            <i class="ri-edit-box-line"></i> تعديل
-                                        </a>
-                                    </li>
-                                `;
-                            }
-
-                            if (moneyPay < totalBought) {
-                                html += `
-                                    <li>
-                                        <a href="/invoices/pay-part/${id}" class="dropdown-item">
-                                            <i class="ri-wallet-3-line"></i> سداد الفاتورة
-                                        </a>
-                                    </li>
-                                `;
-                            }
-
-                            html += `
-                                        <li>
-                                            <a href="/invoices/reissue/${es_id}" class="dropdown-item">
-                                                <i class="ri-arrow-go-forward-line"></i> اعادة اصدار
-                                            </a>
-                                        </li>
-                                        <li>
-                                            <a href="/invoices/refund/${es_id}" class="dropdown-item">
-                                                <i class="ri-refund-2-line"></i> الغاء الفاتورة
-                                            </a>
-                                        </li>
-                                        <li>
-                                            <a href="/invoices/${es_id}/remove" class="dropdown-item">
-                                                <i class="ri-delete-bin-line"></i> حذف الفاتورة
-                                            </a>
-                                        </li>
-                                    </ul>
-                                </div>
-                            `;
-                            return html;
-                        }
-                    }
-                ],
-                language: {
-                    url: '//cdn.datatables.net/plug-ins/1.11.3/i18n/ar.json'
-                },
-                processing: true,
-                paging: true,
-                searching: true,
-                ordering: true,
-                responsive: true,
-                autoWidth: false,
-                rowCallback: function(row, data) {
-                    // إضافة كلاس للصفوف الملغاة
-                    if (data.es_id && data.es_id.startsWith('FLY-RD')) {
-                        $(row).addClass('cancelled-invoice');
-                    }
-                }
-            });
         },
-        error: function (xhr, status, error) {
-            console.error("فشل في تحميل البيانات:", xhr.responseText);
-            alert("فشل في تحميل البيانات من الخادم.");
+        order: [[2, 'desc']],
+        pageLength: 25,
+        lengthMenu: [[25, 50, 100, 250], [25, 50, 100, 250]],
+        columns: [
+            {
+                data: 'es_id',
+                render: function (data, type, row) {
+                    if (row.invoice_ticket_file) {
+                        const fileUrl = `/public/storage/${String(row.invoice_ticket_file).replace('storage/', '')}`;
+                        return `<a href="${fileUrl}" target="_blank">${esc(data)}</a>`;
+                    }
+                    return esc(data);
+                }
+            },
+            {
+                data: 'is_refund', orderable: false,
+                render: function (data, type, row) {
+                    let html = row.is_refund ? '<span class="cancelled-badge">إلغاء</span>' : '<span class="badge bg-success">فعالة</span>';
+                    if (row.is_shared) {
+                        html += '<br><span class="badge bg-dark mt-1">مشتركة</span>';
+                        if (row.shared_owner || row.shared_seller) {
+                            html += `<br><small>المالك: ${esc(row.shared_owner || '-')}<br>البائع: ${esc(row.shared_seller || '-')}</small>`;
+                        }
+                    }
+                    return html;
+                }
+            },
+            { data: 'invoice_date', render: function (data) { return esc(data || '-'); } },
+            { data: 'invoice_travel_date', render: function (data) { return esc(data); } },
+            { data: 'vendors', orderable: false, render: function (data) { return esc(data); } },
+            { data: 'beneficiary', orderable: false, render: function (data) { return esc(data); } },
+            {
+                data: 'passengers', orderable: false,
+                render: function (data) {
+                    return (data || []).map(u => `
+                        <strong>${esc(u.name)}</strong><br>
+                        حجز: ${esc(u.booking || '-')} | تذكرة: ${esc(u.ticket || '-')}<br>
+                    `).join('');
+                }
+            },
+            { data: 'locations', orderable: false, render: function (data) { return esc(data); } },
+            { data: 'cost', orderable: false },
+            { data: 'sale', orderable: false },
+            { data: 'profit', orderable: false },
+            { data: 'creator', orderable: false, render: function (data) { return esc(data); } },
+            {
+                data: 'money_pay', orderable: false,
+                render: function (data, type, row) {
+                    const id = row.id;
+                    const moneyPay = parseFloat(row.money_pay || 0);
+                    const totalBought = parseFloat(row.total_bought || 0);
+                    let badge = '';
+                    if (moneyPay === 0) {
+                        badge = `<span class="badge bg-dark my_badge">لم يتم السداد</span>`;
+                    } else if (moneyPay < totalBought) {
+                        badge = `<span class="badge bg-secondary my_badge">سداد جزئي</span>`;
+                    } else {
+                        badge = `<span class="badge bg-success my_badge">تم السداد</span>`;
+                    }
+                    let buttons = '';
+                    if (window.authAccountType === 2) {
+                        if (row.invoice_status === 0) {
+                            buttons = `
+                                <button class="btn btn-primary mt-1" id="rvd_${id}" style="border-radius: 55px;font-size: 10px;" onclick="do_approved(${id})">تأكيد العملية</button>
+                                <button class="btn btn-success mt-1" id="apprvd_${id}" style="border-radius: 55px;font-size: 10px;display:none;">تم التأكيد</button>`;
+                        } else {
+                            buttons = `<button class="btn btn-success mt-1" style="border-radius: 55px;font-size: 10px;">تم التأكيد</button>`;
+                        }
+                    }
+                    return `<div style="text-align: center;">${badge}<br>${buttons}</div>`;
+                }
+            },
+            {
+                data: 'id', orderable: false,
+                render: function (data, type, row) {
+                    const id = row.id;
+                    const es_id = encodeURIComponent(row.es_id);
+                    // shared invoices keep their own reissue / refund workflow
+                    const reissueUrl = row.is_shared ? `/shared-invoices/reissue/${es_id}` : `/invoices/reissue/${es_id}`;
+                    const refundUrl = row.is_shared ? `/shared-invoices/refund/${es_id}` : `/invoices/refund/${es_id}`;
+                    let html = `
+                        <div class="dropdown">
+                            <button class="btn btn-soft-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="ri-more-fill align-middle"></i>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a href="/invoices/${id}/show" class="dropdown-item"><i class="ri-eye-fill align-bottom me-2 text-muted"></i> تفاصيل</a></li>`;
+                    if (window.authAccountType === 2 || row.invoice_status === 0) {
+                        html += `<li><a href="/invoices/${id}/edit" class="dropdown-item"><i class="ri-edit-box-line"></i> تعديل</a></li>`;
+                    }
+                    if (parseFloat(row.money_pay || 0) < parseFloat(row.total_bought || 0)) {
+                        html += `<li><a href="/invoices/pay-part/${id}" class="dropdown-item"><i class="ri-wallet-3-line"></i> سداد الفاتورة</a></li>`;
+                    }
+                    html += `
+                                <li><a href="${reissueUrl}" class="dropdown-item"><i class="ri-arrow-go-forward-line"></i> اعادة اصدار</a></li>
+                                <li><a href="${refundUrl}" class="dropdown-item"><i class="ri-refund-2-line"></i> الغاء الفاتورة</a></li>
+                                <li><a href="/invoices/${es_id}/remove" class="dropdown-item"><i class="ri-delete-bin-line"></i> حذف الفاتورة</a></li>
+                            </ul>
+                        </div>`;
+                    return html;
+                }
+            }
+        ],
+        language: {
+            url: '//cdn.datatables.net/plug-ins/1.11.3/i18n/ar.json'
+        },
+        paging: true,
+        searching: true,
+        ordering: true,
+        responsive: true,
+        autoWidth: false,
+        searchDelay: 400,
+        rowCallback: function (row, data) {
+            if (data.is_refund) {
+                $(row).addClass('cancelled-invoice');
+            }
         }
     });
 });

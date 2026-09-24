@@ -18,7 +18,13 @@ swal("", "{{$errors->first()}}", "info");
    <div class="col-lg-12">
       <div class="card">
          <div class="card-header">
-            <h5 class="card-title mb-0"> اضافة فاتورة </h5>
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+               <h5 class="card-title mb-0"> اضافة فاتورة </h5>
+               <div class="btn-group">
+                  <a href="{{route('site.invoices_create')}}" class="btn btn-primary btn-sm active" aria-current="page"><i class="ri-file-add-line"></i> إضافة فاتورة</a>
+                  <a href="{{route('site.shared_invoices_create')}}" class="btn btn-outline-dark btn-sm"><i class="ri-team-line"></i> إضافة فاتورة مشتركة</a>
+               </div>
+            </div>
          </div>
          <div class="card-body">
             <form action="{{route('site.invoices_save')}}" method="POST" autocomplete="off" enctype="multipart/form-data">

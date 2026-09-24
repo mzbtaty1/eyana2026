@@ -405,27 +405,21 @@ if($st == 0){
             // rows) falls back to exactly one row, same as before this change.
             $isOpeningBalanceRow = $AccountStatement->es_id == "FLY-OPEN-BALANCE";
             $hasPassengerBreakdown = !$isOpeningBalanceRow && $AccountStatement->transaction_type == 1 && $ticket_info && $users->count() > 0;
-            $breakdownRows = $hasPassengerBreakdown ? $users->values() : collect([null]);
-
-            // A multi-passenger invoice keeps ONE invoice number, but every passenger's
-            // ticket is its own financial movement: each passenger row shows that ticket's
-            // amount and the running balance steps through them one by one. The ticket
-            // amounts add up to the invoice amount, so the balance after the last
-            // passenger equals $total_blnc and the period totals are unchanged.
-            // Per-passenger amounts come from AccountStatement::passengerAmounts(): the
-            // TicketUser prices, or -- when they don't add up to the ledger amount (FLY-RD
-            // cancellations) -- the ledger amount split equally between the passengers.
-            $debitHasAmount = $AccountStatement->debit_balance > 0;
-            $creditHasAmount = $AccountStatement->credit_balance > 0;
-            $paxDebit = $hasPassengerBreakdown && $debitHasAmount
-                ? App\Models\AccountStatement::passengerAmounts($users, 'client_bought_price', $AccountStatement->debit_balance) : [];
-            $paxCredit = $hasPassengerBreakdown && $creditHasAmount
-                ? App\Models\AccountStatement::passengerAmounts($users, 'client_net_pice', $AccountStatement->credit_balance) : [];
+            // Passenger lines of this ledger row, from InvoicePassengerLedger::statementLines()
+            // (shared with the Print Preview / Account Statement screen and the Excel export):
+            // one row per passenger ticket under the same invoice number, each with its own
+            // amount and its own running-balance step. Rows written since the passenger-level
+            // model (edits dated today, refunds) carry their exact per-passenger lines.
+            $paxLines = App\Services\InvoicePassengerLedger::statementLines($AccountStatement, $users, $hasPassengerBreakdown);
+            $hasPassengerBreakdown = $paxLines !== null;
+            $breakdownRows = $hasPassengerBreakdown ? collect($paxLines) : collect([null]);
+            // «نوع العملية» from explicit data only (row marker / invoice number), never from amounts.
+            $kindLabel = App\Services\InvoicePassengerLedger::kindLabel($AccountStatement);
             ?>
             @foreach($breakdownRows as $rowIndex => $user)
             <?php
             if ($hasPassengerBreakdown) {
-                $balance_before_tx = round($balance_before_tx + ($paxDebit[$rowIndex] ?? 0) - ($paxCredit[$rowIndex] ?? 0), 2);
+                $balance_before_tx = round($balance_before_tx + ($user['debit'] ?? 0) - ($user['credit'] ?? 0), 2);
                 $row_balance = $balance_before_tx;
             } else {
                 $row_balance = $total_blnc;
@@ -437,7 +431,7 @@ if($st == 0){
                 <td style="font-weight: bold;">{{$AccountStatement->es_id}}</td>
                 <td>
                     @if($AccountStatement->transaction_type == 1)
-                        تذاكر /
+                        {{$kindLabel ?? 'تذاكر'}} /
                     @elseif($AccountStatement->transaction_type == 2)
                         سندات /
                     @elseif($AccountStatement->transaction_type == 3)
@@ -450,7 +444,7 @@ if($st == 0){
 
                 <td>
                     @if($AccountStatement->transaction_type == 1 && $ticket_info)
-                        {{$ticket_info->invoice_date}}
+                        {{App\Services\InvoicePassengerLedger::displayDate($AccountStatement, $ticket_info)}}
                     @else
                         {{$AccountStatement->created_at}}
                     @endif
@@ -474,7 +468,7 @@ if($st == 0){
 
                 <td>
                     @if($hasPassengerBreakdown)
-                        <span class="ey-ltr">{{$user->client_name}}</span>
+                        <span class="ey-ltr">{{$user['name']}}</span>
                     @else
                         <div class="ey-trip-info">
                             <div>
@@ -521,20 +515,20 @@ if($st == 0){
 
                 <td>
                     @if($hasPassengerBreakdown)
-                        <span class="ey-ltr">{{$user->client_booking_id}}</span>
+                        <span class="ey-ltr">{{$user['booking']}}</span>
                     @endif
                 </td>
 
                 <td class="amount-debit">
                     @if($hasPassengerBreakdown)
-                        @if($debitHasAmount){{number_format($paxDebit[$rowIndex], 2)}}@endif
+                        @if($user['debit'] !== null){{number_format($user['debit'], 2)}}@endif
                     @else
                         {{number_format($AccountStatement->debit_balance , 2)}}
                     @endif
                 </td>
                 <td class="amount-credit">
                     @if($hasPassengerBreakdown)
-                        @if($creditHasAmount){{number_format($paxCredit[$rowIndex], 2)}}@endif
+                        @if($user['credit'] !== null){{number_format($user['credit'], 2)}}@endif
                     @else
                         {{number_format($AccountStatement->credit_balance , 2)}}
                     @endif

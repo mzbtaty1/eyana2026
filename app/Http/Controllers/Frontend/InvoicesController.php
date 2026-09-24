@@ -160,6 +160,126 @@ public function getInvoices3Months(Request $request)
 
 
 
+    /**
+     * Server-side DataTables data for the main invoices list ("كل الفواتير").
+     * Same scope as before (last 3 months, own invoices unless account_type 2)
+     * but now INCLUDING shared invoices, and only the requested page is loaded:
+     * every displayed value is computed here with a fixed number of queries per
+     * page (no per-row lookups, no multi-MB payload). Values are computed exactly
+     * as the page's former client-side render functions did.
+     */
+    public function invoicesListData(Request $request)
+    {
+        $base = DB::table('invoices as i')->whereDate('i.invoice_date', '>=', Carbon::now()->subMonths(3));
+        if (Auth::user()->account_type != 2) {
+            $base->where('i.invoice_create_by', Auth::user()->id);
+        }
+        $recordsTotal = (clone $base)->count();
+
+        $search = trim((string) $request->input('search.value', ''));
+        if ($search !== '') {
+            $like = '%' . $search . '%';
+            // Resolve the related matches once (ticket_system_id is an unindexed text
+            // column, so correlated EXISTS per invoice would be very slow).
+            $paxSystems = DB::table('ticket_users')->where(fn ($w) => $w->where('client_name', 'like', $like)
+                ->orWhere('client_booking_id', 'like', $like)->orWhere('client_ticket_id', 'like', $like))
+                ->distinct()->pluck('ticket_system_id')->all();
+            $vendorSystems = DB::table('ticket_vendors as tv')->join('suppliers as sv', 'sv.id', '=', 'tv.vendor_id')
+                ->where('sv.name', 'like', $like)->distinct()->pluck('tv.ticket_system_id')->all();
+            $beneficiaryIds = DB::table('suppliers')->where('name', 'like', $like)->pluck('id')->all();
+            $creatorIds = DB::table('users')->where('name', 'like', $like)->pluck('id')->all();
+            $base->where(function ($q) use ($like, $paxSystems, $vendorSystems, $beneficiaryIds, $creatorIds) {
+                $q->where('i.es_id', 'like', $like)
+                  ->orWhere('i.invoice_date', 'like', $like)
+                  ->orWhere('i.invoice_travel_date', 'like', $like)
+                  ->orWhere('i.from_location', 'like', $like)
+                  ->orWhere('i.to_location', 'like', $like);
+                if ($paxSystems || $vendorSystems) {
+                    $q->orWhereIn('i.ticket_system_id', array_values(array_unique(array_merge($paxSystems, $vendorSystems))));
+                }
+                if ($beneficiaryIds) {
+                    $q->orWhereIn('i.invoice_beneficiaries', $beneficiaryIds);
+                }
+                if ($creatorIds) {
+                    $q->orWhereIn('i.invoice_create_by', $creatorIds);
+                }
+            });
+        }
+        $recordsFiltered = (clone $base)->count();
+
+        $orderable = [0 => 'i.id', 2 => 'i.invoice_date', 3 => 'i.invoice_travel_date'];
+        $col = (int) $request->input('order.0.column', 2);
+        $dir = strtolower((string) $request->input('order.0.dir', 'desc')) === 'asc' ? 'asc' : 'desc';
+        $base->orderBy($orderable[$col] ?? 'i.invoice_date', $dir)->orderBy('i.id', 'desc');
+
+        $length = (int) $request->input('length', 25);
+        $length = $length > 0 ? min($length, 500) : 25;
+        $rows = $base->select('i.id', 'i.es_id', 'i.ticket_system_id', 'i.invoice_ticket_file', 'i.invoice_date', 'i.created_at', 'i.invoice_travel_date',
+                'i.from_location', 'i.to_location', 'i.invoice_beneficiaries', 'i.invoice_money_pay', 'i.invoice_status', 'i.invoice_shared',
+                'i.invoice_account_1', 'i.invoice_account_2', 'i.invoice_create_by')
+            ->skip(max(0, (int) $request->input('start', 0)))->take($length)->get();
+
+        // batched lookups for this page only
+        $systems = $rows->pluck('ticket_system_id')->filter()->unique()->values();
+        $vendorNames = DB::table('ticket_vendors as tv')->join('suppliers as s', 's.id', '=', 'tv.vendor_id')->whereIn('tv.ticket_system_id', $systems)
+            ->orderBy('tv.id')->get(['tv.ticket_system_id', 'tv.vendor_id', 's.name'])->groupBy('ticket_system_id');
+        $passengers = TicketUser::whereIn('ticket_system_id', $systems)->orderBy('id')
+            ->get(['ticket_system_id', 'client_name', 'client_booking_id', 'client_ticket_id', 'client_net_pice', 'client_bought_price'])->groupBy('ticket_system_id');
+        $supplierNames = DB::table('suppliers')->whereIn('id', $rows->pluck('invoice_beneficiaries')->filter()->unique())->pluck('name', 'id');
+        $userNames = DB::table('users')->whereIn('id', $rows->pluck('invoice_create_by')->merge($rows->pluck('invoice_account_1'))->merge($rows->pluck('invoice_account_2'))->filter()->unique())->pluck('name', 'id');
+        $refundRows = AccountStatement::whereIn('es_id', $rows->pluck('es_id')->filter(fn ($e) => str_starts_with((string) $e, 'FLY-RD')))
+            ->where('transaction_type', 1)->orderBy('id')->get(['es_id', 'supp_client_id', 'debit_balance', 'credit_balance'])->groupBy('es_id');
+
+        $data = $rows->map(function ($r) use ($vendorNames, $passengers, $supplierNames, $userNames, $refundRows) {
+            $pax = $passengers->get($r->ticket_system_id, collect());
+            $isRefund = str_starts_with((string) $r->es_id, 'FLY-RD');
+            $sumNet = $pax->sum(fn ($u) => (float) ($u->client_net_pice ?? 0));
+            $sumBought = $pax->sum(fn ($u) => (float) ($u->client_bought_price ?? 0));
+            if ($isRefund) {
+                // refund: «مسترد للعميل» = client credit, «مرتجع لنا من المورد» = supplier debit,
+                // summed per account (includes any adjustment rows of the refund).
+                $st = $refundRows->get($r->es_id, collect());
+                $vendorId = (int) optional($vendorNames->get($r->ticket_system_id, collect())->first())->vendor_id;
+                $cost = (float) $st->filter(fn ($x) => (int) $x->supp_client_id === (int) $r->invoice_beneficiaries)
+                    ->sum(fn ($x) => (float) $x->credit_balance - (float) $x->debit_balance);
+                $sale = (float) $st->filter(fn ($x) => (int) $x->supp_client_id === $vendorId)
+                    ->sum(fn ($x) => (float) $x->debit_balance - (float) $x->credit_balance);
+            } else {
+                $cost = $sumNet;
+                $sale = $sumBought;
+            }
+            return [
+                'id' => $r->id,
+                'es_id' => $r->es_id,
+                'invoice_ticket_file' => $r->invoice_ticket_file,
+                'is_refund' => $isRefund,
+                'is_shared' => (int) $r->invoice_shared === 1,
+                'shared_owner' => $userNames[$r->invoice_account_1] ?? null,
+                'shared_seller' => $userNames[$r->invoice_account_2] ?? null,
+                'invoice_date' => $r->invoice_date ?: $r->created_at,
+                'invoice_travel_date' => $r->invoice_travel_date,
+                'vendors' => $vendorNames->get($r->ticket_system_id, collect())->pluck('name')->filter()->implode(' / '),
+                'beneficiary' => $supplierNames[$r->invoice_beneficiaries] ?? '',
+                'passengers' => $pax->map(fn ($u) => ['name' => $u->client_name, 'booking' => $u->client_booking_id, 'ticket' => $u->client_ticket_id])->values(),
+                'locations' => trim((string) $r->from_location) !== '' || trim((string) $r->to_location) !== '' ? $r->from_location . ' / ' . $r->to_location : '',
+                'cost' => number_format($cost, 2, '.', ''),
+                'sale' => number_format($sale, 2, '.', ''),
+                'profit' => number_format($sale - $cost, 2, '.', ''),
+                'creator' => $userNames[$r->invoice_create_by] ?? '-',
+                'money_pay' => (float) ($r->invoice_money_pay ?? 0),
+                'total_bought' => $sumBought,
+                'invoice_status' => (int) ($r->invoice_status ?? 0),
+            ];
+        });
+
+        return response()->json([
+            'draw' => (int) $request->input('draw'),
+            'recordsTotal' => $recordsTotal,
+            'recordsFiltered' => $recordsFiltered,
+            'data' => $data,
+        ]);
+    }
+
     public function ajax(Request $request){
 
         if ($request->ajax()) {
@@ -1090,175 +1210,78 @@ $invoices = Invoice::select('*')
             $path = $invoice_info->invoice_ticket_file;
         }
         
-        $old_sup = TicketVendor::select('*')->where('ticket_system_id',$invoice_info->ticket_system_id)->get();
-        $old_sup = $old_sup[0];
-        /* EDIT HERE */
-        
-         $createVendors = TicketVendor::select('*')->where('ticket_system_id',$invoice_info->ticket_system_id)->update([
-//            "ticket_system_id" => $system_id,
-            "vendor_id" => $request->vendor_id,
-            "price" => $request->vendor_cost,
-        ]);
+        // Whole-invoice edit. Date rule: the original ledger rows (and the invoice's
+        // own date) are never changed -- every financial change is booked as
+        // adjustment rows dated TODAY, passenger by passenger
+        // (see InvoicePassengerLedger::recordEdit).
+        DB::transaction(function () use ($request, $invoice_info, $path, $id) {
+            $oldAccounts = InvoicePassengerLedger::accounts($invoice_info);
+            $before = InvoicePassengerLedger::beginEdit($invoice_info);
 
-        
-        // Whole-invoice edit: every passenger keeps its own record and amounts.
-        // Posted rows carry their TicketUser id and are updated in place (no
-        // delete/recreate, so passenger records keep their identity); rows
-        // without an id are new passengers; passengers no longer posted are removed.
-        $existing_tickets = TicketUser::where('ticket_system_id', $invoice_info->ticket_system_id)->get()->keyBy('id');
-        $kept_ticket_ids = [];
-        foreach ($request->ticket_info as $key => $value) {
-            $ticket_data = [
-                "client_name" => $value['name'],
-                "client_type" => $value['client_type'],
-                "client_net_pice" => $value['net_price'],
-                "client_bought_price" => $value['bought_price'],
-                "client_booking_id" => $value['book_id'],
-                "client_ticket_id" => $value['tikcet_id'],
-                "client_phone" => $value['client_phone'],
-            ];
-            $ticket_id = (int) ($value['id'] ?? 0);
-            if ($ticket_id && $existing_tickets->has($ticket_id)) {
-                $existing_tickets[$ticket_id]->update($ticket_data);
-                $kept_ticket_ids[] = $ticket_id;
-            } else {
-                $kept_ticket_ids[] = TicketUser::create(array_merge([
-                    "crt_at" => date('Y-m-d'),
-                    "ticket_system_id" => $invoice_info->ticket_system_id,
-                ], $ticket_data))->id;
-            }
-        }
-        TicketUser::where('ticket_system_id', $invoice_info->ticket_system_id)
-            ->whereNotIn('id', $kept_ticket_ids)
-            ->delete();
-
-        
-         $users = TicketUser::select('*')
-            ->where('ticket_system_id', $invoice_info->ticket_system_id)
-            ->get();
-
-        $total_client_net_pice = 0;
-        $total_client_bought_price = 0;
-        $text = "";
-
-        foreach ($users as $user) {
-            $total_client_net_pice += $user->client_net_pice;
-            $total_client_bought_price += $user->client_bought_price;
-        }
-
-        
-        // Get any existing vendor and beneficiary statements with same es_id and transaction_type
-$existing_statements = AccountStatement::where('transaction_type', 1)
-    ->where('es_id', $invoice_info->es_id)
-    ->get();
-
-$existing_vendor_statement = $existing_statements->firstWhere('supp_client_id', $request->vendor_id);
-$existing_beneficiary_statement = $existing_statements->firstWhere('supp_client_id', $request->invoice_beneficiaries);
-
-// حذف سجل المورد السابق إن وُجد وكان يختلف عن المورد الجديد
-foreach ($existing_statements as $statement) {
-    if ($statement->supp_client_id != $request->vendor_id && $statement->supp_client_id != $request->invoice_beneficiaries) {
-        $statement->delete();
-    }
-}
-
-// تجهيز البيانات حسب نوع الفاتورة (استرداد أو عادي)
-// Both cases are passenger-level: each ledger row is the sum of the passengers'
-// own amounts (client_bought_price = debit share, client_net_pice = credit share).
-if (InvoicePassengerLedger::isRefund($invoice_info)) {
-    // vendor: debit, beneficiary: credit
-    $vendor_data = [
-        "invoice_type" => $request->invoice_section,
-        "invoice_date" => $request->invoice_date,
-        "debit_balance" => round(floatval($total_client_bought_price), 2),
-        "credit_balance" => 0,
-        "ledger_net_effect" => round(floatval($total_client_bought_price), 2),
-        "transaction_txt" => "حجز الرحلة " . $invoice_info->es_id,
-        "added_by" => $request->added_user,
-    ];
-
-    $beneficiary_data = [
-        "invoice_type" => $request->invoice_section,
-        "invoice_date" => $request->invoice_date,
-        "debit_balance" => 0,
-        "credit_balance" => round(floatval($total_client_net_pice), 2),
-        "ledger_net_effect" => -round(floatval($total_client_net_pice), 2),
-        "transaction_txt" => "حجز الرحلة " . $invoice_info->es_id,
-        "added_by" => $request->added_user,
-    ];
-} else {
-    // vendor: credit, beneficiary: debit
-    $vendor_data = [
-        "invoice_type" => $request->invoice_section,
-        "invoice_date" => $request->invoice_date,
-        "debit_balance" => 0,
-        "credit_balance" => floatval($total_client_net_pice),
-        "ledger_net_effect" => -floatval($total_client_net_pice),
-        "transaction_txt" => "حجز الرحلة " . $invoice_info->es_id,
-        "added_by" => $request->added_user,
-    ];
-
-    $beneficiary_data = [
-        "invoice_type" => $request->invoice_section,
-        "invoice_date" => $request->invoice_date,
-        "debit_balance" => floatval($total_client_bought_price),
-        "credit_balance" => 0,
-        "ledger_net_effect" => floatval($total_client_bought_price),
-        "transaction_txt" => "حجز الرحلة " . $invoice_info->es_id,
-        "added_by" => $request->added_user,
-    ];
-}
-
-// حفظ/تحديث كشف حساب المورد
-if ($existing_vendor_statement) {
-    $existing_vendor_statement->update($vendor_data);
-} else {
-    AccountStatement::create(array_merge([
-        "supp_client_id" => $request->vendor_id,
-        "es_id" => $invoice_info->es_id,
-        "transaction_type" => 1,
-        "crt_date" => date('Y-m-d'),
-    ], $vendor_data));
-}
-
-// حفظ/تحديث كشف حساب المستفيد
-if ($existing_beneficiary_statement) {
-    $existing_beneficiary_statement->update($beneficiary_data);
-} else {
-    AccountStatement::create(array_merge([
-        "supp_client_id" => $request->invoice_beneficiaries,
-        "es_id" => $invoice_info->es_id,
-        "transaction_type" => 1,
-        "crt_date" => date('Y-m-d'),
-    ], $beneficiary_data));
-}
-
-
-
-
-        
-        
-        $update_invoice = Invoice::select('*')
-            ->where('id', $id)
-            ->update([
-//                            "ticket_system_id" => $system_id,
-            "invoice_date" => $request->invoice_date,
-            "invoice_travel_date" => $request->invoice_travel_date,
-            "return_date" => $request->return_date,
-            "invoice_airline" => $request->invoice_airline,
-            "from_location" => $request->from_location,
-            "to_location" => $request->to_location,
-            "invoice_group_id" => null,
-            "invoice_beneficiaries" => $request->invoice_beneficiaries,
-            "invoice_section" => $request->invoice_section,
-            "invoice_comments" => $request->invoice_comments,
-            "invoice_currency" => $request->invoice_currency,
-            "invoice_draft" => $request->invoice_draft,
-            "invoice_ticket_file" => $path,
-                            "invoice_create_by" => $request->added_user,
-
+            TicketVendor::where('ticket_system_id', $invoice_info->ticket_system_id)->update([
+                "vendor_id" => $request->vendor_id,
             ]);
-        
+
+            // Every passenger keeps its own record and amounts. Posted rows carry their
+            // TicketUser id and are updated in place; rows without an id are new
+            // passengers; passengers no longer posted are removed.
+            $existing_tickets = TicketUser::where('ticket_system_id', $invoice_info->ticket_system_id)->get()->keyBy('id');
+            $kept_ticket_ids = [];
+            foreach ($request->ticket_info as $key => $value) {
+                $ticket_data = [
+                    "client_name" => $value['name'],
+                    "client_type" => $value['client_type'],
+                    "client_net_pice" => $value['net_price'],
+                    "client_bought_price" => $value['bought_price'],
+                    "client_booking_id" => $value['book_id'],
+                    "client_ticket_id" => $value['tikcet_id'],
+                    "client_phone" => $value['client_phone'],
+                ];
+                $ticket_id = (int) ($value['id'] ?? 0);
+                if ($ticket_id && $existing_tickets->has($ticket_id)) {
+                    $existing_tickets[$ticket_id]->update($ticket_data);
+                    $kept_ticket_ids[] = $ticket_id;
+                } else {
+                    $kept_ticket_ids[] = TicketUser::create(array_merge([
+                        "crt_at" => date('Y-m-d'),
+                        "ticket_system_id" => $invoice_info->ticket_system_id,
+                    ], $ticket_data))->id;
+                }
+            }
+            TicketUser::where('ticket_system_id', $invoice_info->ticket_system_id)
+                ->whereNotIn('id', $kept_ticket_ids)
+                ->delete();
+
+            $after = InvoicePassengerLedger::snapshot($invoice_info);
+            $newAccounts = InvoicePassengerLedger::isRefund($invoice_info)
+                ? [(int) $request->vendor_id, (int) $request->invoice_beneficiaries]
+                : [(int) $request->invoice_beneficiaries, (int) $request->vendor_id];
+            InvoicePassengerLedger::recordEdit($invoice_info, $before, $after, $oldAccounts, $newAccounts, $request->invoice_section);
+
+            // TicketVendor.price mirrors the cost total on normal invoices (it is not read anywhere).
+            if (!InvoicePassengerLedger::isRefund($invoice_info)) {
+                TicketVendor::where('ticket_system_id', $invoice_info->ticket_system_id)
+                    ->update(["price" => round((float) collect($after)->sum('credit'), 2)]);
+            }
+
+            Invoice::where('id', $id)->update([
+                // invoice_date is intentionally not updated: the original date never changes.
+                "invoice_travel_date" => $request->invoice_travel_date,
+                "return_date" => $request->return_date,
+                "invoice_airline" => $request->invoice_airline,
+                "from_location" => $request->from_location,
+                "to_location" => $request->to_location,
+                "invoice_group_id" => null,
+                "invoice_beneficiaries" => $request->invoice_beneficiaries,
+                "invoice_section" => $request->invoice_section,
+                "invoice_comments" => $request->invoice_comments,
+                "invoice_currency" => $request->invoice_currency,
+                "invoice_draft" => $request->invoice_draft,
+                "invoice_ticket_file" => $path,
+                "invoice_create_by" => $request->added_user,
+            ]);
+        });
+
         return redirect()->route('site.invoices_edit' , $id);
         
     }
@@ -1706,12 +1729,12 @@ if ($existing_beneficiary_statement) {
         ]);
 
         // Supplier debit = bought_price_total, client credit = net_pice_total (see below).
-        InvoicePassengerLedger::createRefundPassengers($refund_users, $system_id, $request->bought_price_total, $request->net_pice_total);
+        $refund_markers = InvoicePassengerLedger::createRefundPassengers($refund_users, $system_id, $request->bought_price_total, $request->net_pice_total, $refund_mode);
         $refund_passenger_txt = $refund_mode === 'single' ? " - الراكب: " . $refund_users[0]->client_name : "";
 
         $create = Invoice::create([
             "ticket_system_id" => $system_id,
-            "invoice_date" => $invoice_info->invoice_date,
+            "invoice_date" => date('Y-m-d'),
             "invoice_travel_date" => $invoice_info->invoice_travel_date,
             "return_date" => $invoice_info->return_date,
             "invoice_airline" => $invoice_info->invoice_airline,
@@ -1752,7 +1775,7 @@ if ($existing_beneficiary_statement) {
             "supp_client_id" => $vendors->id,
             "invoice_type" => $invoice_info->invoice_section,
             "es_id" => $newEsId,
-            "invoice_date" => $invoice_info->invoice_date,
+            "invoice_date" => date('Y-m-d'),
             "debit_balance" => $request->bought_price_total,
             "credit_balance" => 0,
             "ledger_net_effect" => $request->bought_price_total,
@@ -1760,13 +1783,14 @@ if ($existing_beneficiary_statement) {
             "transaction_type" => 1,
             "added_by" => Auth::user()->id,
             "crt_date" => date('Y-m-d'),
+            "description" => $refund_markers['debit'],
         ]);
 
         $invoice_beneficiaries_Vendor = AccountStatement::create([
             "supp_client_id" => $invoice_info->invoice_beneficiaries,
             "invoice_type" => $invoice_info->invoice_section,
             "es_id" => $newEsId,
-            "invoice_date" => $invoice_info->invoice_date,
+            "invoice_date" => date('Y-m-d'),
             "debit_balance" => 0,
             "credit_balance" => $request->net_pice_total,
             "ledger_net_effect" => -$request->net_pice_total,
@@ -1774,6 +1798,7 @@ if ($existing_beneficiary_statement) {
             "transaction_type" => 1,
             "added_by" => Auth::user()->id,
             "crt_date" => date('Y-m-d'),
+            "description" => $refund_markers['credit'],
         ]);
 
         return redirect()->route('site.invoices_ajax');

@@ -29,6 +29,7 @@ class AccountStatement extends Model
 "added_by",
 "crt_date",
 "transaction_approved",
+"description",
         
     ];
 

@@ -512,12 +512,12 @@ $invoices = Invoice::select('*')
         // Same accounting as a regular refund (InvoicesController::invoices_refund_save):
         // supplier DEBIT = bought_price_total (returned to us), client CREDIT =
         // net_pice_total (refunded to the client) -- see the ledger rows below.
-        InvoicePassengerLedger::createRefundPassengers($refund_users, $system_id, $request->bought_price_total, $request->net_pice_total);
+        $refund_markers = InvoicePassengerLedger::createRefundPassengers($refund_users, $system_id, $request->bought_price_total, $request->net_pice_total, $refund_mode);
         $refund_passenger_txt = $refund_mode === 'single' ? " - الراكب: " . $refund_users[0]->client_name : "";
 
         $create = Invoice::create([
             "ticket_system_id" => $system_id,
-            "invoice_date" => $invoice_info->invoice_date,
+            "invoice_date" => date('Y-m-d'),
             "invoice_travel_date" => $invoice_info->invoice_travel_date,
             "return_date" => $invoice_info->return_date,
             "invoice_airline" => $invoice_info->invoice_airline,
@@ -565,7 +565,7 @@ $invoices = Invoice::select('*')
             "supp_client_id" => $vendors->id,
             "invoice_type" => $invoice_info->invoice_section,
             "es_id" => $newEsId,
-            "invoice_date" => $invoice_info->invoice_date,
+            "invoice_date" => date('Y-m-d'),
             "debit_balance" => $request->bought_price_total,
             "credit_balance" => 0,
             "ledger_net_effect" => $request->bought_price_total,
@@ -573,13 +573,14 @@ $invoices = Invoice::select('*')
             "transaction_type" => 1,
             "added_by" => Auth::user()->id,
             "crt_date" => date('Y-m-d'),
+            "description" => $refund_markers['debit'],
         ]);
 
         $invoice_beneficiaries_Vendor = AccountStatement::create([
             "supp_client_id" => $invoice_info->invoice_beneficiaries,
             "invoice_type" => $invoice_info->invoice_section,
             "es_id" => $newEsId,
-            "invoice_date" => $invoice_info->invoice_date,
+            "invoice_date" => date('Y-m-d'),
             "debit_balance" => 0,
             "credit_balance" => $request->net_pice_total,
             "ledger_net_effect" => -$request->net_pice_total,
@@ -587,6 +588,7 @@ $invoices = Invoice::select('*')
             "transaction_type" => 1,
             "added_by" => Auth::user()->id,
             "crt_date" => date('Y-m-d'),
+            "description" => $refund_markers['credit'],
         ]);
 
         return redirect()->route('site.shared_invoices');

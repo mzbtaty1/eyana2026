@@ -3,6 +3,7 @@
 namespace App\Exports;
 
 use App\Models\{AccountStatement, Supplier, Bond, Invoice, TicketUser, Bank, Collector, SubStorage, User};
+use App\Services\InvoicePassengerLedger;
 use Illuminate\Contracts\View\View;
 use Maatwebsite\Excel\Concerns\FromView;
 use Maatwebsite\Excel\Concerns\WithEvents;
@@ -142,35 +143,30 @@ class AccountatExport implements FromView, WithEvents, WithTitle
             $isTicket = $AccountStatement->transaction_type == 1 && $ticket_info;
             $hasPassengerBreakdown = $AccountStatement->es_id != 'FLY-OPEN-BALANCE'
                 && $AccountStatement->transaction_type == 1 && $ticket_info && $users->count() > 0;
-            // Same rule as the screen/print: one invoice number, but each passenger's
-            // ticket is its own movement (own amount, own running balance), with the
-            // amounts from AccountStatement::passengerAmounts().
-            $debitHasAmount = $AccountStatement->debit_balance > 0;
-            $creditHasAmount = $AccountStatement->credit_balance > 0;
-            $paxDebit = $hasPassengerBreakdown && $debitHasAmount
-                ? AccountStatement::passengerAmounts($users, 'client_bought_price', $AccountStatement->debit_balance) : [];
-            $paxCredit = $hasPassengerBreakdown && $creditHasAmount
-                ? AccountStatement::passengerAmounts($users, 'client_net_pice', $AccountStatement->credit_balance) : [];
+            // Same passenger lines as the screen/print (InvoicePassengerLedger::statementLines):
+            // one invoice number, each passenger's ticket its own movement with its own
+            // running-balance step; edits (dated today) and refunds carry exact lines.
+            $paxLines = InvoicePassengerLedger::statementLines($AccountStatement, $users, (bool) $hasPassengerBreakdown);
 
             $base = [
                 'es_id' => $AccountStatement->es_id,
                 'type' => $this->typeLabel($AccountStatement),
-                'date' => $isTicket ? (string) $ticket_info->invoice_date : (string) $AccountStatement->created_at,
+                'date' => $isTicket ? InvoicePassengerLedger::displayDate($AccountStatement, $ticket_info) : (string) $AccountStatement->created_at,
                 'airline' => $isTicket ? (string) $ticket_info->invoice_airline : '',
                 'route' => $isTicket ? trim($ticket_info->from_location . ' - ' . $ticket_info->to_location) : '',
                 'travel_date' => $isTicket ? (string) $ticket_info->invoice_travel_date : '',
             ];
             $mem = $usersById->get($AccountStatement->added_by);
 
-            if ($hasPassengerBreakdown) {
-                foreach ($users->values() as $i => $user) {
-                    $debit = $debitHasAmount ? $paxDebit[$i] : null;
-                    $credit = $creditHasAmount ? $paxCredit[$i] : null;
+            if ($paxLines !== null) {
+                foreach ($paxLines as $i => $line) {
+                    $debit = $line['debit'];
+                    $credit = $line['credit'];
                     $balance_before_tx = round($balance_before_tx + (float) $debit - (float) $credit, 2);
                     $rowBalance = $balance_before_tx;
                     $rows[] = $base + [
-                        'details' => (string) $user->client_name,
-                        'booking' => (string) $user->client_booking_id,
+                        'details' => $line['name'],
+                        'booking' => $line['booking'],
                         'debit' => $debit,
                         'credit' => $credit,
                         'balance' => $rowBalance,
@@ -205,10 +201,11 @@ class AccountatExport implements FromView, WithEvents, WithTitle
         ]);
     }
 
-    /** "تذاكر / فواتير الطيران" etc. -- same wording as the Print Preview. */
+    /** "بيع تذكرة / فواتير الطيران" etc. -- same wording as the Print Preview. */
     private function typeLabel($AccountStatement): string
     {
-        $prefix = [1 => 'تذاكر / ', 2 => 'سندات / ', 3 => 'أرصدة افتتاحية / ', 4 => 'سداد / '][$AccountStatement->transaction_type] ?? '';
+        $kind = InvoicePassengerLedger::kindLabel($AccountStatement);
+        $prefix = [1 => ($kind ?? 'تذاكر') . ' / ', 2 => 'سندات / ', 3 => 'أرصدة افتتاحية / ', 4 => 'سداد / '][$AccountStatement->transaction_type] ?? '';
         $type = [
             1 => 'فواتير الطيران', 2 => 'فواتير تأشيرات', 3 => 'فواتير سياحة داخلية',
             4 => 'فواتير سياحة خارجية', 5 => 'فواتير سياحة دينية', 6 => 'فواتير تأمينات السفر',

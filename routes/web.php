@@ -94,6 +94,8 @@ Route::middleware(['auth' , 'check_status'])->group(function(){
     Route::get('/invoices', [InvoicesController::class, 'index'])->name('site.invoices');
     Route::get('/get_invoices_info', [InvoicesController::class, 'getInvoices'])->name('site.invoices_json');
     Route::get('/get_invoices_info_3months', [InvoicesController::class, 'getInvoices3Months'])->name('site.invoices_json_3months');
+    // Server-side DataTables data for the main invoices list (all invoices incl. shared).
+    Route::get('/invoices/list-data', [InvoicesController::class, 'invoicesListData'])->name('site.invoices_list_data');
 
     Route::get('/invoices/ajax', [InvoicesController::class, 'ajax'])->name('site.invoices_ajax');
     Route::get('/invoices/lite', [InvoicesController::class, 'lite'])->name('site.invoices_lite');

@@ -381,11 +381,7 @@ $rname = Route::currentRouteName();
                   </li>
                  
                    @endif
-                     <li class="nav-item">
-                     <a class="nav-link menu-link" href="{{route('site.visas')}}">
-                     <i class="ri-survey-line"></i><span data-key="t-widgets">التأشيرات</span>
-                     </a>
-                  </li>
+                  {{-- Visa section hidden from navigation (routes, pages and data kept). --}}
                   <!--
                      <li class="nav-item">
                                        <a class="nav-link menu-link" href="{{route('site.profits')}}">
@@ -429,14 +425,18 @@ $rname = Route::currentRouteName();
                               <a href="{{route('site.invoices_ajax')}}" class="nav-link" data-key="t-basic-tables">كل الفواتير</a>
                            </li>
                            <li class="nav-item">
+                              <a href="{{route('site.invoices_create')}}" class="nav-link" data-key="t-basic-tables">إضافة فاتورة</a>
+                           </li>
+                           <li class="nav-item">
+                              <a href="{{route('site.shared_invoices_create')}}" class="nav-link" data-key="t-basic-tables">إضافة فاتورة مشتركة</a>
+                           </li>
+                           <li class="nav-item">
                               <a href="{{route('site.invoices_lite')}}" class="nav-link" data-key="t-basic-tables">فواتير اخر 3 شهور</a>
                            </li>
                            <li class="nav-item">
                               <a href="{{route('site.invoices_daily_report')}}" class="nav-link" data-key="t-basic-tables">التقرير اليومي</a>
                            </li>
-                           <li class="nav-item">
-                              <a href="{{route('site.shared_invoices')}}" class="nav-link" data-key="t-basic-tables">الفواتير المشتركة</a>
-                           </li>
+                           {{-- Shared invoices are listed in "كل الفواتير" (no separate list entry). --}}
                             <li class="nav-item">
                               <a href="{{route('site.employee_log')}}" class="nav-link" data-key="t-basic-tables">
                                   
@@ -458,27 +458,7 @@ $rname = Route::currentRouteName();
                         </ul>
                      </div>
                   </li>
-                  <li class="nav-item">
-                     <a class="nav-link menu-link collapsed" href="#sidebarTablesMarketing" data-bs-toggle="collapse" role="button" aria-expanded="false" aria-controls="sidebarTablesMarketing">
-                     <i class="ri-price-tag-3-line"></i><span data-key="t-tables">التسويق</span>
-                     </a>
-                     <div class="menu-dropdown collapse" id="sidebarTablesMarketing" style="">
-                        <ul class="nav nav-sm flex-column">
-                           <li class="nav-item">
-                              <a href="{{route('site.marketing_prices_all')}}" class="nav-link" data-key="t-basic-tables">كل القوائم</a>
-                           </li>
-                           <li class="nav-item">
-                              <a href="{{route('site.marketing_prices')}}" class="nav-link" data-key="t-basic-tables">تسويق شركات</a>
-                           </li>
-                           <li class="nav-item">
-                              <a href="{{route('site.marketing_prices_create')}}" class="nav-link" data-key="t-grid-js">انشاء جديد</a>
-                           </li>
-                           <li class="nav-item">
-                              <a href="{{route('site.marketing_title_create')}}" class="nav-link" data-key="t-grid-js">انشاء بيان جديد</a>
-                           </li>
-                        </ul>
-                     </div>
-                  </li>
+                  {{-- Marketing section hidden from navigation (routes, pages and data kept). --}}
                   <li class="nav-item">
                      <a class="nav-link menu-link collapsed" href="#sidebarSafeArea" data-bs-toggle="collapse" role="button" aria-expanded="false" aria-controls="sidebarSafeArea">
                      <i class="ri-safe-line"></i><span data-key="t-tables">العمليات المالية</span>
