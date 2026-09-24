@@ -112,8 +112,9 @@
                             ?>
                             @foreach($AccountStatements as $key => $AccountStatement)
                             <?php
-                            $closing = (int) $AccountStatement->debit_balance - (int) $AccountStatement->credit_balance;
-                            $total_blnc += $closing;
+                            // Balances are DECIMAL(14,2): keep the cents (an (int) cast truncated them).
+                            $closing = (float) $AccountStatement->debit_balance - (float) $AccountStatement->credit_balance;
+                            $total_blnc = round($total_blnc + $closing, 2);
 
                             $ticket_info = null;
                             $users = [];
