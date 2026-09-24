@@ -44,10 +44,12 @@ class StoreBondRequest extends FormRequest
 
     public function messages(): array
     {
-        // amounts must be positive (a zero / negative voucher would move money the wrong way)
+        // amounts must be positive numbers (a zero / negative voucher would move money the wrong way)
         return [
             'amount.gt' => 'برجاء إدخال مبلغ صحيح أكبر من صفر',
             'amount2.gt' => 'برجاء إدخال مبلغ صحيح أكبر من صفر',
+            'amount.numeric' => 'برجاء إدخال مبلغ صحيح أكبر من صفر',
+            'amount2.numeric' => 'برجاء إدخال مبلغ صحيح أكبر من صفر',
         ];
     }
 
