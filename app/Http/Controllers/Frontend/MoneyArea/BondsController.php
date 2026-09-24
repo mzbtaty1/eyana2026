@@ -170,6 +170,9 @@ $date = $request->crt_date;
             if (!$linkInvoice || !CounterPayments::isPayable($linkInvoice) || (int) $linkInvoice->invoice_beneficiaries !== (int) $supp_id) {
                 return Redirect::back()->withErrors(['msg' => 'الفاتورة المرتبطة غير صحيحة لهذا الحساب']);
             }
+            if ((float) $amount <= 0) {
+                return Redirect::back()->withErrors(['msg' => 'برجاء إدخال مبلغ صحيح أكبر من صفر']);
+            }
             if ((float) $amount > CounterPayments::summary($linkInvoice)['due_to_client'] + 0.005) {
                 return Redirect::back()->withErrors(['msg' => 'قيمة الرد أكبر من المبلغ المستحق للعميل على الفاتورة.']);
             }
