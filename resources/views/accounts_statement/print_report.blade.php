@@ -483,7 +483,7 @@ if($st == 0){
                                     <?php
                                     $bank_info = $banks_by_id->get($bond->bank_id) ?? new App\Models\Bank();
                                     ?>
-                                    - {{$bank_info->bank_name}}
+                                    @if($bank_info->bank_name) - {{$bank_info->bank_name}}@endif
                                 @else
                                     تحصيل من المندوب:
                                     <?php
@@ -491,6 +491,7 @@ if($st == 0){
                                     ?>
                                     {{$collector_info->name}}
                                 @endif
+                                {{$bond->info}}
                                 </div>
                             @endif
 

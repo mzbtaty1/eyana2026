@@ -197,15 +197,15 @@ $url2 = route('site.accounts_statement_print_excel' , [
 
     if($AccountStatement->invoice_type == 1){ $type = "فواتير الطيران"; }
     elseif($AccountStatement->invoice_type == 2){ $type = "فواتير تأشيرات"; }
-    elseif($AccountStatement->invoice_type == 3){ $type = "فواتير سياحه داخليه"; }
-    elseif($AccountStatement->invoice_type == 4){ $type = "فواتير سياحه خارجيه"; }
-    elseif($AccountStatement->invoice_type == 5){ $type = "فواتير سياحه دينيه"; }
+    elseif($AccountStatement->invoice_type == 3){ $type = "فواتير سياحة داخلية"; }
+    elseif($AccountStatement->invoice_type == 4){ $type = "فواتير سياحة خارجية"; }
+    elseif($AccountStatement->invoice_type == 5){ $type = "فواتير سياحة دينية"; }
     elseif($AccountStatement->invoice_type == 6){ $type = "فواتير تأمينات السفر"; }
     elseif($AccountStatement->invoice_type == 7){ $type = "فواتير تحاليل السفر"; }
-    elseif($AccountStatement->invoice_type == 8){ $type = "فواتير نقل سياحى"; }
+    elseif($AccountStatement->invoice_type == 8){ $type = "فواتير نقل سياحي"; }
     elseif($AccountStatement->invoice_type == 9){ $type = "سند دفع"; }
     elseif($AccountStatement->invoice_type == 10){ $type = "سند قبض"; }
-    elseif($AccountStatement->invoice_type == 11){ $type = "ارصدة"; }
+    elseif($AccountStatement->invoice_type == 11){ $type = "أرصدة"; }
     elseif($AccountStatement->invoice_type == 12){ $type = "سداد فاتورة"; }
     else { $type = "أخرى"; }
 
@@ -235,7 +235,7 @@ $url2 = route('site.accounts_statement_print_excel' , [
             @elseif($AccountStatement->transaction_type == 2)
                 سندات /
             @elseif($AccountStatement->transaction_type == 3)
-                ارصدة افتتاحية /
+                أرصدة افتتاحية /
             @elseif($AccountStatement->transaction_type == 4)
                 سداد /
             @endif
@@ -273,9 +273,9 @@ $url2 = route('site.accounts_statement_print_excel' , [
                 <div class="ey-trip-info">
                     <div>
                         @if($result == "FLY-RD")
-                            الغاء تذكرة {{$AccountStatement->es_id}}
+                            إلغاء تذكرة {{$AccountStatement->es_id}}
                         @elseif($result == "FLY-RS")
-                            اعادة اصدار تذكرة {{$AccountStatement->es_id}}
+                            إعادة إصدار تذكرة {{$AccountStatement->es_id}}
                         @else
                             {{$AccountStatement->transaction_txt}}
                         @endif
@@ -288,9 +288,9 @@ $url2 = route('site.accounts_statement_print_excel' , [
                             @elseif($bond->money_way == 2)
                                 تحويل بنكي
                                 <?php $bank_info = $banksById[$bond->bank_id] ?? null; ?>
-                                @if($bank_info){{$bank_info->bank_name}}@endif
+                                @if($bank_info && $bank_info->bank_name) - {{$bank_info->bank_name}}@endif
                             @else
-                                تحصيل من المندوب :
+                                تحصيل من المندوب:
                                 <?php $collector_info = $collectorsById[$bond->collector_info] ?? null; ?>
                                 @if($collector_info){{$collector_info->name}}@endif
                             @endif
@@ -304,7 +304,7 @@ $url2 = route('site.accounts_statement_print_excel' , [
                         $min_info3 = $subStoragesById[$sub_id] ?? null;
                         ?>
                         @if($min_info3)
-                            <div>خزينة فرعية : <b>{{$min_info3->name}}</b></div>
+                            <div>خزينة فرعية: <b>{{$min_info3->name}}</b></div>
                         @endif
                     @endif
                 </div>

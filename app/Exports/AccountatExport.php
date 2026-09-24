@@ -226,7 +226,7 @@ class AccountatExport implements FromView, WithEvents, WithTitle
                 $way = 'دفع نقدي';
             } elseif ($bond->money_way == 2) {
                 $bank = $banksById->get($bond->bank_id);
-                $way = 'تحويل بنكي' . ($bank ? ' - ' . $bank->bank_name : '');
+                $way = 'تحويل بنكي' . ($bank && $bank->bank_name ? ' - ' . $bank->bank_name : '');
             } else {
                 $collector = $collectorsById->get($bond->collector_info);
                 $way = 'تحصيل من المندوب: ' . ($collector ? $collector->name : '');
