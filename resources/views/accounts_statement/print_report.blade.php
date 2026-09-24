@@ -418,116 +418,114 @@ if($st == 0){
             $creditHasAmount = $AccountStatement->credit_balance > 0;
             ?>
             @foreach($breakdownRows as $rowIndex => $user)
-            <tr>
-                @if($isOpeningBalanceRow)
-                    <td colspan="8" style="text-align: center; font-weight: bold; background: #f0f0f0;">الأرصدة الافتتاحية</td>
-                @else
-                    <td style="font-weight: bold;">{{$AccountStatement->es_id}}</td>
-                    <td>
-                        @if($AccountStatement->transaction_type == 1)
-                            تذاكر /
-                        @elseif($AccountStatement->transaction_type == 2)
-                            سندات /
-                        @elseif($AccountStatement->transaction_type == 3)
-                            أرصدة افتتاحية /
-                        @elseif($AccountStatement->transaction_type == 4)
-                            سداد /
-                        @endif
-                        {{$type}}
-                    </td>
+            {{-- The booked opening-balance row (FLY-OPEN-BALANCE) is a real ledger row: render it
+                 in full like the screen and Excel (its amounts and balance were hidden before). --}}
+            <tr @if($isOpeningBalanceRow) style="font-weight: bold; background: #f0f0f0;" @endif>
+                <td style="font-weight: bold;">{{$AccountStatement->es_id}}</td>
+                <td>
+                    @if($AccountStatement->transaction_type == 1)
+                        تذاكر /
+                    @elseif($AccountStatement->transaction_type == 2)
+                        سندات /
+                    @elseif($AccountStatement->transaction_type == 3)
+                        أرصدة افتتاحية /
+                    @elseif($AccountStatement->transaction_type == 4)
+                        سداد /
+                    @endif
+                    {{$type}}
+                </td>
 
-                    <td>
-                        @if($AccountStatement->transaction_type == 1 && $ticket_info)
-                            {{$ticket_info->invoice_date}}
-                        @else
-                            {{$AccountStatement->created_at}}
-                        @endif
-                    </td>
+                <td>
+                    @if($AccountStatement->transaction_type == 1 && $ticket_info)
+                        {{$ticket_info->invoice_date}}
+                    @else
+                        {{$AccountStatement->created_at}}
+                    @endif
+                </td>
 
-                    <td>
-                        @if($AccountStatement->transaction_type == 1 && $ticket_info)
-                            <span class="ey-ltr">{{$ticket_info->invoice_airline}}</span>
-                        @endif
-                    </td>
-                    <td>
-                        @if($AccountStatement->transaction_type == 1 && $ticket_info)
-                            <span class="ey-ltr">{{$ticket_info->from_location}} - {{$ticket_info->to_location}}</span>
-                        @endif
-                    </td>
-                    <td>
-                        @if($AccountStatement->transaction_type == 1 && $ticket_info)
-                            {{$ticket_info->invoice_travel_date}}
-                        @endif
-                    </td>
+                <td>
+                    @if($AccountStatement->transaction_type == 1 && $ticket_info)
+                        <span class="ey-ltr">{{$ticket_info->invoice_airline}}</span>
+                    @endif
+                </td>
+                <td>
+                    @if($AccountStatement->transaction_type == 1 && $ticket_info)
+                        <span class="ey-ltr">{{$ticket_info->from_location}} - {{$ticket_info->to_location}}</span>
+                    @endif
+                </td>
+                <td>
+                    @if($AccountStatement->transaction_type == 1 && $ticket_info)
+                        {{$ticket_info->invoice_travel_date}}
+                    @endif
+                </td>
 
-                    <td>
-                        @if($hasPassengerBreakdown)
-                            <span class="ey-ltr">{{$user->client_name}}</span>
-                        @else
-                            <div class="ey-trip-info">
-                                <div>
-                                    @if($result == "FLY-RD")
-                                        إلغاء تذكرة {{$AccountStatement->es_id}}
-                                    @elseif($result == "FLY-RS")
-                                        إعادة إصدار تذكرة {{$AccountStatement->es_id}}
-                                    @else
-                                        {{$AccountStatement->transaction_txt}}
-                                    @endif
-                                </div>
-
-                                @if($AccountStatement->transaction_type == 2 && $bond)
-                                    <div>
-                                    @if($bond->money_way == 1)
-                                        دفع نقدي
-                                    @elseif($bond->money_way == 2)
-                                        تحويل بنكي
-                                        <?php
-                                        $bank_info = $banks_by_id->get($bond->bank_id) ?? new App\Models\Bank();
-                                        ?>
-                                        - {{$bank_info->bank_name}}
-                                    @else
-                                        تحصيل من المندوب:
-                                        <?php
-                                        $collector_info = $collectors_by_id->get($bond->collector_info) ?? new App\Models\Collector();
-                                        ?>
-                                        {{$collector_info->name}}
-                                    @endif
-                                    </div>
-                                @endif
-
-                                @if($AccountStatement->trans_storage == 1 && $AccountStatement->sub_id != 0)
-                                    <?php
-                                    $sub_id = (int) $AccountStatement->sub_id;
-                                    $min_info3 = $sub_storages_by_id->get($sub_id) ?? new App\Models\SubStorage();
-                                    ?>
-                                    <div>خزينة فرعية: {{$min_info3->name}}</div>
+                <td>
+                    @if($hasPassengerBreakdown)
+                        <span class="ey-ltr">{{$user->client_name}}</span>
+                    @else
+                        <div class="ey-trip-info">
+                            <div>
+                                @if($result == "FLY-RD")
+                                    إلغاء تذكرة {{$AccountStatement->es_id}}
+                                @elseif($result == "FLY-RS")
+                                    إعادة إصدار تذكرة {{$AccountStatement->es_id}}
+                                @else
+                                    {{$AccountStatement->transaction_txt}}
                                 @endif
                             </div>
-                        @endif
-                    </td>
 
-                    <td>
-                        @if($hasPassengerBreakdown)
-                            <span class="ey-ltr">{{$user->client_booking_id}}</span>
-                        @endif
-                    </td>
+                            @if($AccountStatement->transaction_type == 2 && $bond)
+                                <div>
+                                @if($bond->money_way == 1)
+                                    دفع نقدي
+                                @elseif($bond->money_way == 2)
+                                    تحويل بنكي
+                                    <?php
+                                    $bank_info = $banks_by_id->get($bond->bank_id) ?? new App\Models\Bank();
+                                    ?>
+                                    - {{$bank_info->bank_name}}
+                                @else
+                                    تحصيل من المندوب:
+                                    <?php
+                                    $collector_info = $collectors_by_id->get($bond->collector_info) ?? new App\Models\Collector();
+                                    ?>
+                                    {{$collector_info->name}}
+                                @endif
+                                </div>
+                            @endif
 
-                    <td class="amount-debit">
-                        @if(!$hasPassengerBreakdown || ($debitHasAmount && $rowIndex === 0))
-                            {{number_format($AccountStatement->debit_balance , 2)}}
-                        @endif
-                    </td>
-                    <td class="amount-credit">
-                        @if(!$hasPassengerBreakdown || ($creditHasAmount && $rowIndex === 0))
-                            {{number_format($AccountStatement->credit_balance , 2)}}
-                        @endif
-                    </td>
-                    <td class="amount-balance">
-                        {{-- Repeated on every passenger row of this same booking, same as
-                        the screen -- display-only, the transaction is still counted once. --}}
-                        {{$total_blnc_display}}
-                    </td>
-                @endif
+                            @if($AccountStatement->trans_storage == 1 && $AccountStatement->sub_id != 0)
+                                <?php
+                                $sub_id = (int) $AccountStatement->sub_id;
+                                $min_info3 = $sub_storages_by_id->get($sub_id) ?? new App\Models\SubStorage();
+                                ?>
+                                <div>خزينة فرعية: {{$min_info3->name}}</div>
+                            @endif
+                        </div>
+                    @endif
+                </td>
+
+                <td>
+                    @if($hasPassengerBreakdown)
+                        <span class="ey-ltr">{{$user->client_booking_id}}</span>
+                    @endif
+                </td>
+
+                <td class="amount-debit">
+                    @if(!$hasPassengerBreakdown || ($debitHasAmount && $rowIndex === 0))
+                        {{number_format($AccountStatement->debit_balance , 2)}}
+                    @endif
+                </td>
+                <td class="amount-credit">
+                    @if(!$hasPassengerBreakdown || ($creditHasAmount && $rowIndex === 0))
+                        {{number_format($AccountStatement->credit_balance , 2)}}
+                    @endif
+                </td>
+                <td class="amount-balance">
+                    {{-- Repeated on every passenger row of this same booking, same as
+                    the screen -- display-only, the transaction is still counted once. --}}
+                    {{$total_blnc_display}}
+                </td>
             </tr>
             @endforeach
             <?php $x++; ?>
