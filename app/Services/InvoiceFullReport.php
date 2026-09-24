@@ -27,6 +27,9 @@ use Illuminate\Support\Facades\DB;
  *       view) that employee's rate only, otherwise both rates.
  *   Refund rows use the same formula on the refund's profit (existing behaviour).
  *
+ * Dates: date_from / date_to filter the invoice date; travel_from / travel_to the invoice's
+ * travel date (invoice_travel_date -- one per invoice, shared by all its passengers).
+ *
  * Access (as before): account_type 2 sees every invoice; an employee sees the normal
  * invoices they created and the shared invoices they take part in (either account)
  * or created.
@@ -72,6 +75,8 @@ class InvoiceFullReport
         $this->f = [
             'date_from' => $date($input['date_from'] ?? null),
             'date_to' => $date($input['date_to'] ?? null),
+            'travel_from' => $date($input['travel_from'] ?? null),
+            'travel_to' => $date($input['travel_to'] ?? null),
             'customer_id' => $int($input['customer_id'] ?? null),
             'supplier_id' => $int($input['supplier_id'] ?? null),
             'employee_id' => $this->isAdmin() ? $int($input['employee_id'] ?? null) : null,
@@ -128,6 +133,13 @@ class InvoiceFullReport
         }
         if ($this->f['date_to']) {
             $q->whereDate('i.invoice_date', '<=', $this->f['date_to']);
+        }
+        // travel date: one per invoice (invoices.invoice_travel_date), shared by all its passengers
+        if ($this->f['travel_from']) {
+            $q->whereDate('i.invoice_travel_date', '>=', $this->f['travel_from']);
+        }
+        if ($this->f['travel_to']) {
+            $q->whereDate('i.invoice_travel_date', '<=', $this->f['travel_to']);
         }
         if ($this->f['customer_id']) {
             $q->where('i.invoice_beneficiaries', $this->f['customer_id']);
@@ -414,6 +426,11 @@ class InvoiceFullReport
         $out = [];
         if ($f['date_from'] || $f['date_to']) {
             $out['الفترة (تاريخ الفاتورة)'] = ($f['date_from'] ?: '—') . ' : ' . ($f['date_to'] ?: '—');
+        }
+        if ($f['travel_from'] || $f['travel_to']) {
+            $out['تاريخ السفر'] = $f['travel_from'] && $f['travel_from'] === $f['travel_to']
+                ? $f['travel_from'] . ($f['travel_from'] === date('Y-m-d') ? ' (سفر اليوم)' : '')
+                : ($f['travel_from'] ?: '—') . ' : ' . ($f['travel_to'] ?: '—');
         }
         if ($f['customer_id']) {
             $out['العميل'] = (string) DB::table('suppliers')->where('id', $f['customer_id'])->value('name');

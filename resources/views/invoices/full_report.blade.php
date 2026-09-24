@@ -42,6 +42,14 @@
                <label class="form-label mb-1" for="f_to">إلى تاريخ الفاتورة</label>
                <input type="date" id="f_to" name="date_to" class="form-control form-control-sm" value="{{ $f['date_to'] }}">
             </div>
+            <div class="col-6 col-md-3 col-xl-2">
+               <label class="form-label mb-1" for="f_tfrom">من تاريخ السفر</label>
+               <input type="date" id="f_tfrom" name="travel_from" class="form-control form-control-sm" value="{{ $f['travel_from'] }}">
+            </div>
+            <div class="col-6 col-md-3 col-xl-2">
+               <label class="form-label mb-1" for="f_tto">إلى تاريخ السفر</label>
+               <input type="date" id="f_tto" name="travel_to" class="form-control form-control-sm" value="{{ $f['travel_to'] }}">
+            </div>
             <div class="col-12 col-md-6 col-xl-4">
                <label class="form-label mb-1" for="f_q">رقم الفاتورة / PNR / رقم التذكرة</label>
                <input type="text" id="f_q" name="q" class="form-control form-control-sm" value="{{ $f['q'] }}" placeholder="مثال: FLY-A13134">
@@ -111,8 +119,15 @@
                   @endforeach
                </select>
             </div>
-            <div class="col-12 col-md-6 col-xl-2 d-flex gap-2">
-               <button class="btn btn-primary btn-sm text-nowrap flex-fill"><i class="ri-search-line"></i> عرض التقرير</button>
+            <div class="col-12 col-md-auto d-flex flex-wrap gap-2">
+               <button class="btn btn-primary btn-sm text-nowrap px-3"><i class="ri-search-line"></i> <span>عرض التقرير</span></button>
+               @php
+                  // «سفر اليوم»: travel date = today, other filters kept, invoice-date range dropped
+                  $today = date('Y-m-d');
+                  $travelToday = $f['travel_from'] === $today && $f['travel_to'] === $today;
+               @endphp
+               <a href="{{ route('site.invoices_full_report', array_merge(array_diff_key($report->query(), array_flip(['date_from', 'date_to', 'search'])), ['travel_from' => $today, 'travel_to' => $today])) }}"
+                  class="btn btn-sm text-nowrap {{ $travelToday ? 'btn-warning' : 'btn-outline-warning' }}"><i class="ri-flight-takeoff-line"></i> <span>سفر اليوم</span></a>
                <a href="{{ route('site.invoices_full_report') }}" class="btn btn-light btn-sm text-nowrap">مسح الفلاتر</a>
             </div>
          </div>
@@ -214,7 +229,7 @@
                      @endforeach
                   </select>
                </div>
-               <a href="#" id="frGroupPrint" target="_blank" class="btn btn-outline-dark btn-sm"><i class="ri-printer-line"></i> طباعة التجميع</a>
+               <a href="#" id="frGroupPrint" target="_blank" class="btn btn-outline-dark btn-sm text-nowrap"><i class="ri-printer-line"></i> <span>طباعة التجميع</span></a>
             </div>
             <div class="alert alert-info py-2 small d-none" id="frEmpNote">
                <i class="ri-information-line"></i>
