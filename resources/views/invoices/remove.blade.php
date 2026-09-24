@@ -269,8 +269,22 @@ swal("", "{{$errors->first()}}", "info");
                 
 -->
                    
+  @if(!empty($counterDeletion) && $counterDeletion['blocker'])
+                  <div class="alert alert-danger border-0" role="alert">
+                     <i class="ri-error-warning-line"></i> {{ $counterDeletion['blocker'] }}
+                  </div>
+  @elseif(!empty($counterDeletion) && $counterDeletion['bonds']->isNotEmpty())
+                  <div class="alert alert-warning border-0" role="alert">
+                     <b><i class="ri-information-line"></i> على هذه الفاتورة حركات مالية مرتبطة، سيتم عكسها تلقائياً مع الحذف (الخزنة / البنك وكشف حساب العميل):</b>
+                     <ul class="mb-0 mt-1">
+                        @foreach($counterDeletion['bonds'] as $bond)
+                        <li>{{ (int) $bond->type === 2 ? 'سداد' : 'رد مبلغ للعميل' }} {{ $bond->es_id }} : {{ number_format((float) $bond->amount, 2) }} ج.م - {{ (int) $bond->money_way === 2 ? 'بنك' : 'نقدي' }} ({{ $bond->crt_date }})</li>
+                        @endforeach
+                     </ul>
+                  </div>
+  @endif
   <div class="d-grid gap-2">
-                  <button class="btn btn-danger" onclick="Removecustomer('{{$invoice_info->es_id}}')">
+                  <button class="btn btn-danger" onclick="Removecustomer('{{$invoice_info->es_id}}')" @if(!empty($counterDeletion) && $counterDeletion['blocker']) disabled @endif>
                   <i class="ri-delete-bin-line"></i>
                   حذف فاتورة  
                   </button>

@@ -10,6 +10,7 @@ use Redirect;
 use App\Http\Requests\StoreBondRequest;
 use App\Http\Requests\UpdateBondRequest;
 use App\Services\CounterPayments;
+use App\Services\BondReversal;
 use App\Models\{
     Supplier,
     Invoice,
@@ -507,98 +508,15 @@ if ($request->money_way2 == 2) {
         // mirroring the fix already applied to InvoicesController::pay_part_save().
         // Without this, a concurrent request touching the same storage/bank
         // can race with this reversal and lose an update.
+        // P2 safety fix: lock the Bond row plus whichever Storage/Bank rows
+        // it moved money through, and make the reversal + delete atomic.
+        // The reversal itself (balances + immutable storage/bank reversal
+        // entries) is shared with the Counter Customer invoice deletion.
         DB::transaction(function () use ($id) {
             $check_bond = Bond::where('id',$id)->lockForUpdate()->first();
             abort_if(!$check_bond, 404);
 
-            if($check_bond->type == 1){
-                $storage_id = $check_bond->from_account;
-
-                $amount = $check_bond->amount;
-                $commission = $check_bond->commission ?? 0;
-                $total = (float) $amount + (float) $commission;
-
-                $storage_info = Storage::where('id',$storage_id)->lockForUpdate()->first();
-                abort_if(!$storage_info, 404);
-
-                Storage::where('id',$storage_id)->update([
-                    "balance" => $storage_info->balance + $total,
-                ]);
-
-                // P3 storage ledger: void the bond's active storage entry and
-                // append its exact reversal, never delete the original. Runs
-                // unconditionally -- every bond touches Storage regardless of
-                // money_way, unlike the bank ledger reversal below.
-                StorageStatement::reverseActiveEntryForBond(
-                    $id,
-                    "عكس سند محذوف رقم {$check_bond->es_id}",
-                    Auth::user()->id
-                );
-
-                if ($check_bond->money_way == 2 && $check_bond->bank_id) {
-                    $bank_info = Bank::where('id',$check_bond->bank_id)->lockForUpdate()->first();
-                    if ($bank_info) {
-                        Bank::where('id',$check_bond->bank_id)->update([
-                            "bank_balance" => $bank_info->bank_balance + $total,
-                        ]);
-
-                        // P2 bank ledger: void the bond's active ledger entry and
-                        // append its exact reversal, never delete the original.
-                        BankStatement::reverseActiveEntryForBond(
-                            $id,
-                            "عكس سند محذوف رقم {$check_bond->es_id}",
-                            Auth::user()->id
-                        );
-                    }
-                }
-
-            }else{
-
-                $storage_id = $check_bond->to_account;
-
-                $amount = $check_bond->amount;
-
-                $storage_info = Storage::where('id',$storage_id)->lockForUpdate()->first();
-                abort_if(!$storage_info, 404);
-
-                Storage::where('id',$storage_id)->update([
-                    "balance" => $storage_info->balance - $amount,
-                ]);
-
-                // P3 storage ledger: void the bond's active storage entry and
-                // append its exact reversal, never delete the original.
-                StorageStatement::reverseActiveEntryForBond(
-                    $id,
-                    "عكس سند محذوف رقم {$check_bond->es_id}",
-                    Auth::user()->id
-                );
-
-                // P2 bug fix: receipt bonds (type==2) with money_way==2 credited
-                // banks.bank_balance by $amount at creation (see save()'s receipt
-                // branch) but this branch never reversed it on delete, silently
-                // leaving bank_balance permanently overstated. Mirrors the
-                // reversal already done above for payment bonds (type==1),
-                // reversing exactly $amount -- receipt bonds never carry a
-                // commission, so none is applied here either.
-                if ($check_bond->money_way == 2 && $check_bond->bank_id) {
-                    $bank_info = Bank::where('id',$check_bond->bank_id)->lockForUpdate()->first();
-                    if ($bank_info) {
-                        Bank::where('id',$check_bond->bank_id)->update([
-                            "bank_balance" => $bank_info->bank_balance - $amount,
-                        ]);
-
-                        BankStatement::reverseActiveEntryForBond(
-                            $id,
-                            "عكس سند محذوف رقم {$check_bond->es_id}",
-                            Auth::user()->id
-                        );
-                    }
-                }
-
-            }
-
-            Bond::where('id',$id)->delete();
-            AccountStatement::where('es_id',$check_bond->es_id)->delete();
+            BondReversal::reverse($check_bond, "عكس سند محذوف رقم {$check_bond->es_id}");
         });
 
         return redirect()->route('site.bonds');

@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
+use App\Services\CounterInvoiceDeletion;
 use Carbon\Carbon;
 use Exception;
 
@@ -866,6 +867,20 @@ class InvoiceController extends Controller
                 ], 404);
             }
             
+
+            // Counter Customer invoice: its linked payments / payouts are reversed with
+            // the invoice in one transaction, or deletion is refused (nothing changed).
+            if (CounterInvoiceDeletion::applies($invoice)) {
+                $error = CounterInvoiceDeletion::delete((int) $invoice->id, true);
+                if ($error) {
+                    return response()->json(['success' => false, 'message' => $error], 422);
+                }
+                return response()->json([
+                    'success' => true,
+                    'message' => 'تم حذف الفاتورة بنجاح',
+                    'data' => ['invoice_id' => $invoice->id, 'es_id' => $invoice->es_id ?? 'N/A'],
+                ]);
+            }
 
             // P1.2: refuse to delete an invoice that has already received payment --
             // deleting it would silently orphan the paid amount in Storage/Bank with

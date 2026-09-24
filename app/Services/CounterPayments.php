@@ -57,21 +57,7 @@ class CounterPayments
         $totals = DB::table('ticket_users')->whereIn('ticket_system_id', $invoices->pluck('ticket_system_id')->filter()->unique()->values())
             ->groupBy('ticket_system_id')->selectRaw('ticket_system_id, SUM(client_bought_price) t')->pluck('t', 'ticket_system_id');
 
-        // refund invoices made from these invoices: new refunds record their source
-        // in the refund marker; older refunds used the numbering "FLY-RD<source id>"
-        $bySource = [];
-        foreach (DB::table('account_statements')->where('transaction_type', 1)
-                     ->whereRaw("JSON_VALUE(description, '$.kind') = 'refund'")
-                     ->whereIn(DB::raw("JSON_VALUE(description, '$.source_invoice')"), array_map('strval', $ids))
-                     ->distinct()->get(['es_id', DB::raw("JSON_VALUE(description, '$.source_invoice') AS src")]) as $r) {
-            $bySource[$r->es_id] = (int) $r->src;
-        }
-        foreach (DB::table('invoices')->whereIn('es_id', array_map(fn ($id) => 'FLY-RD' . $id, $ids))->get(['id', 'es_id']) as $r) {
-            $src = (int) substr($r->es_id, 6);
-            if ($src !== (int) $r->id && !isset($bySource[$r->es_id])) {
-                $bySource[$r->es_id] = $src;
-            }
-        }
+        $bySource = self::refundSources($ids);
         $refunded = array_fill_keys($ids, 0.0);
         if ($bySource) {
             $refundInvoices = DB::table('invoices')->whereIn('es_id', array_keys($bySource))->get(['es_id', 'invoice_beneficiaries'])->keyBy('es_id');
@@ -112,6 +98,32 @@ class CounterPayments
                          'due_to_client' => $remaining < -0.005 ? -$remaining : 0.0, 'status' => $status, 'label' => $label];
         }
         return $out;
+    }
+
+    /**
+     * Refund invoices made from the given invoices: es_id => source invoice id.
+     * New refunds record their source in the refund marker; older refunds used
+     * the numbering "FLY-RD<source id>".
+     */
+    public static function refundSources(array $ids): array
+    {
+        if (!$ids) {
+            return [];
+        }
+        $bySource = [];
+        foreach (DB::table('account_statements')->where('transaction_type', 1)
+                     ->whereRaw("JSON_VALUE(description, '$.kind') = 'refund'")
+                     ->whereIn(DB::raw("JSON_VALUE(description, '$.source_invoice')"), array_map('strval', $ids))
+                     ->distinct()->get(['es_id', DB::raw("JSON_VALUE(description, '$.source_invoice') AS src")]) as $r) {
+            $bySource[$r->es_id] = (int) $r->src;
+        }
+        foreach (DB::table('invoices')->whereIn('es_id', array_map(fn ($id) => 'FLY-RD' . $id, $ids))->get(['id', 'es_id']) as $r) {
+            $src = (int) substr($r->es_id, 6);
+            if ($src !== (int) $r->id && !isset($bySource[$r->es_id])) {
+                $bySource[$r->es_id] = $src;
+            }
+        }
+        return $bySource;
     }
 
     public static function summary($invoice): ?array

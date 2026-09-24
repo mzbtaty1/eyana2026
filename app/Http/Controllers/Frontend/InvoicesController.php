@@ -11,6 +11,7 @@ use App\Models\{Supplier, Invoice, TicketUser, TicketVendor, Airline, AccountSta
 use Yajra\DataTables\Facades\DataTables;
 use App\Services\InvoicePassengerLedger;
 use App\Services\CounterPayments;
+use App\Services\CounterInvoiceDeletion;
 
 use DB;
 
@@ -1691,8 +1692,17 @@ $invoices = Invoice::select('*')
             ->orderBy('id', 'DESC')
             ->get();
 
+        // Counter Customer invoice: the linked vouchers that deletion will reverse,
+        // or why it can't be deleted now
+        $counterDeletion = null;
+        if (CounterInvoiceDeletion::applies($invoice_info)) {
+            $linkedBonds = CounterInvoiceDeletion::linkedBonds($invoice_info);
+            $counterDeletion = ['bonds' => $linkedBonds, 'blocker' => CounterInvoiceDeletion::blocker($invoice_info, $linkedBonds)];
+        }
+
         return view('invoices.remove', [
             "invoice_info" => $invoice_info,
+            "counterDeletion" => $counterDeletion,
             "vendors" => $vendors,
             "users" => $users,
             "suppliers" => $suppliers,
@@ -1708,6 +1718,21 @@ $invoices = Invoice::select('*')
         abort_if(count($invoice_info) == 0, 404);
         $invoice_info = $invoice_info[0];
         
+        // Counter Customer invoice: reverse its linked payments / payouts and delete it
+        // in one transaction, or refuse with the reason (nothing changed).
+        if (CounterInvoiceDeletion::applies($invoice_info)) {
+            try {
+                $error = CounterInvoiceDeletion::delete((int) $invoice_info->id);
+            } catch (\Throwable $e) {
+                report($e);
+                $error = 'تعذر حذف الفاتورة بسبب خطأ غير متوقع، ولم يتم تغيير أي بيانات.';
+            }
+            if ($error) {
+                return redirect()->route('site.invoices_remove', $invoice_info->es_id)->withErrors(['msg' => $error]);
+            }
+            return redirect()->route('site.invoices');
+        }
+
         $remove = Invoice::select('*')
             ->where('es_id', $id)
             ->delete();
