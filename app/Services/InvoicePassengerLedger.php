@@ -293,11 +293,14 @@ class InvoicePassengerLedger
         }
     }
 
-    /** Date shown for the row: adjustments, new refunds and new re-issues show the day they happened. */
+    /**
+     * Date shown for a ticket row: its entry date (crt_date) -- the same date the
+     * statement is ordered and filtered by, so the column always reads in order.
+     * Falls back to the invoice date only if a row has no entry date.
+     */
     public static function displayDate($row, $ticketInfo): string
     {
-        $kind = self::marker($row)['kind'] ?? null;
-        if ($kind === 'edit' || $kind === 'refund' || $kind === 'reissue') {
+        if ((string) $row->crt_date !== '') {
             return (string) $row->crt_date;
         }
         return $ticketInfo ? (string) $ticketInfo->invoice_date : (string) $row->created_at;
