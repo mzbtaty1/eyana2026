@@ -216,21 +216,12 @@ $url2 = route('site.accounts_statement_print_excel' , [
     $hasPassengerBreakdown = $AccountStatement->transaction_type == 1 && $ticket_info && $users->count() > 0;
     $breakdownRows = $hasPassengerBreakdown ? $users->values() : collect([null]);
 
-    // client_net_pice sums to credit_balance (this account is owed) and
-    // client_bought_price sums to debit_balance (this account owes) --
-    // verified against real data (both sides of the same real transaction)
-    // before implementing this. Only the side that actually carries a
-    // nonzero transaction amount gets a per-passenger breakdown; the other
-    // stays blank, matching the transaction's own zero value on that side.
+    // One ticket = one financial transaction, however many passengers it has.
+    // Its debit/credit is shown ONCE, on the first passenger row (other passenger
+    // rows leave the amount blank), exactly as it is counted once in $total_blnc
+    // and in the period totals. Only the side that carries an amount is shown.
     $debitHasAmount = $AccountStatement->debit_balance > 0;
     $creditHasAmount = $AccountStatement->credit_balance > 0;
-    // Per-passenger shares are shown only when they add up exactly to this
-    // transaction's amount. Cancellations (FLY-RD) carry the refund amount while
-    // TicketUser still holds the original ticket prices; there the transaction
-    // amount is shown once, on the first passenger row, so the column still sums
-    // to the period total and nothing is counted twice.
-    $debitSplit = $hasPassengerBreakdown && $debitHasAmount && abs($users->sum('client_bought_price') - $AccountStatement->debit_balance) < 0.005;
-    $creditSplit = $hasPassengerBreakdown && $creditHasAmount && abs($users->sum('client_net_pice') - $AccountStatement->credit_balance) < 0.005;
 
     $mem = $usersById[$AccountStatement->added_by] ?? null;
     ?>
@@ -327,16 +318,12 @@ $url2 = route('site.accounts_statement_print_excel' , [
         </td>
 
         <td style="text-align: right;">
-            @if($debitSplit)
-                {{number_format($user->client_bought_price, 2)}}
-            @elseif(!$hasPassengerBreakdown || ($debitHasAmount && $rowIndex === 0))
+            @if(!$hasPassengerBreakdown || ($debitHasAmount && $rowIndex === 0))
                 {{number_format($AccountStatement->debit_balance , 2)}}
             @endif
         </td>
         <td style="text-align: right;color:#ff7900;">
-            @if($creditSplit)
-                {{number_format($user->client_net_pice, 2)}}
-            @elseif(!$hasPassengerBreakdown || ($creditHasAmount && $rowIndex === 0))
+            @if(!$hasPassengerBreakdown || ($creditHasAmount && $rowIndex === 0))
                 {{number_format($AccountStatement->credit_balance , 2)}}
             @endif
         </td>

@@ -21,9 +21,10 @@ use PhpOffice\PhpSpreadsheet\Worksheet\PageSetup;
  *  - same filters and chronological order (crt_date ASC, id ASC)
  *  - same carried-forward opening balance (AccountStatement::openingBalanceBefore)
  *  - same running balance: once per transaction, float, rounded to 2 dp per row
- *  - same passenger breakdown: one visual row per passenger for flight tickets,
- *    showing that passenger's share; the running balance still advances once
- *    per transaction and is only repeated for display on each passenger row
+ *  - same passenger breakdown: one visual row per passenger for flight tickets;
+ *    the ticket is ONE transaction -- its debit/credit is shown once (first
+ *    passenger row), the running balance advances once and the same
+ *    transaction-level balance is repeated on each of its passenger rows
  *  - same columns (plus employee, as on the screen)
  *
  * All display rows are built here, so the Blade view runs no queries.
@@ -141,14 +142,10 @@ class AccountatExport implements FromView, WithEvents, WithTitle
             $isTicket = $AccountStatement->transaction_type == 1 && $ticket_info;
             $hasPassengerBreakdown = $AccountStatement->es_id != 'FLY-OPEN-BALANCE'
                 && $AccountStatement->transaction_type == 1 && $ticket_info && $users->count() > 0;
+            // One ticket = one transaction: its amount goes on the first passenger row
+            // only (same as the screen/print); only the side carrying an amount is shown.
             $debitHasAmount = $AccountStatement->debit_balance > 0;
             $creditHasAmount = $AccountStatement->credit_balance > 0;
-            // Same rule as the screen/print: passenger shares only when they add up
-            // exactly to the transaction amount (not for FLY-RD cancellations, whose
-            // TicketUser prices are the original ticket's); otherwise the transaction
-            // amount is shown once, on the first passenger row.
-            $debitSplit = $hasPassengerBreakdown && $debitHasAmount && abs($users->sum('client_bought_price') - $AccountStatement->debit_balance) < 0.005;
-            $creditSplit = $hasPassengerBreakdown && $creditHasAmount && abs($users->sum('client_net_pice') - $AccountStatement->credit_balance) < 0.005;
 
             $base = [
                 'es_id' => $AccountStatement->es_id,
@@ -166,10 +163,8 @@ class AccountatExport implements FromView, WithEvents, WithTitle
                     $rows[] = $base + [
                         'details' => (string) $user->client_name,
                         'booking' => (string) $user->client_booking_id,
-                        'debit' => $debitSplit ? (float) $user->client_bought_price
-                            : ($debitHasAmount && $i === 0 ? (float) $AccountStatement->debit_balance : null),
-                        'credit' => $creditSplit ? (float) $user->client_net_pice
-                            : ($creditHasAmount && $i === 0 ? (float) $AccountStatement->credit_balance : null),
+                        'debit' => $debitHasAmount && $i === 0 ? (float) $AccountStatement->debit_balance : null,
+                        'credit' => $creditHasAmount && $i === 0 ? (float) $AccountStatement->credit_balance : null,
                         'employee' => $i === 0 && $mem ? $mem->name : '',
                         'first' => $i === 0,
                     ];
