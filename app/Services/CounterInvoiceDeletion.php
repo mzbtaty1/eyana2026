@@ -23,7 +23,8 @@ use Illuminate\Support\Facades\{Auth, DB};
  *    those ledgers) or its treasury / bank no longer exists.
  *
  * Any other (non-counter) invoice is never deleted while vouchers are still
- * linked to it (linkedVouchersBlocker): nothing reverses them there.
+ * linked to it, or once an amount was paid on it (nonCounterBlocker): nothing
+ * reverses them there.
  */
 class CounterInvoiceDeletion
 {
@@ -50,6 +51,22 @@ class CounterInvoiceDeletion
         }
         $list = $bonds->map(fn ($b) => ($b->es_id ?: 'رقم ' . $b->id) . ' (' . number_format((float) $b->amount, 2) . ')')->implode('، ');
         return "لا يمكن حذف الفاتورة {$invoice->es_id} لأن عليها سندات مرتبطة بها: $list. برجاء عكس / تصحيح هذه السندات أولاً.";
+    }
+
+    /**
+     * Non-counter invoices: why deletion is refused (Arabic), or null -- vouchers
+     * still linked to it, or an amount already paid on it (the P1.2 rule of the
+     * JSON delete endpoint, InvoiceController::deleteInvoice).
+     */
+    public static function nonCounterBlocker($invoice): ?string
+    {
+        if ($blocker = self::linkedVouchersBlocker($invoice)) {
+            return $blocker;
+        }
+        if ((float) ($invoice->invoice_money_pay ?? 0) > 0) {
+            return 'لا يمكن حذف فاتورة تم سداد مبلغ عليها. برجاء عمل مرتجع / استرجاع أولاً.';
+        }
+        return null;
     }
 
     /** Why the invoice can't be deleted now (Arabic), or null. */
