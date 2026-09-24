@@ -21,9 +21,9 @@ swal("", "{{$errors->first()}}", "info");
             <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
                <h5 class="card-title mb-0"> اضافة فاتورة{{ !empty($counterCustomer) ? ' - عميل كونتر' : '' }} </h5>
                <div class="btn-group">
-                  <a href="{{route('site.invoices_create')}}" class="btn btn-sm {{ empty($counterCustomer) ? 'btn-primary active' : 'btn-outline-primary' }}" @if(empty($counterCustomer)) aria-current="page" @endif><i class="ri-file-add-line"></i> إضافة فاتورة</a>
-                  <a href="{{route('site.shared_invoices_create')}}" class="btn btn-outline-dark btn-sm"><i class="ri-team-line"></i> إضافة فاتورة مشتركة</a>
-                  <a href="{{route('site.invoices_create_counter')}}" class="btn btn-sm {{ !empty($counterCustomer) ? 'btn-success active' : 'btn-outline-success' }}" @if(!empty($counterCustomer)) aria-current="page" @endif><i class="ri-store-2-line"></i> عميل كونتر</a>
+                  <a href="{{route('site.invoices_create')}}" class="btn btn-sm {{ empty($counterCustomer) ? 'btn-primary active' : 'btn-outline-primary' }}" @if(empty($counterCustomer)) aria-current="page" @endif><i class="ri-file-add-line"></i> <span>إضافة فاتورة</span></a>
+                  <a href="{{route('site.shared_invoices_create')}}" class="btn btn-outline-dark btn-sm"><i class="ri-team-line"></i> <span>إضافة فاتورة مشتركة</span></a>
+                  <a href="{{route('site.invoices_create_counter')}}" class="btn btn-sm {{ !empty($counterCustomer) ? 'btn-success active' : 'btn-outline-success' }}" @if(!empty($counterCustomer)) aria-current="page" @endif><i class="ri-store-2-line"></i> <span>عميل كونتر</span></a>
                </div>
             </div>
          </div>
