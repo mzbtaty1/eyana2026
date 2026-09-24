@@ -424,12 +424,8 @@ $rname = Route::currentRouteName();
                            <li class="nav-item">
                               <a href="{{route('site.invoices')}}" class="nav-link" data-key="t-basic-tables">كل الفواتير</a>
                            </li>
-                           <li class="nav-item">
-                              <a href="{{route('site.invoices_create')}}" class="nav-link" data-key="t-basic-tables">إضافة فاتورة</a>
-                           </li>
-                           <li class="nav-item">
-                              <a href="{{route('site.shared_invoices_create')}}" class="nav-link" data-key="t-basic-tables">إضافة فاتورة مشتركة</a>
-                           </li>
+                           {{-- "إضافة فاتورة" removed from navigation (route kept). --}}
+                           {{-- "إضافة فاتورة مشتركة" removed from navigation (route kept). --}}
                            {{-- "Last 3 months" list removed from navigation: "كل الفواتير" now shows every invoice with a date filter (route kept). --}}
                            <li class="nav-item">
                               <a href="{{route('site.invoices_daily_report')}}" class="nav-link" data-key="t-basic-tables">التقرير اليومي</a>
@@ -444,9 +440,7 @@ $rname = Route::currentRouteName();
                             <li class="nav-item">
                               <a href="{{route('site.invoices_full_report')}}" class="nav-link" data-key="t-basic-tables">تقرير الفواتير التفصيلي</a>
                            </li>
-                            <li class="nav-item">
-                              <a href="{{route('site.air_cairo_calc')}}" class="nav-link" data-key="t-basic-tables">تكلفة اير كايرو</a>
-                           </li>
+                           {{-- "تكلفة اير كايرو" removed from navigation (route kept). --}}
                             
 <!--
                            <li class="nav-item">
