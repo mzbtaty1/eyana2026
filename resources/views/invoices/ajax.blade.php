@@ -5,24 +5,11 @@
 @include('components.flash-messages')
 
 <x-page-header title="قائمة الفواتير">
-   <a href="{{route('site.invoices_create')}}">
-      <button class="btn btn-primary">
-         <i class="ri-file-add-line"></i>
-         اضافة فاتورة
-      </button>
-   </a>
-   <a href="{{route('site.shared_invoices_create')}}">
-      <button class="btn btn-outline-dark">
-         <i class="ri-team-line"></i>
-         إضافة فاتورة مشتركة
-      </button>
-   </a>
-   <a href="{{route('site.invoices_create_counter')}}">
-      <button class="btn btn-success">
-         <i class="ri-store-2-line"></i>
-         عميل كونتر
-      </button>
-   </a>
+   <div class="ey-action-group">
+      <a href="{{route('site.invoices_create')}}" class="btn btn-primary"><i class="ri-file-add-line"></i><span>اضافة فاتورة</span></a>
+      <a href="{{route('site.shared_invoices_create')}}" class="btn btn-outline-dark"><i class="ri-team-line"></i><span>إضافة فاتورة مشتركة</span></a>
+      <a href="{{route('site.invoices_create_counter')}}" class="btn btn-success"><i class="ri-store-2-line"></i><span>عميل كونتر</span></a>
+   </div>
 </x-page-header>
 
 <style>
