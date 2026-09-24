@@ -4,6 +4,7 @@ use App\Http\Controllers\Frontend\{
     IndexController,
     AirlineController,
     InvoicesController,
+    InvoiceFullReportController,
     CustomersController,
     SuppliersController,
     MarketingController,
@@ -113,8 +114,13 @@ Route::middleware(['auth' , 'check_status'])->group(function(){
 
     Route::get('/invoices/daily-report' , [InvoicesController::class , 'daily_report'])->name('site.invoices_daily_report');
     
-    Route::get('/invoices/full-report' , [InvoicesController::class , 'full_report'])->name('site.invoices_full_report');
-    Route::post('/invoices/full-report' , [InvoicesController::class , 'full_report_get'])->name('site.invoices_full_report_get');
+    // Detailed invoice report (read-only, App\Services\InvoiceFullReport); the old search form's POST shows the same report.
+    Route::get('/invoices/full-report' , [InvoiceFullReportController::class , 'index'])->name('site.invoices_full_report');
+    Route::post('/invoices/full-report' , [InvoiceFullReportController::class , 'legacy'])->name('site.invoices_full_report_get');
+    Route::get('/invoices/full-report/data' , [InvoiceFullReportController::class , 'data'])->name('site.invoices_full_report_data');
+    Route::get('/invoices/full-report/groups' , [InvoiceFullReportController::class , 'groups'])->name('site.invoices_full_report_groups');
+    Route::get('/invoices/full-report/excel' , [InvoiceFullReportController::class , 'excel'])->name('site.invoices_full_report_excel');
+    Route::get('/invoices/full-report/print' , [InvoiceFullReportController::class , 'print'])->name('site.invoices_full_report_print');
     
     Route::get('/invoices/reissue' , [InvoicesController::class , 'invoices_reissue'])->name('site.invoices_reissue');
     Route::post('/invoices/reissue' , [InvoicesController::class , 'invoices_reissue_get'])->name('site.invoices_reissue');
