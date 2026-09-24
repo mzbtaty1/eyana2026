@@ -172,8 +172,9 @@ $url2 = route('site.accounts_statement_print_excel' , [
     // their first row -- they never recompute or add to it again, so a
     // multi-passenger invoice still advances the running balance by exactly
     // one transaction's worth, never once per passenger.
-    $closing = (int) $AccountStatement->debit_balance - (int) $AccountStatement->credit_balance;
-    $total_blnc += $closing;
+    // Balances are DECIMAL(14,2): keep the cents (an (int) cast truncated them).
+    $closing = (float) $AccountStatement->debit_balance - (float) $AccountStatement->credit_balance;
+    $total_blnc = round($total_blnc + $closing, 2);
     $total_blnc_display = number_format($total_blnc, 2);
 
     $ticket_info = null;

@@ -364,8 +364,9 @@ if($st == 0){
             // value on their first row -- never recomputed or added again --
             // so a multi-passenger invoice still advances the running balance
             // by exactly one transaction's worth, never once per passenger.
-            $closing = (int) $AccountStatement->debit_balance - (int) $AccountStatement->credit_balance;
-            $total_blnc += $closing;
+            // Balances are DECIMAL(14,2): keep the cents (an (int) cast truncated them).
+            $closing = (float) $AccountStatement->debit_balance - (float) $AccountStatement->credit_balance;
+            $total_blnc = round($total_blnc + $closing, 2);
             $total_blnc_display = number_format($total_blnc, 2);
 
             $ticket_info = null;

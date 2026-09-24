@@ -98,8 +98,9 @@ $total_cumulative_balance += $AccountStatement->cumulative_balance;
                    
                    <?php
                    
-                    $closing = (int) $AccountStatement->debit_balance - (int) $AccountStatement->credit_balance;
-                   $total_blnc += $closing;
+                    // Balances are DECIMAL(14,2): keep the cents (an (int) cast truncated them).
+                    $closing = (float) $AccountStatement->debit_balance - (float) $AccountStatement->credit_balance;
+                    $total_blnc = round($total_blnc + $closing, 2);
                    
                    // Lookups come from maps batched in AccountatExport (no per-row queries).
                    // Reset per row so a row never shows the previous row's passengers.
