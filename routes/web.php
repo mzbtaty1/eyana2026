@@ -124,6 +124,9 @@ Route::middleware(['auth' , 'check_status'])->group(function(){
     
     Route::get('/invoices/{id}/edit' , [InvoicesController::class , 'edit_invoice'])->name('site.invoices_edit');
     Route::post('/invoices/save_update' , [InvoicesController::class , 'save_update'])->name('site.invoices_save_update');
+    // Edit ONE passenger/ticket of an invoice (the other passengers stay unchanged).
+    Route::get('/invoices/{id}/edit-passenger' , [InvoicesController::class , 'edit_passenger'])->name('site.invoices_edit_passenger');
+    Route::post('/invoices/edit-passenger/save' , [InvoicesController::class , 'save_passenger'])->name('site.invoices_save_passenger');
     
     Route::get('/invoices/{id}/confirm' , [InvoicesController::class , 'confirm'])->name('site.invoices_confirm');
     Route::post('/invoices/confirm_save' , [InvoicesController::class , 'confirm_save'])->name('site.invoices_confirm_save');

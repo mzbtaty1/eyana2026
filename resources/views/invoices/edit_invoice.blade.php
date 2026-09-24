@@ -18,7 +18,9 @@ swal("", "{{$errors->first()}}", "info");
    <div class="col-lg-12">
       <div class="card">
          <div class="card-header">
-            <h5 class="card-title mb-0"> تعديل الفاتورة : <b>{{$invoice_info->es_id}}</b> </h5>
+            <h5 class="card-title mb-0"> تعديل الفاتورة : <b>{{$invoice_info->es_id}}</b>
+                <a href="{{route('site.invoices_edit_passenger', $invoice_info->id)}}" class="btn btn-sm btn-outline-primary" style="float:left;">تعديل راكب واحد فقط</a>
+            </h5>
          </div>
          <div class="card-body">
             <form action="{{route('site.invoices_save_update')}}" method="POST" autocomplete="off" enctype="multipart/form-data">
@@ -211,8 +213,13 @@ swal("", "{{$errors->first()}}", "info");
                   <tr>
                      <th>الاسم</th>
                      <th>نوع الراكب</th>
+                     @if($result == "FLY-RD")
+                     <th>المسترد له (دائن العميل)</th>
+                     <th>المرتجع لنا (مدين المورد)</th>
+                     @else
                      <th>سعر التكلفة</th>
                      <th>سعر البيع</th>
+                     @endif
                      <th>رقم الحجز</th>
                      <th>رقم التكت</th>
                      <th>رقم الهاتف</th>
@@ -223,6 +230,7 @@ swal("", "{{$errors->first()}}", "info");
                    @foreach($users as $user)
                   <tr>
                      <td>
+                        <input type="hidden" name="ticket_info[{{$x}}][id]" value="{{$user->id}}">
                         <input type="text" value="{{$user->client_name}}" name="ticket_info[{{$x}}][name]" placeholder="الاسم" class="form-control">
                      </td>
                      <td>
@@ -233,10 +241,10 @@ swal("", "{{$errors->first()}}", "info");
                         </select>
                      </td>
                      <td>
-                        <input type="number" name="ticket_info[{{$x}}][net_price]" placeholder="سعر التكلفة" class="form-control amount" oninput="findTotal()" value="{{$user->client_net_pice}}" /> 
+                        <input type="number" name="ticket_info[{{$x}}][net_price]" placeholder="سعر التكلفة" class="form-control amount" oninput="findTotal()" value="{{$shares[$user->id][1] ?? $user->client_net_pice}}" step="0.01" /> 
                      </td>
                      <td>
-                        <input type="text" name="ticket_info[{{$x}}][bought_price]" oninput="findTotal2()" oninput="" placeholder="سعر البيع" class="form-control amount2" value="{{$user->client_bought_price}}" />
+                        <input type="text" name="ticket_info[{{$x}}][bought_price]" oninput="findTotal2()" oninput="" placeholder="سعر البيع" class="form-control amount2" value="{{$shares[$user->id][0] ?? $user->client_bought_price}}" />
                      </td>
                      <td>
                         <input type="text" value="{{$user->client_booking_id}}" name="ticket_info[{{$x}}][book_id]" placeholder="رقم الحجز" class="form-control" />
@@ -260,29 +268,23 @@ swal("", "{{$errors->first()}}", "info");
                <br>
                 @if($result == "FLY-RD")
                 <?php
-                
-                $mostarad = App\Models\AccountStatement::select('*')->where('es_id',$invoice_info->es_id)
-                               ->where('credit_balance',0)->get();
-                           $mostarad = $mostarad[0];
-                           
-                            $mortaga = App\Models\AccountStatement::select('*')->where('es_id',$invoice_info->es_id)
-                               ->where('debit_balance',0)->get();
-                           $mortaga = $mortaga[0];
-//                dd($mostarad , $mortaga);
-//                dd();
+                // Refund amounts are passenger-level: each ledger row = the sum of the
+                // passengers' amounts above (saved passenger by passenger).
+                $refund_credit_total = array_sum(array_map(fn ($sh) => $sh[1], $shares));
+                $refund_debit_total = array_sum(array_map(fn ($sh) => $sh[0], $shares));
                 ?>
                   <div class="row">
       <div class="col-6 mb-3">
           <p>
-          المسترد له
+          المسترد له (مجموع الركاب)
           </p>
-          <input type="number" name="net_pice_total" value="{{$mortaga->credit_balance}}" class="form-control" style="text-align:right;" required>
+          <input type="number" value="{{$refund_credit_total}}" class="form-control" style="text-align:right;" readonly>
       </div>
       <div class="col-6">
           <p>
-          المرتجع لنا
+          المرتجع لنا (مجموع الركاب)
           </p>
-            <input type="number" name="bought_price_total" value="{{$mostarad->debit_balance}}" class="form-control" onchange="" style="text-align:right;" required>
+            <input type="number" value="{{$refund_debit_total}}" class="form-control" style="text-align:right;" readonly>
       </div>
     </div>
                 @else

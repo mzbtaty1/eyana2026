@@ -9,6 +9,7 @@ use Redirect;
 use Illuminate\Support\Carbon;
 use App\Models\{Supplier, Invoice, TicketUser, TicketVendor, Airline, AccountStatement , Log , TransactionBalance,Storage,StorageStatement,Bond , User};
 use Yajra\DataTables\Facades\DataTables;
+use App\Services\InvoicePassengerLedger;
 
 use DB;
 
@@ -985,14 +986,81 @@ $invoices = Invoice::select('*')
             ->orderBy('id', 'DESC')
             ->get();
 
+        // Each passenger's [debit share, credit share] as the Account Statement shows them.
+        $shares = InvoicePassengerLedger::currentShares($invoice_info, $users);
+
         return view('invoices.edit_invoice', [
             "invoice_info" => $invoice_info,
             "vendors" => $vendors,
             "users" => $users,
+            "shares" => $shares,
             "suppliers" => $suppliers,
             "my_suppliers" => $my_suppliers,
             "airlines" => $airlines,
         ]);
+    }
+
+    /**
+     * Edit ONE passenger/ticket of an invoice: pick the passenger, change only
+     * that passenger. The other passengers stay untouched and the invoice's
+     * ledger rows move by exactly that passenger's difference.
+     */
+    public function edit_passenger(Request $request, $id)
+    {
+        $invoice_info = Invoice::find((int) $id);
+        abort_if(!$invoice_info, 404);
+
+        $users = InvoicePassengerLedger::passengers($invoice_info);
+        $shares = InvoicePassengerLedger::currentShares($invoice_info, $users);
+        $selected = $users->firstWhere('id', (int) $request->query('passenger'));
+
+        return view('invoices.edit_passenger', [
+            "invoice_info" => $invoice_info,
+            "users" => $users,
+            "shares" => $shares,
+            "selected" => $selected,
+            "isRefund" => InvoicePassengerLedger::isRefund($invoice_info),
+        ]);
+    }
+
+    public function save_passenger(Request $request)
+    {
+        $request->validate([
+            'id' => 'required|integer',
+            'passenger_id' => 'required|integer',
+            'name' => 'required|string',
+            'client_type' => 'required|in:1,2,3',
+            'net_price' => 'required|numeric|min:0',
+            'bought_price' => 'required|numeric|min:0',
+        ]);
+
+        $invoice_info = Invoice::find((int) $request->id);
+        abort_if(!$invoice_info, 404);
+
+        try {
+            [$dDebit, $dCredit] = InvoicePassengerLedger::updatePassenger($invoice_info, (int) $request->passenger_id, [
+                "client_name" => $request->name,
+                "client_type" => $request->client_type,
+                "client_net_pice" => $request->net_price,
+                "client_bought_price" => $request->bought_price,
+                "client_booking_id" => $request->book_id,
+                "client_ticket_id" => $request->tikcet_id,
+                "client_phone" => $request->client_phone,
+            ]);
+        } catch (\RuntimeException $e) {
+            return Redirect::back()->withErrors(['msg' => 'تعذر تعديل الراكب: ' . $e->getMessage()]);
+        }
+
+        Log::create([
+            "log_txt" => "تم تعديل الراكب " . $request->name . " في الفاتورة " . $invoice_info->es_id
+                . " (فرق المدين: " . number_format($dDebit, 2) . " - فرق الدائن: " . number_format($dCredit, 2) . ")",
+            "log_ip" => $request->ip(),
+            "log_by" => Auth::user()->id,
+            "log_date" => date('Y-m-d'),
+        ]);
+
+        return redirect()->route('site.invoices_edit_passenger', [$invoice_info->id, 'passenger' => (int) $request->passenger_id])
+            ->with('success', 'تم تعديل الراكب فقط. فرق المدين: ' . number_format($dDebit, 2) . ' - فرق الدائن: ' . number_format($dCredit, 2));
     }
     
     public function save_update(Request $request){
@@ -1033,13 +1101,14 @@ $invoices = Invoice::select('*')
         ]);
 
         
-        $remove_tickets = TicketUser::select('*')->where('ticket_system_id',$invoice_info->ticket_system_id)->delete();
-        
-        
-           foreach ($request->ticket_info as $key => $value) {
-            $createClients = TicketUser::create([
-                "crt_at" => date('Y-m-d'),
-                "ticket_system_id" => $invoice_info->ticket_system_id,
+        // Whole-invoice edit: every passenger keeps its own record and amounts.
+        // Posted rows carry their TicketUser id and are updated in place (no
+        // delete/recreate, so passenger records keep their identity); rows
+        // without an id are new passengers; passengers no longer posted are removed.
+        $existing_tickets = TicketUser::where('ticket_system_id', $invoice_info->ticket_system_id)->get()->keyBy('id');
+        $kept_ticket_ids = [];
+        foreach ($request->ticket_info as $key => $value) {
+            $ticket_data = [
                 "client_name" => $value['name'],
                 "client_type" => $value['client_type'],
                 "client_net_pice" => $value['net_price'],
@@ -1047,10 +1116,22 @@ $invoices = Invoice::select('*')
                 "client_booking_id" => $value['book_id'],
                 "client_ticket_id" => $value['tikcet_id'],
                 "client_phone" => $value['client_phone'],
-                //                "client_passport_id" => $value['passport_id'],
-            ]);
+            ];
+            $ticket_id = (int) ($value['id'] ?? 0);
+            if ($ticket_id && $existing_tickets->has($ticket_id)) {
+                $existing_tickets[$ticket_id]->update($ticket_data);
+                $kept_ticket_ids[] = $ticket_id;
+            } else {
+                $kept_ticket_ids[] = TicketUser::create(array_merge([
+                    "crt_at" => date('Y-m-d'),
+                    "ticket_system_id" => $invoice_info->ticket_system_id,
+                ], $ticket_data))->id;
+            }
         }
-        
+        TicketUser::where('ticket_system_id', $invoice_info->ticket_system_id)
+            ->whereNotIn('id', $kept_ticket_ids)
+            ->delete();
+
         
          $users = TicketUser::select('*')
             ->where('ticket_system_id', $invoice_info->ticket_system_id)
@@ -1082,14 +1163,16 @@ foreach ($existing_statements as $statement) {
 }
 
 // تجهيز البيانات حسب نوع الفاتورة (استرداد أو عادي)
-if ($request->is_rfund == 1) {
+// Both cases are passenger-level: each ledger row is the sum of the passengers'
+// own amounts (client_bought_price = debit share, client_net_pice = credit share).
+if (InvoicePassengerLedger::isRefund($invoice_info)) {
     // vendor: debit, beneficiary: credit
     $vendor_data = [
         "invoice_type" => $request->invoice_section,
         "invoice_date" => $request->invoice_date,
-        "debit_balance" => floatval($request->bought_price_total),
+        "debit_balance" => round(floatval($total_client_bought_price), 2),
         "credit_balance" => 0,
-        "ledger_net_effect" => floatval($request->bought_price_total),
+        "ledger_net_effect" => round(floatval($total_client_bought_price), 2),
         "transaction_txt" => "حجز الرحلة " . $invoice_info->es_id,
         "added_by" => $request->added_user,
     ];
@@ -1098,8 +1181,8 @@ if ($request->is_rfund == 1) {
         "invoice_type" => $request->invoice_section,
         "invoice_date" => $request->invoice_date,
         "debit_balance" => 0,
-        "credit_balance" => floatval($request->net_pice_total),
-        "ledger_net_effect" => -floatval($request->net_pice_total),
+        "credit_balance" => round(floatval($total_client_net_pice), 2),
+        "ledger_net_effect" => -round(floatval($total_client_net_pice), 2),
         "transaction_txt" => "حجز الرحلة " . $invoice_info->es_id,
         "added_by" => $request->added_user,
     ];
@@ -1569,6 +1652,20 @@ if ($existing_beneficiary_statement) {
         abort_if(count($invoice_info) == 0, 404);
         $invoice_info = $invoice_info[0];
 
+        // Refund mode (explicit, never guessed):
+        //  full   = cancel the whole invoice: the entered amounts are split
+        //           equally between all its passengers
+        //  single = refund one passenger: the entered amounts belong only to
+        //           the selected passenger; the other passengers are untouched
+        $refund_mode = $request->refund_mode === 'single' ? 'single' : 'full';
+        $refund_users = TicketUser::where('ticket_system_id', $invoice_info->ticket_system_id)->orderBy('id')->get();
+        if ($refund_mode === 'single') {
+            $refund_users = $refund_users->where('id', (int) $request->refund_passenger_id)->values();
+            if ($refund_users->isEmpty()) {
+                return Redirect::back()->withErrors(['msg' => 'برجاء اختيار الراكب المسترد من الجدول']);
+            }
+        }
+
         $system_id = \Str::random(8);
         $vendors = TicketVendor::select('*')
             ->where('ticket_system_id', $invoice_info->ticket_system_id)
@@ -1588,24 +1685,9 @@ if ($existing_beneficiary_statement) {
             "price" => $request->net_pice_total,
         ]);
 
-        $users = TicketUser::select('*')
-            ->where('ticket_system_id', $invoice_info->ticket_system_id)
-            ->get();
-
-        foreach ($users as $user) {
-            $createClients = TicketUser::create([
-                "crt_at" => date('Y-m-d'),
-                "ticket_system_id" => $system_id,
-                "client_name" => $user->client_name,
-                "client_type" => $user->client_type,
-                "client_net_pice" => $user->client_net_pice,
-                "client_bought_price" => $user->client_bought_price,
-                "client_booking_id" => $user->client_booking_id,
-                "client_ticket_id" => $user->client_ticket_id,
-                "client_phone" => $user->client_phone,
-                //                "client_passport_id" => $user->client_passport_id,
-            ]);
-        }
+        // Supplier debit = bought_price_total, client credit = net_pice_total (see below).
+        InvoicePassengerLedger::createRefundPassengers($refund_users, $system_id, $request->bought_price_total, $request->net_pice_total);
+        $refund_passenger_txt = $refund_mode === 'single' ? " - الراكب: " . $refund_users[0]->client_name : "";
 
         $create = Invoice::create([
             "ticket_system_id" => $system_id,
@@ -1639,7 +1721,7 @@ if ($existing_beneficiary_statement) {
             ]);
 
               $save_log = Log::create([
-            "log_txt" => "تم ارجاع فاتورة " . $newEsId,
+            "log_txt" => "تم ارجاع فاتورة " . $newEsId . $refund_passenger_txt,
             "log_ip" => $request->ip(),
             "log_by" => Auth::user()->id,
             "log_date" => date('Y-m-d'),
@@ -1654,7 +1736,7 @@ if ($existing_beneficiary_statement) {
             "debit_balance" => $request->bought_price_total,
             "credit_balance" => 0,
             "ledger_net_effect" => $request->bought_price_total,
-            "transaction_txt" => " مرتجع الفاتورة " . $newEsId,
+            "transaction_txt" => " مرتجع الفاتورة " . $newEsId . $refund_passenger_txt,
             "transaction_type" => 1,
             "added_by" => Auth::user()->id,
             "crt_date" => date('Y-m-d'),
@@ -1668,7 +1750,7 @@ if ($existing_beneficiary_statement) {
             "debit_balance" => 0,
             "credit_balance" => $request->net_pice_total,
             "ledger_net_effect" => -$request->net_pice_total,
-            "transaction_txt" => " مرتجع الفاتورة " . $newEsId,
+            "transaction_txt" => " مرتجع الفاتورة " . $newEsId . $refund_passenger_txt,
             "transaction_type" => 1,
             "added_by" => Auth::user()->id,
             "crt_date" => date('Y-m-d'),

@@ -200,8 +200,23 @@ swal("", "{{$errors->first()}}", "info");
                    <tag style="font-size: 14px;">رقم الهاتف اختياري</tag>
 
                 </h6>
+               <div class="card border mb-3">
+                  <div class="card-body">
+                     <p class="mb-2"><b>نوع الاسترداد</b> <span class="text-danger">*</span></p>
+                     <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="refund_mode" id="refund_mode_full" value="full" checked onchange="onRefundModeChange()">
+                        <label class="form-check-label" for="refund_mode_full">إلغاء الفاتورة بالكامل</label>
+                     </div>
+                     <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="refund_mode" id="refund_mode_single" value="single" onchange="onRefundModeChange()">
+                        <label class="form-check-label" for="refund_mode_single">استرداد راكب واحد فقط</label>
+                     </div>
+                     <p id="refund_mode_hint" class="mb-0 mt-2" style="font-size:13px;"></p>
+                  </div>
+               </div>
                <table class="table table-bordered" id="dynamicTableTwo">
                   <tr>
+                     <th class="refund-pick" style="display:none;">الراكب المسترد</th>
                      <th>الاسم</th>
                      <th>نوع الراكب</th>
                      <th>سعر التكلفة</th>
@@ -213,6 +228,7 @@ swal("", "{{$errors->first()}}", "info");
                   <?php $x = 0; ?>
                    @foreach($users as $user)
                   <tr id="remove{{$user->id}}">
+                     <td class="refund-pick" style="display:none;"><input type="radio" name="refund_passenger_id" value="{{$user->id}}" class="form-check-input"></td>
                      <td>
                         <input type="text" value="{{$user->client_name}}" name="ticket_info[{{$x}}][name]" placeholder="الاسم" class="form-control" required disabled>
                      </td>
@@ -469,4 +485,29 @@ document.getElementById('refundForm').addEventListener('submit', function (e) {
 
 
 
+<script>
+// Refund mode: full = the entered amounts are split equally between all
+// passengers; single = they belong only to the passenger picked in the table.
+function onRefundModeChange() {
+    var single = document.getElementById('refund_mode_single').checked;
+    document.querySelectorAll('.refund-pick').forEach(function (el) { el.style.display = single ? '' : 'none'; });
+    var n = document.querySelectorAll('input[name="refund_passenger_id"]').length;
+    var hint = document.getElementById('refund_mode_hint');
+    hint.className = 'mb-0 mt-2 text-muted';
+    hint.textContent = single
+        ? 'اختر الراكب المسترد من الجدول. المبالغ المدخلة تخص هذا الراكب فقط ولا تؤثر على باقي الركاب.'
+        : 'المبالغ المدخلة تقسم بالتساوي على ' + n + ' ركاب.';
+}
+document.getElementById('refundForm').addEventListener('submit', function (e) {
+    if (document.getElementById('refund_mode_single').checked
+        && !document.querySelector('input[name="refund_passenger_id"]:checked')) {
+        e.preventDefault();
+        var hint = document.getElementById('refund_mode_hint');
+        hint.className = 'mb-0 mt-2 text-danger';
+        hint.textContent = 'برجاء اختيار الراكب المسترد من الجدول';
+        hint.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+});
+onRefundModeChange();
+</script>
 @endsection

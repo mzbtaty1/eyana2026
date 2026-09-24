@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Auth;
 use Redirect;
 use App\Models\{Supplier, Invoice, TicketUser, TicketVendor, Airline, AccountStatement , Log , TransactionBalance};
+use App\Services\InvoicePassengerLedger;
 
 class SharedInvoices extends Controller
 {
@@ -458,6 +459,17 @@ $invoices = Invoice::select('*')
         abort_if(count($invoice_info) == 0, 404);
         $invoice_info = $invoice_info[0];
 
+        // Refund mode (explicit): full = entered amounts split equally between all
+        // passengers; single = entered amounts belong only to the selected passenger.
+        $refund_mode = $request->refund_mode === 'single' ? 'single' : 'full';
+        $refund_users = TicketUser::where('ticket_system_id', $invoice_info->ticket_system_id)->orderBy('id')->get();
+        if ($refund_mode === 'single') {
+            $refund_users = $refund_users->where('id', (int) $request->refund_passenger_id)->values();
+            if ($refund_users->isEmpty()) {
+                return Redirect::back()->withErrors(['msg' => 'برجاء اختيار الراكب المسترد من الجدول']);
+            }
+        }
+
         $system_id = \Str::random(8);
         $vendors = TicketVendor::select('*')
             ->where('ticket_system_id', $invoice_info->ticket_system_id)
@@ -477,24 +489,10 @@ $invoices = Invoice::select('*')
             "price" => $request->net_pice_total,
         ]);
 
-        $users = TicketUser::select('*')
-            ->where('ticket_system_id', $invoice_info->ticket_system_id)
-            ->get();
-
-        foreach ($users as $user) {
-            $createClients = TicketUser::create([
-                "crt_at" => date('Y-m-d'),
-                "ticket_system_id" => $system_id,
-                "client_name" => $user->client_name,
-                "client_type" => $user->client_type,
-                "client_net_pice" => $user->client_net_pice,
-                "client_bought_price" => $user->client_bought_price,
-                "client_booking_id" => $user->client_booking_id,
-                "client_ticket_id" => $user->client_ticket_id,
-                "client_phone" => $user->client_phone,
-                //                "client_passport_id" => $user->client_passport_id,
-            ]);
-        }
+        // This refund books the supplier DEBIT = net_pice_total and the client
+        // CREDIT = bought_price_total (see the ledger rows below).
+        InvoicePassengerLedger::createRefundPassengers($refund_users, $system_id, $request->net_pice_total, $request->bought_price_total);
+        $refund_passenger_txt = $refund_mode === 'single' ? " - الراكب: " . $refund_users[0]->client_name : "";
 
         $create = Invoice::create([
             "ticket_system_id" => $system_id,
@@ -535,7 +533,7 @@ $invoices = Invoice::select('*')
             ]);
 
               $save_log = Log::create([
-            "log_txt" => "تم ارجاع فاتورة " . $newEsId,
+            "log_txt" => "تم ارجاع فاتورة " . $newEsId . $refund_passenger_txt,
             "log_ip" => $request->ip(),
             "log_by" => Auth::user()->id,
             "log_date" => date('Y-m-d'),
@@ -550,7 +548,7 @@ $invoices = Invoice::select('*')
             "debit_balance" => $request->net_pice_total,
             "credit_balance" => 0,
             "ledger_net_effect" => $request->net_pice_total,
-            "transaction_txt" => " مرتجع الفاتورة " . $newEsId,
+            "transaction_txt" => " مرتجع الفاتورة " . $newEsId . $refund_passenger_txt,
             "transaction_type" => 1,
             "added_by" => Auth::user()->id,
             "crt_date" => date('Y-m-d'),
@@ -564,7 +562,7 @@ $invoices = Invoice::select('*')
             "debit_balance" => 0,
             "credit_balance" => $request->bought_price_total,
             "ledger_net_effect" => -$request->bought_price_total,
-            "transaction_txt" => " مرتجع الفاتورة " . $newEsId,
+            "transaction_txt" => " مرتجع الفاتورة " . $newEsId . $refund_passenger_txt,
             "transaction_type" => 1,
             "added_by" => Auth::user()->id,
             "crt_date" => date('Y-m-d'),
