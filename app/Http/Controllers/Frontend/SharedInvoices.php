@@ -489,9 +489,10 @@ $invoices = Invoice::select('*')
             "price" => $request->net_pice_total,
         ]);
 
-        // This refund books the supplier DEBIT = net_pice_total and the client
-        // CREDIT = bought_price_total (see the ledger rows below).
-        InvoicePassengerLedger::createRefundPassengers($refund_users, $system_id, $request->net_pice_total, $request->bought_price_total);
+        // Same accounting as a regular refund (InvoicesController::invoices_refund_save):
+        // supplier DEBIT = bought_price_total (returned to us), client CREDIT =
+        // net_pice_total (refunded to the client) -- see the ledger rows below.
+        InvoicePassengerLedger::createRefundPassengers($refund_users, $system_id, $request->bought_price_total, $request->net_pice_total);
         $refund_passenger_txt = $refund_mode === 'single' ? " - الراكب: " . $refund_users[0]->client_name : "";
 
         $create = Invoice::create([
@@ -545,9 +546,9 @@ $invoices = Invoice::select('*')
             "invoice_type" => $invoice_info->invoice_section,
             "es_id" => $newEsId,
             "invoice_date" => $invoice_info->invoice_date,
-            "debit_balance" => $request->net_pice_total,
+            "debit_balance" => $request->bought_price_total,
             "credit_balance" => 0,
-            "ledger_net_effect" => $request->net_pice_total,
+            "ledger_net_effect" => $request->bought_price_total,
             "transaction_txt" => " مرتجع الفاتورة " . $newEsId . $refund_passenger_txt,
             "transaction_type" => 1,
             "added_by" => Auth::user()->id,
@@ -560,8 +561,8 @@ $invoices = Invoice::select('*')
             "es_id" => $newEsId,
             "invoice_date" => $invoice_info->invoice_date,
             "debit_balance" => 0,
-            "credit_balance" => $request->bought_price_total,
-            "ledger_net_effect" => -$request->bought_price_total,
+            "credit_balance" => $request->net_pice_total,
+            "ledger_net_effect" => -$request->net_pice_total,
             "transaction_txt" => " مرتجع الفاتورة " . $newEsId . $refund_passenger_txt,
             "transaction_type" => 1,
             "added_by" => Auth::user()->id,
