@@ -1877,6 +1877,7 @@ $invoices = Invoice::select('*')
             "summary" => CounterPayments::summary($invoice_info),
             "client" => Supplier::find($invoice_info->invoice_beneficiaries),
             "banks" => Bank::orderBy('id')->get(['id', 'bank_name']),
+            "storages" => Storage::orderBy('id')->get(['id', 'name']),
         ]);
     }
 
@@ -1917,6 +1918,7 @@ $invoices = Invoice::select('*')
             // duplicate-submission guard (unchanged): the same payment again within 10 seconds
             $duplicateBond = Bond::where('invoice_id', $id)
                 ->where('is_invoice', 1)
+                ->where('type', 2)
                 ->where('amount', $moneyPay)
                 ->where('created_at', '>=', now()->subSeconds(10))
                 ->exists();

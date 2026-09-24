@@ -78,6 +78,9 @@ swal("", "{{$errors->first()}}", "info");
                 @if($summary['refunded'] > 0)
                 <tr><th>مسترد للعميل (مرتجعات)</th><td>{{$fmt($summary['refunded'])}} ج.م</td></tr>
                 @endif
+                @if($summary['paid_out'] > 0)
+                <tr><th>مردود للعميل (سندات دفع)</th><td>{{$fmt($summary['paid_out'])}} ج.م</td></tr>
+                @endif
                 @if($summary['remaining'] < 0)
                 <tr class="table-warning"><th>مستحق للعميل</th><td>{{$fmt(-$summary['remaining'])}} ج.م</td></tr>
                 @else
@@ -86,13 +89,56 @@ swal("", "{{$errors->first()}}", "info");
                 <tr><th>حالة السداد</th><td>{{$summary['label']}}</td></tr>
             </table>
 
-            @if($summary['remaining'] <= 0.005)
+            @if($summary['due_to_client'] > 0.005)
+            {{-- Refund payout: an ordinary payment voucher («سند دفع», BondsController::save)
+                 linked to this invoice; limited to the amount due to the client. --}}
+            <form action="{{route('site.bonds_save')}}" onsubmit="return validatePayout()" name="payoutForm" method="POST" autocomplete="off" style="max-width: 640px;">
+               @csrf
+                <input type="hidden" name="type_slctd" value="1">
+                <input type="hidden" name="invoice_id" value="{{$invoice_info->id}}">
+                <input type="hidden" name="supp_id" value="{{$invoice_info->invoice_beneficiaries}}">
+                <input type="hidden" name="commission" value="0">
+                <input type="hidden" name="sub_id" value="0">
+                <input type="hidden" name="crt_date" value="{{date('Y-m-d')}}">
+                <h6 class="mb-2">رد المبلغ للعميل</h6>
+                <p class="mb-1"><b>المبلغ المردود</b> <small class="text-muted">(حتى {{$fmt($summary['due_to_client'])}} ج.م)</small></p>
+                <input type="number" step="0.01" min="0.01" max="{{$summary['due_to_client']}}" name="amount" id="payout_amount" class="form-control" value="{{$summary['due_to_client']}}" style="text-align: right;direction: rtl;" required>
+                <br>
+                <p class="mb-1"><b>من الخزنة</b></p>
+                <select name="storage_id" class="form-select" required>
+                    @foreach($storages as $storage)
+                    <option value="{{$storage->id}}">{{$storage->name}}</option>
+                    @endforeach
+                </select>
+                <br>
+                <p class="mb-1"><b>طريقة الرد</b></p>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="money_way" id="out_cash" value="1" checked onchange="onOutWayChange()">
+                    <label class="form-check-label" for="out_cash">خزنة (نقدي)</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="money_way" id="out_bank" value="2" onchange="onOutWayChange()">
+                    <label class="form-check-label" for="out_bank">بنك</label>
+                </div>
+                <div id="out_bank_box" class="mt-2" style="display:none;">
+                    <select name="bank_id" id="out_bank_id" class="form-select">
+                        <option value="">-- اختر البنك --</option>
+                        @foreach($banks as $bank)
+                        <option value="{{$bank->id}}">{{$bank->bank_name}}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <br>
+                <input type="text" name="transaction_info" class="form-control" value="رد مبلغ مستحق لفاتورة {{$invoice_info->es_id}}">
+                <br>
+                <div class="d-grid gap-2">
+                    <button class="btn btn-warning"><i class="ri-refund-2-line"></i> تسجيل رد المبلغ للعميل (سند دفع)</button>
+                </div>
+            </form>
+            @elseif($summary['remaining'] <= 0.005)
                 <div class="alert alert-success border-0" style="font-size: 16px;">
                     <i class="ri-information-line"></i>
                     لا يوجد مبلغ متبقي على فاتورة {{$invoice_info->es_id}}.
-                    @if($summary['remaining'] < -0.005)
-                        المبلغ المستحق للعميل يُرد له بسند دفع من الخزنة أو البنك.
-                    @endif
                 </div>
             @else
             <form action="{{route('site.pay_part_save')}}" onsubmit="return validateForm()" name="myForm" method="POST" autocomplete="off" style="max-width: 640px;">
@@ -132,6 +178,17 @@ swal("", "{{$errors->first()}}", "info");
    <!--end col-->
 </div>
 <script type="text/javascript">
+function onOutWayChange() {
+    document.getElementById('out_bank_box').style.display = document.getElementById('out_bank').checked ? 'block' : 'none';
+}
+function validatePayout() {
+    var due = {{ $summary ? $summary['due_to_client'] : 0 }};
+    var x = parseFloat(document.forms["payoutForm"]["amount"].value);
+    if (isNaN(x) || x <= 0) { swal("", "برجاء إدخال مبلغ صحيح أكبر من صفر", "error"); return false; }
+    if (x > due + 0.005) { swal("", "قيمة الرد أكبر من المبلغ المستحق للعميل على الفاتورة.", "error"); return false; }
+    if (document.getElementById('out_bank').checked && !document.getElementById('out_bank_id').value) { swal("", "برجاء اختيار البنك", "error"); return false; }
+    return true;
+}
 function onWayChange() {
     document.getElementById('bank_box').style.display = document.getElementById('way_bank').checked ? 'block' : 'none';
 }

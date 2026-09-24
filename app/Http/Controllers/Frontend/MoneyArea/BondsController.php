@@ -9,6 +9,7 @@ use Auth;
 use Redirect;
 use App\Http\Requests\StoreBondRequest;
 use App\Http\Requests\UpdateBondRequest;
+use App\Services\CounterPayments;
 use App\Models\{
     Supplier,
     Invoice,
@@ -155,7 +156,24 @@ $date = $request->crt_date;
         // applied to InvoicesController::pay_part_save(). Without this,
         // two concurrent bond submissions touching the same storage/bank
         // can both read the same starting balance and one update is lost.
-        DB::transaction(function () use ($request, $path, $type_slctd, $storage_id, $sub_id, $supp_id, $amount, $commission, $money_way, $bank_id, $collector_info, $transaction_info, $date, $total) {
+        // Optional link to a Counter Customer invoice: a refund payout ("رد مبلغ للعميل")
+        // that settles the amount due to the client on that invoice.
+        $linkInvoiceId = (int) $request->invoice_id;
+
+        $payoutError = DB::transaction(function () use ($request, $path, $type_slctd, $storage_id, $sub_id, $supp_id, $amount, $commission, $money_way, $bank_id, $collector_info, $transaction_info, $date, $total, $linkInvoiceId) {
+        // Linked payout: lock the invoice FIRST (same order as the invoice payment screen:
+        // invoice -> storage -> bank) and never pay out more than is due to the client.
+        $linkInvoice = null;
+        if ($linkInvoiceId) {
+            $linkInvoice = Invoice::where('id', $linkInvoiceId)->lockForUpdate()->first();
+            if (!$linkInvoice || !CounterPayments::isPayable($linkInvoice) || (int) $linkInvoice->invoice_beneficiaries !== (int) $supp_id) {
+                return Redirect::back()->withErrors(['msg' => 'الفاتورة المرتبطة غير صحيحة لهذا الحساب']);
+            }
+            if ((float) $amount > CounterPayments::summary($linkInvoice)['due_to_client'] + 0.005) {
+                return Redirect::back()->withErrors(['msg' => 'قيمة الرد أكبر من المبلغ المستحق للعميل على الفاتورة.']);
+            }
+        }
+
         $storage_info = Storage::where('id',$storage_id)->lockForUpdate()->first();
         abort_if(!$storage_info, 404);
 
@@ -197,6 +215,11 @@ $date = $request->crt_date;
             ->update([
                 "es_id" => "FLY-BD" . $createBond->id,
             ]);
+
+        // linked to the invoice -> part of its payment history (not deletable / editable)
+        if ($linkInvoice) {
+            Bond::where('id', $createBond->id)->update(["is_invoice" => 1, "invoice_id" => $linkInvoice->id]);
+        }
         
         
   
@@ -220,7 +243,7 @@ $date = $request->crt_date;
             "debit_balance" => 0,
             "credit_balance" => $total,
             "ledger_net_effect" => -$total,
-            "transaction_txt" => "سند دفع من خزينة $storage_info->name لصالح $supplier->name",
+            "transaction_txt" => "سند دفع من خزينة $storage_info->name لصالح $supplier->name" . ($linkInvoice ? " - رد مبلغ مستحق لفاتورة {$linkInvoice->es_id}" : ""),
             "transaction_type" => 2,
             "added_by" => Auth::user()->id,
             "crt_date" => date('Y-m-d'),
@@ -237,7 +260,7 @@ $date = $request->crt_date;
             "debit_balance" => $amount,
             "credit_balance" => 0,
             "ledger_net_effect" => $amount,
-            "transaction_txt" => "سند دفع من خزينة $storage_info->name لصالح $supplier->name",
+            "transaction_txt" => "سند دفع من خزينة $storage_info->name لصالح $supplier->name" . ($linkInvoice ? " - رد مبلغ مستحق لفاتورة {$linkInvoice->es_id}" : ""),
             "transaction_type" => 2,
             "added_by" => Auth::user()->id,
             "crt_date" => date('Y-m-d'),
@@ -278,7 +301,14 @@ $date = $request->crt_date;
                 'created_by' => Auth::user()->id,
             ]);
         }
+        return null;
         });
+        if ($payoutError) {
+            return $payoutError;
+        }
+        if ($linkInvoiceId) {
+            return redirect()->route('site.invoices_ajax')->with('success', 'تم رد المبلغ للعميل');
+        }
 
 
 

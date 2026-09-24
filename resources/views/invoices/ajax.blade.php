@@ -223,9 +223,9 @@ $(document).ready(function () {
                     let badge = '';
                     const c = row.counter;
                     if (c) {
-                        const cls = { unpaid: 'bg-dark', partial: 'bg-secondary', paid: 'bg-success', nothing_due: 'bg-light text-dark', due_to_client: 'bg-warning text-dark' }[c.status] || 'bg-dark';
+                        const cls = { unpaid: 'bg-dark', partial: 'bg-secondary', paid: 'bg-success', settled: 'bg-success', nothing_due: 'bg-light text-dark', due_to_client: 'bg-warning text-dark' }[c.status] || 'bg-dark';
                         badge = `<span class="badge ${cls} my_badge">${esc(c.label)}</span>`
-                            + `<br><small>المسدد: ${fmt(c.paid)}` + (c.refunded > 0 ? `<br>مرتجع: ${fmt(c.refunded)}` : '')
+                            + `<br><small>المسدد: ${fmt(c.paid)}` + (c.refunded > 0 ? `<br>مرتجع: ${fmt(c.refunded)}` : '') + (c.paid_out > 0 ? `<br>مردود للعميل: ${fmt(c.paid_out)}` : '')
                             + (c.remaining < 0 ? `<br>مستحق للعميل: ${fmt(-c.remaining)}` : `<br>المتبقي: ${fmt(c.remaining)}`) + `</small>`;
                     }
                     let buttons = '';
@@ -262,7 +262,9 @@ $(document).ready(function () {
                     if (row.counter) {
                         html += row.counter.remaining > 0.005
                             ? `<li><a href="/invoices/pay-part/${id}" class="dropdown-item"><i class="ri-wallet-3-line"></i> سداد</a></li>`
-                            : `<li><span class="dropdown-item disabled"><i class="ri-checkbox-circle-line"></i> ${esc(row.counter.label)}</span></li>`;
+                            : (row.counter.due_to_client > 0.005
+                                ? `<li><a href="/invoices/pay-part/${id}" class="dropdown-item"><i class="ri-refund-2-line"></i> رد مبلغ للعميل</a></li>`
+                                : `<li><span class="dropdown-item disabled"><i class="ri-checkbox-circle-line"></i> ${esc(row.counter.label)}</span></li>`);
                     }
                     html += `
                                 <li><a href="${reissueUrl}" class="dropdown-item"><i class="ri-arrow-go-forward-line"></i> اعادة اصدار</a></li>

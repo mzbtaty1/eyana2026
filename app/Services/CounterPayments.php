@@ -18,7 +18,9 @@ use Illuminate\Support\Facades\DB;
  *   total     = the invoice's current sale total (sum of its passengers)
  *   paid      = invoices.invoice_money_pay (sum of its payments)
  *   refunded  = client refunds («مسترد للعميل») of refund invoices made from it
- *   remaining = total - paid - refunded   (negative = «مستحق للعميل»)
+ *   paid_out  = refund payouts to the client linked to the invoice (payment vouchers
+ *               «سند دفع» with invoice_id, created from the invoice's payment screen)
+ *   remaining = total - paid - refunded + paid_out   (negative = «مستحق للعميل»)
  */
 class CounterPayments
 {
@@ -83,14 +85,21 @@ class CounterPayments
             }
         }
 
+        $paidOut = DB::table('bonds')->where('type', 1)->where('is_invoice', 1)->whereIn('invoice_id', $ids)
+            ->groupBy('invoice_id')->selectRaw('invoice_id, SUM(amount) s')->pluck('s', 'invoice_id');
+
         $out = [];
         foreach ($invoices as $id => $inv) {
             $total = round((float) ($totals[$inv->ticket_system_id] ?? 0), 2);
             $paid = round((float) ($inv->invoice_money_pay ?? 0), 2);
             $ref = round($refunded[(int) $id] ?? 0, 2);
-            $remaining = round($total - $paid - $ref, 2);
+            $out_ = round((float) ($paidOut[$id] ?? 0), 2);
+            $remaining = round($total - $paid - $ref + $out_, 2);
             if ($remaining < -0.005) {
                 $status = 'due_to_client'; $label = 'مستحق للعميل';
+            } elseif ($remaining <= 0.005 && $out_ > 0.005) {
+                // a refund due to the client has been paid back to them
+                $status = 'settled'; $label = 'تمت التسوية مع العميل';
             } elseif ($remaining <= 0.005) {
                 $status = $paid > 0 ? 'paid' : 'nothing_due';
                 $label = $paid > 0 ? 'تم السداد' : 'لا يوجد مستحق';
@@ -99,7 +108,7 @@ class CounterPayments
             } else {
                 $status = 'partial'; $label = 'سداد جزئي';
             }
-            $out[$id] = ['total' => $total, 'paid' => $paid, 'refunded' => $ref, 'remaining' => $remaining,
+            $out[$id] = ['total' => $total, 'paid' => $paid, 'refunded' => $ref, 'paid_out' => $out_, 'remaining' => $remaining,
                          'due_to_client' => $remaining < -0.005 ? -$remaining : 0.0, 'status' => $status, 'label' => $label];
         }
         return $out;
