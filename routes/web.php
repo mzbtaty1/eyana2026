@@ -152,7 +152,7 @@ Route::middleware(['auth' , 'check_status'])->group(function(){
     
     Route::get('/accounts-statement/print/{invoice_beneficiaries}/{date_from?}/{date_to?}/{transaction_type?}' , [AccountsController::class , 'accounts_statement_print_all'])->name('site.accounts_statement_print_all');
     
-    Route::get('/accounts-statement/excel/{invoice_beneficiaries?}/{date_from?}{date_to?}/{transaction_type?}' , [AccountsController::class , 'accounts_statement_print_excel'])->name('site.accounts_statement_print_excel');
+    Route::get('/accounts-statement/excel/{invoice_beneficiaries?}/{date_from?}/{date_to?}/{transaction_type?}' , [AccountsController::class , 'accounts_statement_print_excel'])->name('site.accounts_statement_print_excel');
     
     Route::get('/accounts-statement/custom' , [AccountsController::class , 'accounts_statement_custom_get'])->name('site.accounts_statement_custom_get');
     

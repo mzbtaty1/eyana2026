@@ -72,7 +72,9 @@
                    @endif
                    <?php
                    
-                   $total_blnc = 0;
+                   // Seeded with the carried-forward opening balance (0 when there is no
+                   // date filter), same as the Account Statement screen and Print Preview.
+                   $total_blnc = $opening_balance_for_period;
                   
                        
                    
@@ -82,6 +84,15 @@ $total_cumulative_balance += $AccountStatement->cumulative_balance;
  }
                    
                    ?>
+               @if($date_from !== null && $date_to !== null)
+                  <tr>
+                     <td colspan="7" style="text-align: right;font-weight:bold;">رصيد افتتاحي للفترة (مرحل حتى {{$date_from}})</td>
+                     <td></td>
+                     <td></td>
+                     <td style="text-align: right;font-weight:bold;">{{number_format($opening_balance_for_period , 2)}}</td>
+                     <td></td>
+                  </tr>
+               @endif
                <?php $x = 0; ?>
                   @foreach($AccountStatements as $key => $AccountStatement)
                    
@@ -90,16 +101,19 @@ $total_cumulative_balance += $AccountStatement->cumulative_balance;
                     $closing = (int) $AccountStatement->debit_balance - (int) $AccountStatement->credit_balance;
                    $total_blnc += $closing;
                    
+                   // Lookups come from maps batched in AccountatExport (no per-row queries).
+                   // Reset per row so a row never shows the previous row's passengers.
+                   $ticket_info = new App\Models\Invoice();
+                   $users = collect();
+                   $bond = new App\Models\Bond();
                 if($AccountStatement->trans_storage == 1){
 //                    dd(4);
-                  $ticket_info = App\Models\Bond::select('*')->where('es_id' , $AccountStatement->es_id)->get();
-                  $ticket_info = $ticket_info[0];    
+                  $ticket_info = $bondsByEsId->get($AccountStatement->es_id) ?? new App\Models\Bond();
                $bond = $ticket_info;    
                 }else{
               if($AccountStatement->is_supp_account == 0){
-                                            $ticket_info = App\Models\Invoice::select('*')->where('es_id' , $AccountStatement->es_id)->get();
-                   $ticket_info = $ticket_info[0];
-                   $users = App\Models\TicketUser::select('*')->where('ticket_system_id' , $ticket_info->ticket_system_id)->get();
+                   $ticket_info = $invoicesByEsId->get($AccountStatement->es_id) ?? new App\Models\Invoice();
+                   $users = $usersByTicketSystemId->get($ticket_info->ticket_system_id) ?? collect();
                    
                       
                       $total_client_net_pice = 0;
@@ -252,15 +266,13 @@ $total_cumulative_balance += $AccountStatement->cumulative_balance;
                          @elseif($bond->money_way == 2)
                          تحويل بنكي
                     <?php
-                         $bank_info = App\Models\Bank::select('*')->where('id',$bond->bank_id)->get();
-                         $bank_info = $bank_info[0];
+                         $bank_info = $banksById->get($bond->bank_id) ?? new App\Models\Bank();
                          ?>
                          {{$bank_info->bank_name}}
                          @else
                          تحصيل من المندوب : 
                          <?php
-                         $collector_info = App\Models\Collector::select('*')->where('id',$bond->collector_info)->get();
-                         $collector_info = $collector_info[0];
+                         $collector_info = $collectorsById->get($bond->collector_info) ?? new App\Models\Collector();
                          ?>
                          {{$collector_info->name}}
                          
@@ -272,8 +284,7 @@ $total_cumulative_balance += $AccountStatement->cumulative_balance;
                           <br>
                          <?php
                          $sub_id = (int) $AccountStatement->sub_id;
-                          $min_info3 = App\Models\SubStorage::select('*')->where('id' , $sub_id)->get();
-                         $min_info3 = $min_info3[0];
+                          $min_info3 = $subStoragesById->get($sub_id) ?? new App\Models\SubStorage();
                              
                          
                          ?>
@@ -308,8 +319,7 @@ $total_cumulative_balance += $AccountStatement->cumulative_balance;
                       
                 <td style="text-align: right;">
                     <?php
-                    $mem = App\Models\User::select('*')->where('id',$AccountStatement->added_by)->get();
-                    $mem = $mem[0];
+                    $mem = $usersById->get($AccountStatement->added_by) ?? new App\Models\User();
                     ?>
                     {{$mem->name}}
                     
@@ -331,5 +341,14 @@ $total_cumulative_balance += $AccountStatement->cumulative_balance;
                   @endforeach
                  
                </tbody>
+               <tfoot>
+                  <tr>
+                     <td colspan="7" style="text-align: right;font-weight:bold;">الإجمالي</td>
+                     <td style="text-align: right;font-weight:bold;">{{number_format($total_debit_balance , 2)}}</td>
+                     <td style="text-align: right;font-weight:bold;">{{number_format($total_credit_balance , 2)}}</td>
+                     <td style="text-align: right;font-weight:bold;">{{number_format($total_blnc , 2)}}</td>
+                     <td></td>
+                  </tr>
+               </tfoot>
                
 </table>

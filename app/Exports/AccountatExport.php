@@ -1,8 +1,7 @@
 <?php
 
 namespace App\Exports;
-use App\Models\AccountStatement;
-use App\Models\Supplier;
+use App\Models\{AccountStatement, Supplier, Bond, Invoice, TicketUser, Bank, Collector, SubStorage, User};
 //use Maatwebsite\Excel\Concerns\FromCollection;
 
 
@@ -62,7 +61,9 @@ class AccountatExport implements FromView
 //       dd($st , $AccountStatements->get());
         
         
-        if(isset($this->date_from) && isset($this->date_to)){
+        $isDateFiltered = isset($this->date_from) && isset($this->date_to);
+
+        if($isDateFiltered){
             $AccountStatements = $AccountStatements->whereBetween('crt_date' , [$this->date_from , $this->date_to]);
         }
         
@@ -71,7 +72,14 @@ class AccountatExport implements FromView
         }
          
         
-        $AccountStatements = $AccountStatements->get();
+        // Same chronological ledger order as the Account Statement screen and
+        // Print Preview (see AccountsController::accounts_statement_search()).
+        $AccountStatements = $AccountStatements->orderBy('crt_date', 'asc')->orderBy('id', 'asc')->get();
+
+        // Same carried-forward opening balance as the screen and Print Preview.
+        $opening_balance_for_period = $isDateFiltered
+            ? AccountStatement::openingBalanceBefore($search_status, $this->invoice_beneficiaries, $this->date_from, $this->transaction_type)
+            : 0;
         
         
         
@@ -83,13 +91,44 @@ class AccountatExport implements FromView
         foreach ($AccountStatements as $AccountStatement) {
             $total_credit_balance += $AccountStatement->credit_balance;
         }
+
+        // Batched lookups replacing the per-row queries the Excel view used to
+        // run (same approach as accounts_statement_search()).
+        $esIds = $AccountStatements->pluck('es_id')->filter()->unique();
+        $bondsByEsId = Bond::whereIn('es_id', $esIds)->get()->keyBy('es_id');
+        $invoicesByEsId = Invoice::whereIn('es_id', $esIds)->get()->keyBy('es_id');
+
+        $ticketSystemIds = $invoicesByEsId->pluck('ticket_system_id')->filter()->unique();
+        $usersByTicketSystemId = TicketUser::whereIn('ticket_system_id', $ticketSystemIds)->get()->groupBy('ticket_system_id');
+
+        $bankIds = $bondsByEsId->where('money_way', 2)->pluck('bank_id')->filter()->unique();
+        $banksById = Bank::whereIn('id', $bankIds)->get()->keyBy('id');
+
+        $collectorIds = $bondsByEsId->filter(fn ($b) => $b->money_way != 1 && $b->money_way != 2)
+            ->pluck('collector_info')->filter()->unique();
+        $collectorsById = Collector::whereIn('id', $collectorIds)->get()->keyBy('id');
+
+        $subIds = $AccountStatements->filter(fn ($a) => $a->trans_storage == 1 && (int) $a->sub_id !== 0)
+            ->pluck('sub_id')->filter()->unique();
+        $subStoragesById = SubStorage::whereIn('id', $subIds)->get()->keyBy('id');
+
+        $addedByIds = $AccountStatements->pluck('added_by')->filter()->unique();
+        $usersById = User::whereIn('id', $addedByIds)->get()->keyBy('id');
         
      return view('excel.accountat_excel', [
             'AccountStatements' => $AccountStatements,
          "st" => $st,
                      "total_debit_balance" => $total_debit_balance,
             "total_credit_balance" => $total_credit_balance,
+            "opening_balance_for_period" => $opening_balance_for_period,
             "supplier" => $supplier,
+            "bondsByEsId" => $bondsByEsId,
+            "invoicesByEsId" => $invoicesByEsId,
+            "usersByTicketSystemId" => $usersByTicketSystemId,
+            "banksById" => $banksById,
+            "collectorsById" => $collectorsById,
+            "subStoragesById" => $subStoragesById,
+            "usersById" => $usersById,
          
             "date_from" => $this->date_from,
             "date_to" => $this->date_to,
