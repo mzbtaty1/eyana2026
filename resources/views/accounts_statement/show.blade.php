@@ -252,7 +252,7 @@ $url2 = route('site.accounts_statement_print_excel' , [
             @elseif($AccountStatement->transaction_type == 3)
                 أرصدة افتتاحية /
             @elseif($AccountStatement->transaction_type == 4)
-                سداد /
+                {{$kindLabel ?? 'سداد'}} /
             @endif
             {{$type}}
         </td>

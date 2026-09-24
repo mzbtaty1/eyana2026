@@ -517,7 +517,7 @@ $invoices = Invoice::select('*')
         // Same accounting as a regular refund (InvoicesController::invoices_refund_save):
         // supplier DEBIT = bought_price_total (returned to us), client CREDIT =
         // net_pice_total (refunded to the client) -- see the ledger rows below.
-        $refund_markers = InvoicePassengerLedger::createRefundPassengers($refund_users, $system_id, $request->bought_price_total, $request->net_pice_total, $refund_mode);
+        $refund_markers = InvoicePassengerLedger::createRefundPassengers($refund_users, $system_id, $request->bought_price_total, $request->net_pice_total, $refund_mode, (int) $invoice_info->id);
         $refund_passenger_txt = $refund_mode === 'single' ? " - الراكب: " . $refund_users[0]->client_name : "";
 
         $create = Invoice::create([

@@ -211,7 +211,7 @@ class AccountatExport implements FromView, WithEvents, WithTitle
     private function typeLabel($AccountStatement, $invoice = null): string
     {
         $kind = InvoicePassengerLedger::kindLabel($AccountStatement, $invoice);
-        $prefix = [1 => ($kind ?? 'تذاكر') . ' / ', 2 => 'سندات / ', 3 => 'أرصدة افتتاحية / ', 4 => 'سداد / '][$AccountStatement->transaction_type] ?? '';
+        $prefix = [1 => ($kind ?? 'تذاكر') . ' / ', 2 => 'سندات / ', 3 => 'أرصدة افتتاحية / ', 4 => ($kind ?? 'سداد') . ' / '][$AccountStatement->transaction_type] ?? '';
         $type = [
             1 => 'فواتير الطيران', 2 => 'فواتير تأشيرات', 3 => 'فواتير سياحة داخلية',
             4 => 'فواتير سياحة خارجية', 5 => 'فواتير سياحة دينية', 6 => 'فواتير تأمينات السفر',

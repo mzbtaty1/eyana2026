@@ -18,7 +18,7 @@ swal("", "{{$errors->first()}}", "info");
    <div class="col-lg-12">
       <div class="card">
          <div class="card-header">
-            <h5 class="card-title mb-0"> سداد الفاتورة : <b>{{$invoice_info->es_id}}</b> </h5>
+            <h5 class="card-title mb-0"> سداد الفاتورة : <b>{{$invoice_info->es_id}}</b> — {{$client->name ?? ''}} </h5>
          </div>
          <div class="card-body">
                  <table class="table table-bordered" id="dynamicTableTwo">
@@ -63,94 +63,94 @@ swal("", "{{$errors->first()}}", "info");
                    @endforeach
                </table>
                <br>
-             
-            <form action="{{route('site.pay_part_save')}}" onsubmit="return validateForm()" name="myForm" method="POST" autocomplete="off">
+            @if(!$summary)
+                <div class="alert alert-warning border-0" style="font-size: 16px;">
+                    <i class="ri-information-line"></i>
+                    تسجيل السداد متاح لفواتير عميل الكونتر فقط.
+                </div>
+            @else
+            <?php $fmt = fn ($v) => number_format((float) $v, 2); ?>
+            <table class="table table-bordered" style="max-width: 640px;">
+                <tr><th>رقم الفاتورة</th><td>{{$invoice_info->es_id}}</td></tr>
+                <tr><th>العميل</th><td>{{$client->name ?? '-'}}</td></tr>
+                <tr><th>قيمة الفاتورة</th><td>{{$fmt($summary['total'])}} ج.م</td></tr>
+                <tr><th>المسدد</th><td>{{$fmt($summary['paid'])}} ج.م</td></tr>
+                @if($summary['refunded'] > 0)
+                <tr><th>مسترد للعميل (مرتجعات)</th><td>{{$fmt($summary['refunded'])}} ج.م</td></tr>
+                @endif
+                @if($summary['remaining'] < 0)
+                <tr class="table-warning"><th>مستحق للعميل</th><td>{{$fmt(-$summary['remaining'])}} ج.م</td></tr>
+                @else
+                <tr class="table-primary"><th>المتبقي</th><td><b>{{$fmt($summary['remaining'])}} ج.م</b></td></tr>
+                @endif
+                <tr><th>حالة السداد</th><td>{{$summary['label']}}</td></tr>
+            </table>
+
+            @if($summary['remaining'] <= 0.005)
+                <div class="alert alert-success border-0" style="font-size: 16px;">
+                    <i class="ri-information-line"></i>
+                    لا يوجد مبلغ متبقي على فاتورة {{$invoice_info->es_id}}.
+                    @if($summary['remaining'] < -0.005)
+                        المبلغ المستحق للعميل يُرد له بسند دفع من الخزنة أو البنك.
+                    @endif
+                </div>
+            @else
+            <form action="{{route('site.pay_part_save')}}" onsubmit="return validateForm()" name="myForm" method="POST" autocomplete="off" style="max-width: 640px;">
                @csrf
                 <input type="hidden" name="id" value="{{$invoice_info->id}}">
-
-                
-           
-                <?php
-  $users = App\Models\TicketUser::select('*')->where('ticket_system_id' , $invoice_info->ticket_system_id)->get();
-                      
-                      $total_client_net_pice = 0;
-                      $total_client_bought_price = 0;
-                      foreach($users as $user){
-                          $total_client_net_pice += $user->client_net_pice;
-                          $total_client_bought_price += $user->client_bought_price;
-                      }                
-                ?>
-          
-                       <div class="row">
-      <div class="col-sm">
-          <h4>
-          اجمالي سعر البيع الحالي : {{$total_client_bought_price}} ج.م
-          </h4>
-      </div>
-      <div class="col-sm">
-          <h4>
-اجمالي المسدد من الفاتورة : {{$invoice_info->invoice_money_pay}} ج.م
-          </h4>
-      </div>
-    </div>
-                
-               <hr>
-        @if($invoice_info->invoice_money_pay == $total_client_bought_price)
-                <div class="alert alert-success border-0" style="  font-size: 16px;">
-                    <i class="ri-information-line"></i>
-                تم سداد فاتورة : {{$invoice_info->es_id}} بالكامل
-                </div>
-                @else
-                <h5 style="  line-height: 27px;">
-                المبلغ الذي تريد اضافتة للدفع : 
+                <p class="mb-1"><b>مبلغ السداد</b> <small class="text-muted">(حتى {{$fmt($summary['remaining'])}} ج.م)</small></p>
+                <input type="number" step="0.01" min="0.01" max="{{$summary['remaining']}}" name="money_pay" id="money_pay" class="form-control" placeholder="المبلغ : (*)" style="text-align: right;direction: rtl;" required>
                 <br>
-                    يمكنك كتابة مبالغ تصل الي {{$total_client_bought_price - $invoice_info->invoice_money_pay}} جنية فقط
-                </h5>
-                
-               <input type="tel" name="money_pay" id="money_pay" class="form-control" inputmode="numeric" oninput="this.value = this.value.replace(/\D+/g, '')" placeholder="المبلغ : (*)" style="text-align: right;direction: rtl;">
-                
-               <br> 
-               <div class="d-grid gap-2">
-                  <button class="btn btn-primary">
-                  <i class="ri-save-line"></i>
-دفع لصالح الفاتورة 
-                   </button>
-                   
-@endif
-                   
-               </div>
+                <p class="mb-1"><b>طريقة السداد</b></p>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="money_way" id="way_cash" value="1" checked onchange="onWayChange()">
+                    <label class="form-check-label" for="way_cash">خزنة (نقدي)</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="money_way" id="way_bank" value="2" onchange="onWayChange()">
+                    <label class="form-check-label" for="way_bank">بنك</label>
+                </div>
+                <div id="bank_box" class="mt-2" style="display:none;">
+                    <select name="bank_id" id="bank_id" class="form-select">
+                        <option value="">-- اختر البنك --</option>
+                        @foreach($banks as $bank)
+                        <option value="{{$bank->id}}">{{$bank->bank_name}}</option>
+                        @endforeach
+                    </select>
+                    <small class="text-muted">السداد البنكي يُسجل في البنك المختار وفي الخزنة، مثل سند القبض البنكي.</small>
+                </div>
+                <br>
+                <div class="d-grid gap-2">
+                    <button class="btn btn-primary"><i class="ri-save-line"></i> تسجيل السداد</button>
+                </div>
             </form>
+            @endif
+            @endif
          </div>
       </div>
    </div>
    <!--end col-->
 </div>
-<script src="//ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
 <script type="text/javascript">
-    
-function validateForm() {
-    var val = {{$total_client_bought_price - $invoice_info->invoice_money_pay}};
-    
-  let x = document.forms["myForm"]["money_pay"].value;
-  if (x == "") {
-    swal("", "برجاء ادخال القيمة التي ترغب في سدادها", "error");
-    return false;
-  }
-    
-     if (x == 0) {
-    swal("", "يرجي ادخال قيمة صحيحة للسداد", "error");
-    return false;
-  }
-   
-     if (x > val) {
-         var msg = "يرجي ادخال قيمة للسداد لا تزيد عن " + val + " ج.م ";
-    swal("", msg, "error");
-    return false;
-  }
-   
+function onWayChange() {
+    document.getElementById('bank_box').style.display = document.getElementById('way_bank').checked ? 'block' : 'none';
 }
-    
-    
-    
+function validateForm() {
+    var remaining = {{ $summary ? max(0, $summary['remaining']) : 0 }};
+    var x = parseFloat(document.forms["myForm"]["money_pay"].value);
+    if (isNaN(x) || x <= 0) {
+        swal("", "برجاء إدخال مبلغ سداد صحيح أكبر من صفر", "error");
+        return false;
+    }
+    if (x > remaining + 0.005) {
+        swal("", "قيمة السداد أكبر من المبلغ المتبقي.", "error");
+        return false;
+    }
+    if (document.getElementById('way_bank').checked && !document.getElementById('bank_id').value) {
+        swal("", "برجاء اختيار البنك", "error");
+        return false;
+    }
+    return true;
+}
 </script>
 @endsection

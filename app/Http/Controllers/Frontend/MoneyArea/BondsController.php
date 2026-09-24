@@ -466,6 +466,11 @@ if ($request->money_way2 == 2) {
     public function delete($id)
     {
         $id = (int) $id;
+        // Invoice-payment vouchers (counter-customer "سداد") are part of the invoice's
+        // payment history: never deleted or edited here -- a correction is a reversing entry.
+        if ((int) Bond::where('id', $id)->value('is_invoice') === 1) {
+            return Redirect::back()->withErrors(['msg' => 'لا يمكن حذف أو تعديل سند سداد فاتورة؛ سجل السداد محفوظ في كشف الحساب والخزنة/البنك. للتصحيح استخدم قيد عكسي.']);
+        }
 
         // P2 safety fix: lock the Bond row plus whichever Storage/Bank rows
         // it moved money through, and make the reversal + delete atomic,
@@ -575,6 +580,11 @@ if ($request->money_way2 == 2) {
     public function edit($id)
     {
                  $id = (int) $id;
+        // Invoice-payment vouchers (counter-customer "سداد") are part of the invoice's
+        // payment history: never deleted or edited here -- a correction is a reversing entry.
+        if ((int) Bond::where('id', $id)->value('is_invoice') === 1) {
+            return Redirect::back()->withErrors(['msg' => 'لا يمكن حذف أو تعديل سند سداد فاتورة؛ سجل السداد محفوظ في كشف الحساب والخزنة/البنك. للتصحيح استخدم قيد عكسي.']);
+        }
         $check_bond = Bond::select('*')->where('id',$id)->get();
         abort_if(count($check_bond) == 0 , 404);
         $check_bond = $check_bond[0];
@@ -607,6 +617,11 @@ if ($request->money_way2 == 2) {
     public function save_update(UpdateBondRequest $request)
     {
        $id = (int) $request->bond_id;
+        // Invoice-payment vouchers (counter-customer "سداد") are part of the invoice's
+        // payment history: never deleted or edited here -- a correction is a reversing entry.
+        if ((int) Bond::where('id', $id)->value('is_invoice') === 1) {
+            return Redirect::back()->withErrors(['msg' => 'لا يمكن حذف أو تعديل سند سداد فاتورة؛ سجل السداد محفوظ في كشف الحساب والخزنة/البنك. للتصحيح استخدم قيد عكسي.']);
+        }
           $check_bond = Bond::select('*')->where('id',$id)->get();
         abort_if(count($check_bond) == 0 , 404);
         $check_bond = $check_bond[0];

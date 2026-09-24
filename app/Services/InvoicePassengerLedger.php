@@ -24,11 +24,13 @@ use RuntimeException;
  *
  * Row marker (account_statements.description, JSON, new rows only):
  *   {"kind": "sale"|"edit"|"reissue"|"refund", "mode": "full"|"single" (refunds),
- *    "scope": "whole"|"passenger" (edits),
+ *    "source_invoice": <id> (refunds: the invoice refunded), "scope": "whole"|"passenger" (edits),
  *    "lines": [{"pid", "name", "booking", "debit", "credit"}, ...]}
  * "lines" is that row's exact per-passenger breakdown as shown on the Account
  * Statement / Print Preview / Excel. Rows without a marker (all historical rows)
  * are shown from the passengers' current amounts, as before.
+ * Invoice payments (transaction_type 4) carry {"kind": "payment", "method":
+ * "cash"|"bank", "bank_id", "bank_name", "bond_id"} (see CounterPayments).
  *
  * Date rule: an edit never changes the original rows; it adds adjustment rows
  * dated TODAY with each passenger's difference. Refunds (incl. a full refund of the
@@ -271,6 +273,14 @@ class InvoicePassengerLedger
      */
     public static function kindLabel($row, $invoice = null): ?string
     {
+        if ((int) $row->transaction_type === 4) {
+            // invoice payment: method recorded on the row since the counter-payment screen
+            // (all earlier invoice payments were treasury/cash payments)
+            $m = self::marker($row);
+            return ($m['kind'] ?? '') === 'payment' && ($m['method'] ?? '') === 'bank'
+                ? 'سداد - بنك ' . ($m['bank_name'] ?? '')
+                : 'سداد';
+        }
         $kind = self::rowKind($row);
         if ($kind === null) {
             return null;
@@ -450,7 +460,7 @@ class InvoicePassengerLedger
      * pass just that passenger: it receives the full amounts.
      * Returns the refund rows' markers: ['debit' => marker, 'credit' => marker].
      */
-    public static function createRefundPassengers(Collection $sourceUsers, string $newSystemId, $debitTotal, $creditTotal, string $mode = 'full'): array
+    public static function createRefundPassengers(Collection $sourceUsers, string $newSystemId, $debitTotal, $creditTotal, string $mode = 'full', ?int $sourceInvoiceId = null): array
     {
         $sourceUsers = $sourceUsers->values();
         $debit = self::splitEqually($debitTotal, $sourceUsers->count());
@@ -473,8 +483,8 @@ class InvoicePassengerLedger
             $cLines[] = ['pid' => $u->id, 'name' => (string) $user->client_name, 'booking' => (string) $user->client_booking_id, 'debit' => null, 'credit' => $credit[$i]];
         }
         return [
-            'debit' => self::encode(['kind' => 'refund', 'mode' => $mode, 'lines' => $dLines]),
-            'credit' => self::encode(['kind' => 'refund', 'mode' => $mode, 'lines' => $cLines]),
+            'debit' => self::encode(['kind' => 'refund', 'mode' => $mode, 'source_invoice' => $sourceInvoiceId, 'lines' => $dLines]),
+            'credit' => self::encode(['kind' => 'refund', 'mode' => $mode, 'source_invoice' => $sourceInvoiceId, 'lines' => $cLines]),
         ];
     }
 

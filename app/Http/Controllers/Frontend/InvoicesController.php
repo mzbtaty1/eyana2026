@@ -7,9 +7,10 @@ use Illuminate\Http\Request;
 use Auth;
 use Redirect;
 use Illuminate\Support\Carbon;
-use App\Models\{Supplier, Invoice, TicketUser, TicketVendor, Airline, AccountStatement , Log , TransactionBalance,Storage,StorageStatement,Bond , User};
+use App\Models\{Supplier, Invoice, TicketUser, TicketVendor, Airline, AccountStatement , Log , TransactionBalance,Storage,StorageStatement,Bond , User, Bank, BankStatement};
 use Yajra\DataTables\Facades\DataTables;
 use App\Services\InvoicePassengerLedger;
+use App\Services\CounterPayments;
 
 use DB;
 
@@ -253,7 +254,10 @@ public function getInvoices3Months(Request $request)
         $markedRows = AccountStatement::whereIn('es_id', $rows->pluck('es_id')->filter())->where('transaction_type', 1)
             ->whereNotNull('description')->orderBy('id')->get(['es_id', 'description', 'crt_date'])->groupBy('es_id');
 
-        $data = $rows->map(function ($r) use ($vendorNames, $passengers, $supplierNames, $userNames, $refundRows, $markedRows) {
+        // payment status / paid / remaining: Counter Customer invoices only (batched for the page)
+        $counterSummaries = CounterPayments::summaries($rows);
+
+        $data = $rows->map(function ($r) use ($vendorNames, $passengers, $supplierNames, $userNames, $refundRows, $markedRows, $counterSummaries) {
             $pax = $passengers->get($r->ticket_system_id, collect());
             $isRefund = str_starts_with((string) $r->es_id, 'FLY-RD');
             $sumNet = $pax->sum(fn ($u) => (float) ($u->client_net_pice ?? 0));
@@ -315,8 +319,7 @@ public function getInvoices3Months(Request $request)
                 'sale' => number_format($sale, 2, '.', ''),
                 'profit' => number_format($sale - $cost, 2, '.', ''),
                 'creator' => $userNames[$r->invoice_create_by] ?? '-',
-                'money_pay' => (float) ($r->invoice_money_pay ?? 0),
-                'total_bought' => $sumBought,
+                'counter' => $counterSummaries[$r->id] ?? null,          // null = no payment status (not a counter invoice)
                 'invoice_status' => (int) ($r->invoice_status ?? 0),
             ];
         });
@@ -1783,7 +1786,7 @@ $invoices = Invoice::select('*')
         ]);
 
         // Supplier debit = bought_price_total, client credit = net_pice_total (see below).
-        $refund_markers = InvoicePassengerLedger::createRefundPassengers($refund_users, $system_id, $request->bought_price_total, $request->net_pice_total, $refund_mode);
+        $refund_markers = InvoicePassengerLedger::createRefundPassengers($refund_users, $system_id, $request->bought_price_total, $request->net_pice_total, $refund_mode, (int) $invoice_info->id);
         $refund_passenger_txt = $refund_mode === 'single' ? " - الراكب: " . $refund_users[0]->client_name : "";
 
         $create = Invoice::create([
@@ -1859,42 +1862,59 @@ $invoices = Invoice::select('*')
     }
     
     public function pay_part($id){
-        $invoice_check = Invoice::select('*')->where('id',$id)->get();
-        abort_if(count($invoice_check) == 0,404);
-        
-        $invoice_info = $invoice_check[0];
-         $system_id = $invoice_info->ticket_system_id;
- $users = TicketUser::select('*')
-            ->where('ticket_system_id', $system_id)
+        $invoice_info = Invoice::find((int) $id);
+        abort_if(!$invoice_info, 404);
+
+        $users = TicketUser::select('*')
+            ->where('ticket_system_id', $invoice_info->ticket_system_id)
             ->get();
-        
+
+        // Counter-customer payment screen: totals, payments, refunds and remaining
+        // come from CounterPayments (the same figures as the invoices list).
         return view('invoices.pay_part.view' , [
             "invoice_info" => $invoice_info,
             "users" => $users,
+            "summary" => CounterPayments::summary($invoice_info),
+            "client" => Supplier::find($invoice_info->invoice_beneficiaries),
+            "banks" => Bank::orderBy('id')->get(['id', 'bank_name']),
         ]);
-        
-        
     }
+
+    /**
+     * Record one payment of a Counter Customer invoice ("سداد").
+     *
+     * One payment = one receipt Bond + the customer / treasury ledger rows + the
+     * treasury statement -- and, for a bank payment, the bank balance and bank
+     * statement too: exactly what a bank receipt voucher records (the money is
+     * received into the treasury through the selected bank). Every payment keeps
+     * its own date and stays individually traceable. The invoice itself is never
+     * rewritten (only its running invoice_money_pay).
+     */
     public function pay_part_save(Request $request){
         $id = (int) $request->id;
 
-        // Safety fix: validate the payment amount before touching anything.
         if (!is_numeric($request->money_pay) || (float) $request->money_pay <= 0) {
             return Redirect::back()->withErrors(['msg' => 'برجاء إدخال مبلغ سداد صحيح أكبر من صفر']);
         }
-        $moneyPay = (float) $request->money_pay;
+        $moneyPay = round((float) $request->money_pay, 2);
+        $method = (int) $request->money_way === 2 ? 2 : 1;          // 1 = treasury (cash), 2 = bank
+        $bankId = $method === 2 ? (int) $request->bank_id : null;
+        if ($method === 2 && !Bank::where('id', $bankId)->exists()) {
+            return Redirect::back()->withErrors(['msg' => 'برجاء اختيار البنك']);
+        }
 
-        // Safety fix: the whole financial operation is now atomic.
-        $result = DB::transaction(function () use ($id, $moneyPay) {
-            // Safety fix: lock the invoice row for the duration of the transaction.
+        // The whole payment is atomic: the invoice row is locked first, so two
+        // concurrent payments on the same invoice are serialised and the second
+        // one sees the first one's amount when it checks the remaining amount.
+        $result = DB::transaction(function () use ($id, $moneyPay, $method, $bankId) {
             $invoice_info = Invoice::where('id', $id)->lockForUpdate()->first();
             abort_if(!$invoice_info, 404);
 
-            // Safety fix: duplicate-submission guard using the existing Bond
-            // records, checked while the invoice row lock is held (no session,
-            // no new table). A recent matching Bond means this exact payment
-            // was already processed — the invoice row lock guarantees this
-            // check sees any payment committed by a concurrent request.
+            if (!CounterPayments::isPayable($invoice_info)) {
+                return Redirect::back()->withErrors(['msg' => 'تسجيل السداد متاح لفواتير عميل الكونتر فقط']);
+            }
+
+            // duplicate-submission guard (unchanged): the same payment again within 10 seconds
             $duplicateBond = Bond::where('invoice_id', $id)
                 ->where('is_invoice', 1)
                 ->where('amount', $moneyPay)
@@ -1904,50 +1924,50 @@ $invoices = Invoice::select('*')
                 return Redirect::back()->withErrors(['msg' => 'تم استلام هذا السداد بالفعل، برجاء عدم تكرار الإرسال']);
             }
 
-            // Safety fix: lock the storage row for the duration of the transaction.
-            $storage_info = Storage::where('name', 'الخزنة الرئيسية')->lockForUpdate()->first();
-            abort_if(!$storage_info, 404);
-
-            // Actual invoice total, computed from the real ticket data (moved
-            // here from further down in the method, where it was previously
-            // computed but never used).
-            $system_id = $invoice_info->ticket_system_id;
-            $users = TicketUser::where('ticket_system_id', $system_id)->get();
-            $total_client_bought_price = 0;
-            foreach ($users as $user) {
-                $total_client_bought_price += $user->client_bought_price;
+            // remaining = total - payments - client refunds (read while the invoice is locked)
+            $summary = CounterPayments::summary($invoice_info);
+            if ($moneyPay > $summary['remaining'] + 0.005) {
+                return Redirect::back()->withErrors(['msg' => 'قيمة السداد أكبر من المبلغ المتبقي.']);
             }
 
-            // Safety fix: never let invoice_money_pay exceed the invoice's actual total.
-            $newMoneyPay = $invoice_info->invoice_money_pay + $moneyPay;
-            if ($newMoneyPay > $total_client_bought_price) {
-                return Redirect::back()->withErrors(['msg' => 'المبلغ المدخل يتجاوز إجمالي قيمة الفاتورة، برجاء مراجعة المبلغ']);
+            // canonical lock order (as in BondsController): Storage before Bank
+            $storage_info = Storage::where('name', 'الخزنة الرئيسية')->lockForUpdate()->first();
+            abort_if(!$storage_info, 404);
+            $bank = $method === 2 ? Bank::where('id', $bankId)->lockForUpdate()->first() : null;
+            if ($method === 2 && !$bank) {
+                return Redirect::back()->withErrors(['msg' => 'برجاء اختيار البنك']);
             }
 
             $create_bond = Bond::create([
-                           "type" => 2,
-               "system_id" => \Str::random(8),
-               "from_account" => $invoice_info->invoice_beneficiaries,
-               "from_type" => "supplier",
-               "to_account" => $storage_info->id,
-               "to_type" => "storage",
-               "amount" => $moneyPay,
-               "info" => "سداد مبلغ لفاتورة $invoice_info->es_id",
-               "money_way" => 1,
-               "crt_date" => date('Y-m-d'),
-               "created_by" => Auth::user()->id,
-
+                "type" => 2,
+                "system_id" => \Str::random(8),
+                "from_account" => $invoice_info->invoice_beneficiaries,
+                "from_type" => "supplier",
+                "to_account" => $storage_info->id,
+                "to_type" => "storage",
+                "amount" => $moneyPay,
+                "info" => "سداد مبلغ لفاتورة $invoice_info->es_id" . ($bank ? " - بنك {$bank->bank_name}" : ""),
+                "money_way" => $method,
+                "bank_id" => $bank ? $bank->id : null,
+                "crt_date" => date('Y-m-d'),
+                "created_by" => Auth::user()->id,
                 "is_invoice" => 1,
                 "invoice_id" => $id,
-
             ]);
 
-            $balance = $storage_info->balance;
-            $update = Storage::where('name', 'الخزنة الرئيسية')->update([
-                "balance" => $balance + $moneyPay,
+            Storage::where('id', $storage_info->id)->update([
+                "balance" => $storage_info->balance + $moneyPay,
             ]);
+            if ($bank) {
+                Bank::where('id', $bank->id)->update(["bank_balance" => $bank->bank_balance + $moneyPay]);
+            }
 
-            $Statement_Vendor = AccountStatement::create([
+            // explicit record of what this row is (shown as «سداد» / «سداد - بنك <name>»)
+            $marker = json_encode(['kind' => 'payment', 'method' => $bank ? 'bank' : 'cash', 'bank_id' => $bank ? $bank->id : null,
+                'bank_name' => $bank ? $bank->bank_name : null, 'bond_id' => $create_bond->id], JSON_UNESCAPED_UNICODE);
+            $txt = "سداد مبلغ لصالح رحلة $invoice_info->es_id" . ($bank ? " - بنك {$bank->bank_name}" : "");
+
+            AccountStatement::create([
                 "supp_client_id" => $invoice_info->invoice_beneficiaries,
                 "invoice_type" => 12,
                 "es_id" => $invoice_info->es_id,
@@ -1955,13 +1975,14 @@ $invoices = Invoice::select('*')
                 "debit_balance" => 0,
                 "credit_balance" => $moneyPay,
                 "ledger_net_effect" => -$moneyPay,
-                "transaction_txt" => "سداد مبلغ لصالح رحلة $invoice_info->es_id",
+                "transaction_txt" => $txt,
                 "transaction_type" => 4,
                 "added_by" => Auth::user()->id,
                 "crt_date" => date('Y-m-d'),
+                "description" => $marker,
             ]);
 
-             $storage_log = AccountStatement::create([
+            AccountStatement::create([
                 "supp_client_id" => $storage_info->id,
                 "trans_storage" => 1,
                 "is_storage" => 1,
@@ -1971,22 +1992,20 @@ $invoices = Invoice::select('*')
                 "debit_balance" => $moneyPay,
                 "credit_balance" => 0,
                 "ledger_net_effect" => $moneyPay,
-                "transaction_txt" => "سداد مبلغ لصالح رحلة $invoice_info->es_id",
+                "transaction_txt" => $txt,
                 "transaction_type" => 4,
                 "added_by" => Auth::user()->id,
                 "crt_date" => date('Y-m-d'),
+                "description" => $marker,
             ]);
 
-            // P3 storage ledger: one credit entry for the invoice payment
-            // that just moved money into storage. Tagged with this bond's
-            // id, so a future deletion of this bond via BondsController's
-            // generic bond-delete flow correctly finds and reverses it.
+            // P3 storage ledger: one credit entry for the money received into the treasury.
             StorageStatement::record([
                 'storage_id' => $storage_info->id,
                 'bond_id' => $create_bond->id,
                 'entry_type' => 'bond',
                 'transaction_date' => date('Y-m-d'),
-                'description' => "سداد مبلغ لصالح رحلة $invoice_info->es_id",
+                'description' => $txt,
                 'reference' => $invoice_info->es_id,
                 'debit' => 0,
                 'credit' => $moneyPay,
@@ -1994,8 +2013,24 @@ $invoices = Invoice::select('*')
                 'created_by' => Auth::user()->id,
             ]);
 
-            $update = Invoice::where('id', $id)->update([
-                "invoice_money_pay" => $newMoneyPay,
+            // P2 bank ledger: bank payments also credit the selected bank, as a bank receipt voucher does.
+            if ($bank) {
+                BankStatement::record([
+                    'bank_id' => $bank->id,
+                    'bond_id' => $create_bond->id,
+                    'entry_type' => 'bond',
+                    'transaction_date' => date('Y-m-d'),
+                    'description' => $txt,
+                    'reference' => $invoice_info->es_id,
+                    'debit' => 0,
+                    'credit' => $moneyPay,
+                    'commission' => 0,
+                    'created_by' => Auth::user()->id,
+                ]);
+            }
+
+            Invoice::where('id', $id)->update([
+                "invoice_money_pay" => round((float) $invoice_info->invoice_money_pay + $moneyPay, 2),
             ]);
 
             return null;
@@ -2005,11 +2040,6 @@ $invoices = Invoice::select('*')
             return $result;
         }
 
-        return redirect()->route('site.invoices');
-
+        return redirect()->route('site.invoices_ajax')->with('success', 'تم تسجيل السداد');
     }
-
-
-    
-    
 }

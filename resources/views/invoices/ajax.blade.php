@@ -215,18 +215,18 @@ $(document).ready(function () {
             { data: 'profit', orderable: false },
             { data: 'creator', orderable: false, render: function (data) { return esc(data); } },
             {
-                data: 'money_pay', orderable: false,
+                data: 'counter', orderable: false,
                 render: function (data, type, row) {
                     const id = row.id;
-                    const moneyPay = parseFloat(row.money_pay || 0);
-                    const totalBought = parseFloat(row.total_bought || 0);
+                    const fmt = v => parseFloat(v || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                    // payment status: Counter Customer invoices only (computed server-side)
                     let badge = '';
-                    if (moneyPay === 0) {
-                        badge = `<span class="badge bg-dark my_badge">لم يتم السداد</span>`;
-                    } else if (moneyPay < totalBought) {
-                        badge = `<span class="badge bg-secondary my_badge">سداد جزئي</span>`;
-                    } else {
-                        badge = `<span class="badge bg-success my_badge">تم السداد</span>`;
+                    const c = row.counter;
+                    if (c) {
+                        const cls = { unpaid: 'bg-dark', partial: 'bg-secondary', paid: 'bg-success', nothing_due: 'bg-light text-dark', due_to_client: 'bg-warning text-dark' }[c.status] || 'bg-dark';
+                        badge = `<span class="badge ${cls} my_badge">${esc(c.label)}</span>`
+                            + `<br><small>المسدد: ${fmt(c.paid)}` + (c.refunded > 0 ? `<br>مرتجع: ${fmt(c.refunded)}` : '')
+                            + (c.remaining < 0 ? `<br>مستحق للعميل: ${fmt(-c.remaining)}` : `<br>المتبقي: ${fmt(c.remaining)}`) + `</small>`;
                     }
                     let buttons = '';
                     if (window.authAccountType === 2) {
@@ -259,8 +259,10 @@ $(document).ready(function () {
                     if (window.authAccountType === 2 || row.invoice_status === 0) {
                         html += `<li><a href="/invoices/${id}/edit" class="dropdown-item"><i class="ri-edit-box-line"></i> تعديل</a></li>`;
                     }
-                    if (parseFloat(row.money_pay || 0) < parseFloat(row.total_bought || 0)) {
-                        html += `<li><a href="/invoices/pay-part/${id}" class="dropdown-item"><i class="ri-wallet-3-line"></i> سداد الفاتورة</a></li>`;
+                    if (row.counter) {
+                        html += row.counter.remaining > 0.005
+                            ? `<li><a href="/invoices/pay-part/${id}" class="dropdown-item"><i class="ri-wallet-3-line"></i> سداد</a></li>`
+                            : `<li><span class="dropdown-item disabled"><i class="ri-checkbox-circle-line"></i> ${esc(row.counter.label)}</span></li>`;
                     }
                     html += `
                                 <li><a href="${reissueUrl}" class="dropdown-item"><i class="ri-arrow-go-forward-line"></i> اعادة اصدار</a></li>

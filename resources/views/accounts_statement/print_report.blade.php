@@ -445,7 +445,7 @@ if($st == 0){
                     @elseif($AccountStatement->transaction_type == 3)
                         أرصدة افتتاحية /
                     @elseif($AccountStatement->transaction_type == 4)
-                        سداد /
+                        {{$kindLabel ?? 'سداد'}} /
                     @endif
                     {{$type}}
                 </td>
