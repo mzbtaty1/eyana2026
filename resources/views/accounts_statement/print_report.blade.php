@@ -252,6 +252,12 @@ if($st == 0){
             -webkit-print-color-adjust: exact;
         }
     }
+    /* Operation rows (edit / re-issue / refund) -- same classes in the
+       Account Statement screen and Print Preview. */
+    tr.op-edit > td { background-color: #fff8e1 !important; }
+    tr.op-reissue > td { background-color: #e3f2fd !important; }
+    tr.op-refund > td { background-color: #fdecea !important; }
+    tr.op-edit, tr.op-reissue, tr.op-refund { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 </style>
 
 <div class="page_print">
@@ -414,7 +420,9 @@ if($st == 0){
             $hasPassengerBreakdown = $paxLines !== null;
             $breakdownRows = $hasPassengerBreakdown ? collect($paxLines) : collect([null]);
             // «نوع العملية» from explicit data only (row marker / invoice number), never from amounts.
-            $kindLabel = App\Services\InvoicePassengerLedger::kindLabel($AccountStatement);
+            $kindLabel = App\Services\InvoicePassengerLedger::kindLabel($AccountStatement, $ticket_info);
+            // highlight class for edit / re-issue / refund rows (from the same explicit data)
+            $opClass = ['edit' => 'op-edit', 'reissue' => 'op-reissue', 'refund' => 'op-refund'][App\Services\InvoicePassengerLedger::rowKind($AccountStatement)] ?? '';
             ?>
             @foreach($breakdownRows as $rowIndex => $user)
             <?php
@@ -427,7 +435,7 @@ if($st == 0){
             ?>
             {{-- The booked opening-balance row (FLY-OPEN-BALANCE) is a real ledger row: render it
                  in full like the screen and Excel (its amounts and balance were hidden before). --}}
-            <tr @if($isOpeningBalanceRow) style="font-weight: bold; background: #f0f0f0;" @endif>
+            <tr class="{{$opClass}}" @if($isOpeningBalanceRow) style="font-weight: bold; background: #f0f0f0;" @endif>
                 <td style="font-weight: bold;">{{$AccountStatement->es_id}}</td>
                 <td>
                     @if($AccountStatement->transaction_type == 1)
@@ -473,7 +481,7 @@ if($st == 0){
                         <div class="ey-trip-info">
                             <div>
                                 @if($result == "FLY-RD")
-                                    إلغاء تذكرة {{$AccountStatement->es_id}}
+                                    مرتجع تذكرة {{$AccountStatement->es_id}}
                                 @elseif($result == "FLY-RS")
                                     إعادة إصدار تذكرة {{$AccountStatement->es_id}}
                                 @else

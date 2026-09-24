@@ -23,14 +23,16 @@ use RuntimeException;
  * account's rows always add up to the sum over its passengers.
  *
  * Row marker (account_statements.description, JSON, new rows only):
- *   {"kind": "sale"|"edit"|"refund", "mode": "full"|"single" (refunds),
+ *   {"kind": "sale"|"edit"|"reissue"|"refund", "mode": "full"|"single" (refunds),
+ *    "scope": "whole"|"passenger" (edits),
  *    "lines": [{"pid", "name", "booking", "debit", "credit"}, ...]}
  * "lines" is that row's exact per-passenger breakdown as shown on the Account
  * Statement / Print Preview / Excel. Rows without a marker (all historical rows)
  * are shown from the passengers' current amounts, as before.
  *
  * Date rule: an edit never changes the original rows; it adds adjustment rows
- * dated TODAY with each passenger's difference. Refunds/cancellations are dated
+ * dated TODAY with each passenger's difference. Refunds (incl. a full refund of the
+ * whole invoice) are dated
  * today too. The original sale keeps its date and amounts.
  */
 class InvoicePassengerLedger
@@ -201,9 +203,12 @@ class InvoicePassengerLedger
     {
         $m = self::marker($row);
         if ($m && !empty($m['lines'])) {
+            // amounts are the row's recorded ones; name / booking number come from the
+            // passenger's current record, so a data correction shows everywhere
+            $byId = collect($users)->keyBy('id');
             return array_map(fn ($l) => [
-                'name' => (string) ($l['name'] ?? ''),
-                'booking' => (string) ($l['booking'] ?? ''),
+                'name' => (string) (isset($l['pid'], $byId[$l['pid']]) ? $byId[$l['pid']]->client_name : ($l['name'] ?? '')),
+                'booking' => (string) (isset($l['pid'], $byId[$l['pid']]) ? $byId[$l['pid']]->client_booking_id : ($l['booking'] ?? '')),
                 'debit' => isset($l['debit']) ? (float) $l['debit'] : null,
                 'credit' => isset($l['credit']) ? (float) $l['credit'] : null,
             ], $m['lines']);
@@ -225,10 +230,15 @@ class InvoicePassengerLedger
     }
 
     /**
-     * «نوع العملية» of a ticket ledger row, from explicit data only (row marker or
-     * the invoice number prefix) -- never from amounts. Null for non-ticket rows.
+     * Operation kind of a ticket ledger row, from explicit data only (row marker,
+     * invoice number prefix) -- never from amounts:
+     * 'sale' | 'edit' | 'reissue' | 'refund', or null for non-ticket rows.
+     *   refund   = refund of one passenger OR of the whole invoice ("cancellation" is
+     *              a full refund: same workflow, same accounting; only its label differs)
+     *   edit     = correction of an existing invoice (adjustment rows, same invoice)
+     *   reissue  = new invoice from the re-issue workflow (FLY-RS; marker 'reissue' since then)
      */
-    public static function kindLabel($row): ?string
+    public static function rowKind($row): ?string
     {
         if ((int) $row->transaction_type !== 1 || $row->es_id === 'FLY-OPEN-BALANCE') {
             return null;
@@ -236,28 +246,58 @@ class InvoicePassengerLedger
         $m = self::marker($row);
         $kind = $m['kind'] ?? null;
         if ($kind === 'edit') {
-            return 'تعديل تذكرة';
+            return 'edit';
         }
         if ($kind === 'refund') {
-            return ($m['mode'] ?? '') === 'single'
-                ? 'مرتجع - ' . ($m['lines'][0]['name'] ?? '')
-                : 'إلغاء فاتورة - كامل';
+            return 'refund';
         }
+        if ($kind === 'reissue') {
+            return 'reissue';
+        }
+        // historical rows: the refund / re-issue workflows give their new invoice its own number prefix
         $es = (string) $row->es_id;
         if (str_starts_with($es, 'FLY-RD')) {
-            return 'مرتجع';
+            return 'refund';            // historical refund: its mode was not recorded
         }
         if (str_starts_with($es, 'FLY-RS')) {
-            return 'إعادة إصدار تذكرة';
+            return 'reissue';
         }
-        return 'بيع تذكرة';
+        return 'sale';
     }
 
-    /** Date shown for the row: adjustments and new refunds show the day they happened. */
+    /**
+     * «نوع العملية» of a ticket ledger row (null for non-ticket rows). $invoice is
+     * the row's invoice (for its invoice_shared flag); from explicit data only.
+     */
+    public static function kindLabel($row, $invoice = null): ?string
+    {
+        $kind = self::rowKind($row);
+        if ($kind === null) {
+            return null;
+        }
+        $m = self::marker($row);
+        $shared = $invoice && (int) ($invoice->invoice_shared ?? 0) === 1 ? ' مشتركة' : '';
+        $firstName = $m['lines'][0]['name'] ?? '';
+        switch ($kind) {
+            case 'edit':
+                return 'تعديل تذكرة' . $shared . (($m['scope'] ?? '') === 'passenger' && $firstName !== '' ? ' - ' . $firstName : '');
+            case 'reissue':
+                return 'إعادة إصدار تذكرة' . $shared;
+            case 'refund':
+                if (!$m) {
+                    return 'مرتجع';                       // historical refund: mode not recorded
+                }
+                return ($m['mode'] ?? '') === 'single' ? 'مرتجع - ' . $firstName : 'مرتجع كامل للفاتورة';
+            default:
+                return 'بيع تذكرة' . $shared;
+        }
+    }
+
+    /** Date shown for the row: adjustments, new refunds and new re-issues show the day they happened. */
     public static function displayDate($row, $ticketInfo): string
     {
         $kind = self::marker($row)['kind'] ?? null;
-        if ($kind === 'edit' || $kind === 'refund') {
+        if ($kind === 'edit' || $kind === 'refund' || $kind === 'reissue') {
             return (string) $row->crt_date;
         }
         return $ticketInfo ? (string) $ticketInfo->invoice_date : (string) $row->created_at;
@@ -276,7 +316,7 @@ class InvoicePassengerLedger
      * keeps showing its original per-passenger amounts after passengers change.
      * Amounts, dates and every other column are left as they are.
      */
-    public static function freezeRows(Invoice $invoice, Collection $users): void
+    public static function freezeRows(Invoice $invoice, Collection $users, string $kind = 'sale'): void
     {
         foreach (self::ledgerRowsAll($invoice) as $row) {
             if (self::marker($row)) {
@@ -284,7 +324,7 @@ class InvoicePassengerLedger
             }
             $lines = self::statementLines($row, $users, $users->count() > 0) ?? [];
             DB::table('account_statements')->where('id', $row->id)->update(['description' => self::encode([
-                'kind' => 'sale',
+                'kind' => $kind,
                 'lines' => array_map(fn ($l) => ['pid' => $l['pid'] ?? null, 'name' => $l['name'], 'booking' => $l['booking'], 'debit' => $l['debit'], 'credit' => $l['credit']], $lines),
             ])]);
         }
@@ -303,13 +343,20 @@ class InvoicePassengerLedger
 
     /**
      * Start an edit: store the displayed shares of a historical refund in its
-     * passengers and freeze the existing rows. Returns the "before" snapshot.
+     * passengers. Returns the "before" snapshot (rows are frozen by recordEdit,
+     * and only if the edit moves money).
      */
     public static function beginEdit(Invoice $invoice): array
     {
         self::materializeShares($invoice);
-        self::freezeRows($invoice, self::passengers($invoice));
         return self::snapshot($invoice);
+    }
+
+    /** Passenger-like objects from a snapshot() (for freezing rows as they were before an edit). */
+    protected static function snapshotUsers(array $snapshot): Collection
+    {
+        return collect($snapshot)->map(fn ($p, $pid) => (object) ['id' => $pid, 'client_name' => $p['name'], 'client_booking_id' => $p['booking'],
+            'client_bought_price' => $p['debit'], 'client_net_pice' => $p['credit']])->values();
     }
 
     /**
@@ -319,8 +366,22 @@ class InvoicePassengerLedger
      * Changed account: the old account is reversed and the new account booked, both today.
      * Returns the created rows.
      */
-    public static function recordEdit(Invoice $invoice, array $before, array $after, array $oldAccounts, array $newAccounts, $invoiceType): array
+    public static function recordEdit(Invoice $invoice, array $before, array $after, array $oldAccounts, array $newAccounts, $invoiceType, string $scope = 'whole'): array
     {
+        // A pure data correction (names, ticket numbers ...) moves no money: nothing is
+        // booked and the existing rows are left completely untouched.
+        $moves = $oldAccounts !== $newAccounts;
+        foreach (array_unique(array_merge(array_keys($before), array_keys($after))) as $pid) {
+            foreach (['debit', 'credit'] as $side) {
+                if (abs(($after[$pid][$side] ?? 0) - ($before[$pid][$side] ?? 0)) >= 0.005) $moves = true;
+            }
+        }
+        if (!$moves) {
+            return [];
+        }
+        // before the first adjustment: record the existing rows' breakdown as it was
+        self::freezeRows($invoice, self::snapshotUsers($before));
+
         $created = [];
         foreach ([0 => 'debit', 1 => 'credit'] as $i => $side) {
             if ($oldAccounts[$i] === $newAccounts[$i]) {
@@ -333,7 +394,7 @@ class InvoicePassengerLedger
                     }
                 }
                 if ($lines) {
-                    $created[] = self::adjustmentRow($invoice, $newAccounts[$i], $lines, $invoiceType);
+                    $created[] = self::adjustmentRow($invoice, $newAccounts[$i], $lines, $invoiceType, $scope);
                 }
             } else {
                 $rev = [];
@@ -344,8 +405,8 @@ class InvoicePassengerLedger
                 foreach ($after as $pid => $p) {
                     if (abs($p[$side]) >= 0.005) $new[] = self::line($pid, $p, $side, $p[$side]);
                 }
-                if ($rev && $oldAccounts[$i]) $created[] = self::adjustmentRow($invoice, $oldAccounts[$i], $rev, $invoiceType);
-                if ($new) $created[] = self::adjustmentRow($invoice, $newAccounts[$i], $new, $invoiceType);
+                if ($rev && $oldAccounts[$i]) $created[] = self::adjustmentRow($invoice, $oldAccounts[$i], $rev, $invoiceType, $scope);
+                if ($new) $created[] = self::adjustmentRow($invoice, $newAccounts[$i], $new, $invoiceType, $scope);
             }
         }
         return $created;
@@ -360,7 +421,7 @@ class InvoicePassengerLedger
         return ['pid' => $pid, 'name' => $p['name'], 'booking' => $p['booking'], 'debit' => $debit, 'credit' => $debit === null ? $amount : null];
     }
 
-    protected static function adjustmentRow(Invoice $invoice, $account, array $lines, $invoiceType): AccountStatement
+    protected static function adjustmentRow(Invoice $invoice, $account, array $lines, $invoiceType, string $scope = 'whole'): AccountStatement
     {
         $net = round(array_sum(array_map(fn ($l) => ($l['debit'] ?? 0) - ($l['credit'] ?? 0), $lines)), 2);
         return AccountStatement::create([
@@ -375,7 +436,7 @@ class InvoicePassengerLedger
             'transaction_type' => 1,
             'added_by' => Auth::id(),
             'crt_date' => date('Y-m-d'),
-            'description' => self::encode(['kind' => 'edit', 'lines' => $lines]),
+            'description' => self::encode(['kind' => 'edit', 'scope' => $scope, 'lines' => $lines]),
         ]);
     }
 
@@ -439,7 +500,7 @@ class InvoicePassengerLedger
             $user->update(array_merge($attrs, ['client_bought_price' => $newDebit, 'client_net_pice' => $newCredit]));
             $after = self::snapshot($invoice);
 
-            self::recordEdit($invoice, $before, $after, $accounts, $accounts, $invoice->invoice_section);
+            self::recordEdit($invoice, $before, $after, $accounts, $accounts, $invoice->invoice_section, 'passenger');
 
             // TicketVendor.price mirrors the cost total on normal invoices (it is not read anywhere).
             if (!self::isRefund($invoice)) {

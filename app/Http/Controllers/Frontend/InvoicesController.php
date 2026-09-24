@@ -172,20 +172,29 @@ public function getInvoices3Months(Request $request)
 
 
     /**
-     * Server-side DataTables data for the main invoices list ("كل الفواتير").
-     * Same scope as before (last 3 months, own invoices unless account_type 2)
-     * but now INCLUDING shared invoices, and only the requested page is loaded:
+     * Server-side DataTables data for the main invoices list ("كل الفواتير"):
+     * ALL invoices (normal + shared, every date; own invoices unless account_type 2),
+     * optionally filtered by invoice date (date_from / date_to), and only the
+     * requested page is loaded:
      * every displayed value is computed here with a fixed number of queries per
      * page (no per-row lookups, no multi-MB payload). Values are computed exactly
      * as the page's former client-side render functions did.
      */
     public function invoicesListData(Request $request)
     {
-        $base = DB::table('invoices as i')->whereDate('i.invoice_date', '>=', Carbon::now()->subMonths(3));
+        $base = DB::table('invoices as i');
         if (Auth::user()->account_type != 2) {
             $base->where('i.invoice_create_by', Auth::user()->id);
         }
         $recordsTotal = (clone $base)->count();
+
+        // optional date filter on the invoice date
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $request->input('date_from'))) {
+            $base->whereDate('i.invoice_date', '>=', $request->input('date_from'));
+        }
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $request->input('date_to'))) {
+            $base->whereDate('i.invoice_date', '<=', $request->input('date_to'));
+        }
 
         $search = trim((string) $request->input('search.value', ''));
         if ($search !== '') {
@@ -240,8 +249,11 @@ public function getInvoices3Months(Request $request)
         $userNames = DB::table('users')->whereIn('id', $rows->pluck('invoice_create_by')->merge($rows->pluck('invoice_account_1'))->merge($rows->pluck('invoice_account_2'))->filter()->unique())->pluck('name', 'id');
         $refundRows = AccountStatement::whereIn('es_id', $rows->pluck('es_id')->filter(fn ($e) => str_starts_with((string) $e, 'FLY-RD')))
             ->where('transaction_type', 1)->orderBy('id')->get(['es_id', 'supp_client_id', 'debit_balance', 'credit_balance'])->groupBy('es_id');
+        // rows carrying an operation marker (edits dated later, refund mode) for this page
+        $markedRows = AccountStatement::whereIn('es_id', $rows->pluck('es_id')->filter())->where('transaction_type', 1)
+            ->whereNotNull('description')->orderBy('id')->get(['es_id', 'description', 'crt_date'])->groupBy('es_id');
 
-        $data = $rows->map(function ($r) use ($vendorNames, $passengers, $supplierNames, $userNames, $refundRows) {
+        $data = $rows->map(function ($r) use ($vendorNames, $passengers, $supplierNames, $userNames, $refundRows, $markedRows) {
             $pax = $passengers->get($r->ticket_system_id, collect());
             $isRefund = str_starts_with((string) $r->es_id, 'FLY-RD');
             $sumNet = $pax->sum(fn ($u) => (float) ($u->client_net_pice ?? 0));
@@ -259,9 +271,35 @@ public function getInvoices3Months(Request $request)
                 $cost = $sumNet;
                 $sale = $sumBought;
             }
+            // operation kind of this invoice, from explicit data (invoice number prefix,
+            // refund marker) -- never from amounts
+            $marked = $markedRows->get($r->es_id, collect());
+            $markers = $marked->map(fn ($x) => InvoicePassengerLedger::marker($x))->filter();
+            $refundMarker = $markers->first(fn ($m) => ($m['kind'] ?? '') === 'refund');
+            $reissueMarker = $markers->first(fn ($m) => ($m['kind'] ?? '') === 'reissue');
+            if ($isRefund) {
+                // one operation: refund of one passenger or of the whole invoice
+                $op = 'refund';
+                $opLabel = !$refundMarker ? 'مرتجع'
+                    : (($refundMarker['mode'] ?? '') === 'single' ? 'مرتجع - ' . ($refundMarker['lines'][0]['name'] ?? '') : 'مرتجع كامل للفاتورة');
+            } elseif ($reissueMarker || str_starts_with((string) $r->es_id, 'FLY-RS')) {
+                // new invoice from the re-issue workflow (marker since now; its number prefix before)
+                $op = 'reissue';
+                $opLabel = (int) $r->invoice_shared === 1 ? 'إعادة إصدار مشتركة' : 'إعادة إصدار';
+            } else {
+                // original invoice; an edit (correction) keeps it as it is -- see 'edits' below
+                $op = 'sale';
+                $opLabel = (int) $r->invoice_shared === 1 ? 'بيع تذكرة مشتركة' : 'بيع تذكرة';
+            }
+            $editRows = $marked->filter(fn ($x) => (InvoicePassengerLedger::marker($x)['kind'] ?? '') === 'edit');
+
             return [
                 'id' => $r->id,
                 'es_id' => $r->es_id,
+                'op' => $op,
+                'op_label' => $opLabel,
+                'edits' => $editRows->count(),
+                'last_edit' => $editRows->isEmpty() ? null : (string) $editRows->last()->crt_date,
                 'invoice_ticket_file' => $r->invoice_ticket_file,
                 'is_refund' => $isRefund,
                 'is_shared' => (int) $r->invoice_shared === 1,
@@ -1478,7 +1516,7 @@ $invoices = Invoice::select('*')
 
         $create = Invoice::create([
             "ticket_system_id" => $system_id,
-            "invoice_date" => $request->invoice_date,
+            "invoice_date" => date('Y-m-d'),   // re-issue is a new operation: today
             "invoice_travel_date" => $request->invoice_travel_date,
             "return_date" => $request->return_date,
             "invoice_airline" => $request->invoice_airline,
@@ -1536,7 +1574,7 @@ $invoices = Invoice::select('*')
             "supp_client_id" => $request->vendor_id,
             "invoice_type" => $request->invoice_section,
             "es_id" => $newEsId,
-            "invoice_date" => $request->invoice_date,
+            "invoice_date" => date('Y-m-d'),   // re-issue is a new operation: today
             "debit_balance" => 0,
             "credit_balance" => $total_client_net_pice,
             "ledger_net_effect" => -$total_client_net_pice,
@@ -1552,7 +1590,7 @@ $invoices = Invoice::select('*')
             "supp_client_id" => $request->invoice_beneficiaries,
             "invoice_type" => $request->invoice_section,
             "es_id" => $newEsId,
-            "invoice_date" => $request->invoice_date,
+            "invoice_date" => date('Y-m-d'),   // re-issue is a new operation: today
             "debit_balance" => $total_client_bought_price,
             "credit_balance" => 0,
             "ledger_net_effect" => $total_client_bought_price,
@@ -1561,6 +1599,11 @@ $invoices = Invoice::select('*')
             "added_by" => Auth::user()->id,
             "crt_date" => date('Y-m-d'),
         ]);
+
+        // Re-issue = a NEW invoice dated today. Record it explicitly on its ledger rows
+        // (kind "reissue" + per-passenger lines) so it is never confused with an edit.
+        $reissued = Invoice::find($create->id);
+        InvoicePassengerLedger::freezeRows($reissued, InvoicePassengerLedger::passengers($reissued), 'reissue');
 
         return redirect()->route('site.invoices_ajax');
     }

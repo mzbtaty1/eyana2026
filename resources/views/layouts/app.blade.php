@@ -430,9 +430,7 @@ $rname = Route::currentRouteName();
                            <li class="nav-item">
                               <a href="{{route('site.shared_invoices_create')}}" class="nav-link" data-key="t-basic-tables">إضافة فاتورة مشتركة</a>
                            </li>
-                           <li class="nav-item">
-                              <a href="{{route('site.invoices_lite')}}" class="nav-link" data-key="t-basic-tables">فواتير اخر 3 شهور</a>
-                           </li>
+                           {{-- "Last 3 months" list removed from navigation: "كل الفواتير" now shows every invoice with a date filter (route kept). --}}
                            <li class="nav-item">
                               <a href="{{route('site.invoices_daily_report')}}" class="nav-link" data-key="t-basic-tables">التقرير اليومي</a>
                            </li>

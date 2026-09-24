@@ -80,12 +80,41 @@
     .table-striped tbody tr.cancelled-invoice:nth-of-type(odd) {
         background-color: #ffcccc !important;
     }
+
+    /* Operation rows (new invoices: re-issue / refund -- a full cancellation is a full refund). Original
+       invoices -- including edited ones -- keep the normal look. */
+    #invoicesTable tbody tr.invoice-reissue > td { background-color: #e3f2fd !important; }
+    #invoicesTable tbody tr.invoice-refund > td { background-color: #fdecea !important; }
+    .op-badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; }
+    .op-badge.op-sale { background: #198754; color: #fff; }
+    .op-badge.op-edit { background: #f0ad4e; color: #212529; }
+    .op-badge.op-reissue { background: #0d6efd; color: #fff; }
+    .op-badge.op-refund { background: #dc3545; color: #fff; }
 </style>
 
 <div class="row">
     <div class="col-lg-12">
         <div class="card">
             <div class="card-body">
+                <div class="row g-2 align-items-end mb-3" id="invoiceFilters">
+                    <div class="col-auto">
+                        <label class="form-label mb-1" for="flt_from">من تاريخ الفاتورة</label>
+                        <input type="date" id="flt_from" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-auto">
+                        <label class="form-label mb-1" for="flt_to">إلى تاريخ الفاتورة</label>
+                        <input type="date" id="flt_to" class="form-control form-control-sm">
+                    </div>
+                    <div class="col-auto">
+                        <button type="button" id="flt_apply" class="btn btn-primary btn-sm">تطبيق</button>
+                        <button type="button" id="flt_clear" class="btn btn-light btn-sm">كل الفواتير</button>
+                    </div>
+                    <div class="col-auto ms-auto small">
+                        <span class="op-badge op-sale">بيع</span>
+                        <span class="op-badge op-reissue">إعادة إصدار</span>
+                        <span class="op-badge op-refund">مرتجع</span>
+                    </div>
+                </div>
                 <div class="table-responsive">
                     <table id="invoicesTable" class="table table-bordered dt-responsive nowrap table-striped align-middle">
                         <thead>
@@ -128,6 +157,10 @@ $(document).ready(function () {
         processing: true,
         ajax: {
             url: '{{ route("site.invoices_list_data") }}',
+            data: function (d) {
+                d.date_from = $('#flt_from').val();
+                d.date_to = $('#flt_to').val();
+            },
             error: function (xhr) {
                 console.error("فشل في تحميل البيانات:", xhr.responseText);
                 alert("فشل في تحميل البيانات من الخادم.");
@@ -148,9 +181,12 @@ $(document).ready(function () {
                 }
             },
             {
-                data: 'is_refund', orderable: false,
+                data: 'op', orderable: false,
                 render: function (data, type, row) {
-                    let html = row.is_refund ? '<span class="cancelled-badge">إلغاء</span>' : '<span class="badge bg-success">فعالة</span>';
+                    let html = `<span class="op-badge op-${esc(row.op)}">${esc(row.op_label)}</span>`;
+                    if (row.edits > 0) {
+                        html += `<br><span class="op-badge op-edit mt-1">معدلة (${row.edits}) - آخر تعديل ${esc(row.last_edit)}</span>`;
+                    }
                     if (row.is_shared) {
                         html += '<br><span class="badge bg-dark mt-1">مشتركة</span>';
                         if (row.shared_owner || row.shared_seller) {
@@ -228,7 +264,7 @@ $(document).ready(function () {
                     }
                     html += `
                                 <li><a href="${reissueUrl}" class="dropdown-item"><i class="ri-arrow-go-forward-line"></i> اعادة اصدار</a></li>
-                                <li><a href="${refundUrl}" class="dropdown-item"><i class="ri-refund-2-line"></i> الغاء الفاتورة</a></li>
+                                <li><a href="${refundUrl}" class="dropdown-item"><i class="ri-refund-2-line"></i> مرتجع الفاتورة</a></li>
                                 <li><a href="/invoices/${es_id}/remove" class="dropdown-item"><i class="ri-delete-bin-line"></i> حذف الفاتورة</a></li>
                             </ul>
                         </div>`;
@@ -246,11 +282,15 @@ $(document).ready(function () {
         autoWidth: false,
         searchDelay: 400,
         rowCallback: function (row, data) {
-            if (data.is_refund) {
-                $(row).addClass('cancelled-invoice');
+            const cls = { reissue: 'invoice-reissue', refund: 'invoice-refund' }[data.op];
+            $(row).removeClass('invoice-reissue invoice-refund');
+            if (cls) {
+                $(row).addClass(cls);
             }
         }
     });
+    $('#flt_apply').on('click', function () { $('#invoicesTable').DataTable().ajax.reload(); });
+    $('#flt_clear').on('click', function () { $('#flt_from').val(''); $('#flt_to').val(''); $('#invoicesTable').DataTable().ajax.reload(); });
 });
 
 function do_approved(id) {

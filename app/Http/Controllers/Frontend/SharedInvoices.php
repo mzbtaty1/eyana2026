@@ -306,7 +306,7 @@ $invoices = Invoice::select('*')
 
         $create = Invoice::create([
             "ticket_system_id" => $system_id,
-            "invoice_date" => $request->invoice_date,
+            "invoice_date" => date('Y-m-d'),   // re-issue is a new operation: today
             "invoice_travel_date" => $request->invoice_travel_date,
             "return_date" => $request->return_date,
             "invoice_airline" => $request->invoice_airline,
@@ -370,7 +370,7 @@ $invoices = Invoice::select('*')
             "supp_client_id" => $request->vendor_id,
             "invoice_type" => $request->invoice_section,
             "es_id" => $newEsId,
-            "invoice_date" => $request->invoice_date,
+            "invoice_date" => date('Y-m-d'),   // re-issue is a new operation: today
             "debit_balance" => 0,
             "credit_balance" => $total_client_net_pice,
             "ledger_net_effect" => -$total_client_net_pice,
@@ -386,7 +386,7 @@ $invoices = Invoice::select('*')
             "supp_client_id" => $request->invoice_beneficiaries,
             "invoice_type" => $request->invoice_section,
             "es_id" => $newEsId,
-            "invoice_date" => $request->invoice_date,
+            "invoice_date" => date('Y-m-d'),   // re-issue is a new operation: today
             "debit_balance" => $total_client_bought_price,
             "credit_balance" => 0,
             "ledger_net_effect" => $total_client_bought_price,
@@ -395,6 +395,11 @@ $invoices = Invoice::select('*')
             "added_by" => Auth::user()->id,
             "crt_date" => date('Y-m-d'),
         ]);
+
+        // Re-issue = a NEW invoice dated today. Record it explicitly on its ledger rows
+        // (kind "reissue" + per-passenger lines) so it is never confused with an edit.
+        $reissued = Invoice::find($create->id);
+        InvoicePassengerLedger::freezeRows($reissued, InvoicePassengerLedger::passengers($reissued), 'reissue');
 
         return redirect()->route('site.shared_invoices');
     }

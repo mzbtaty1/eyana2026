@@ -61,6 +61,12 @@
     #InvoicesTable td:nth-child(9), #InvoicesTable td:nth-child(10), #InvoicesTable td:nth-child(11){
         white-space: nowrap;
     }
+    /* Operation rows (edit / re-issue / refund) -- same classes in the
+       Account Statement screen and Print Preview. */
+    tr.op-edit > td { background-color: #fff8e1 !important; }
+    tr.op-reissue > td { background-color: #e3f2fd !important; }
+    tr.op-refund > td { background-color: #fdecea !important; }
+    tr.op-edit, tr.op-reissue, tr.op-refund { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 </style>
 <?php
 
@@ -220,7 +226,9 @@ $url2 = route('site.accounts_statement_print_excel' , [
     $hasPassengerBreakdown = $paxLines !== null;
     $breakdownRows = $hasPassengerBreakdown ? collect($paxLines) : collect([null]);
     // «نوع العملية» from explicit data only (row marker / invoice number), never from amounts.
-    $kindLabel = App\Services\InvoicePassengerLedger::kindLabel($AccountStatement);
+    $kindLabel = App\Services\InvoicePassengerLedger::kindLabel($AccountStatement, $ticket_info);
+    // highlight class for edit / re-issue / refund rows (from the same explicit data)
+    $opClass = ['edit' => 'op-edit', 'reissue' => 'op-reissue', 'refund' => 'op-refund'][App\Services\InvoicePassengerLedger::rowKind($AccountStatement)] ?? '';
 
     $mem = $usersById[$AccountStatement->added_by] ?? null;
     ?>
@@ -234,7 +242,7 @@ $url2 = route('site.accounts_statement_print_excel' , [
         $row_balance = $total_blnc;
     }
     ?>
-    <tr>
+    <tr class="{{$opClass}}">
         <td style="text-align: right;">{{$AccountStatement->es_id}}</td>
         <td style="text-align: right;">
             @if($AccountStatement->transaction_type == 1)
@@ -280,7 +288,7 @@ $url2 = route('site.accounts_statement_print_excel' , [
                 <div class="ey-trip-info">
                     <div>
                         @if($result == "FLY-RD")
-                            إلغاء تذكرة {{$AccountStatement->es_id}}
+                            مرتجع تذكرة {{$AccountStatement->es_id}}
                         @elseif($result == "FLY-RS")
                             إعادة إصدار تذكرة {{$AccountStatement->es_id}}
                         @else

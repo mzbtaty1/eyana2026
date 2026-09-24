@@ -205,11 +205,11 @@ swal("", "{{$errors->first()}}", "info");
                      <p class="mb-2"><b>نوع الاسترداد</b> <span class="text-danger">*</span></p>
                      <div class="form-check form-check-inline">
                         <input class="form-check-input" type="radio" name="refund_mode" id="refund_mode_full" value="full" checked onchange="onRefundModeChange()">
-                        <label class="form-check-label" for="refund_mode_full">إلغاء الفاتورة بالكامل</label>
+                        <label class="form-check-label" for="refund_mode_full">مرتجع كامل للفاتورة</label>
                      </div>
                      <div class="form-check form-check-inline">
                         <input class="form-check-input" type="radio" name="refund_mode" id="refund_mode_single" value="single" onchange="onRefundModeChange()">
-                        <label class="form-check-label" for="refund_mode_single">استرداد راكب واحد فقط</label>
+                        <label class="form-check-label" for="refund_mode_single">مرتجع راكب واحد فقط</label>
                      </div>
                      <p id="refund_mode_hint" class="mb-0 mt-2" style="font-size:13px;"></p>
                   </div>

@@ -37,6 +37,8 @@ class AccountatExport implements FromView, WithEvents, WithTitle
     const HEADER_LABEL = 'رقم العملية';
 
     protected $invoice_beneficiaries;
+    /** operation kind of every transaction row, in sheet order (for highlighting) */
+    protected $rowOps = [];
     protected $date_from;
     protected $date_to;
     protected $transaction_type;
@@ -150,7 +152,9 @@ class AccountatExport implements FromView, WithEvents, WithTitle
 
             $base = [
                 'es_id' => $AccountStatement->es_id,
-                'type' => $this->typeLabel($AccountStatement),
+                'type' => $this->typeLabel($AccountStatement, $ticket_info),
+                // edit / re-issue / refund rows are highlighted (see registerEvents)
+                'op' => InvoicePassengerLedger::rowKind($AccountStatement),
                 'date' => $isTicket ? InvoicePassengerLedger::displayDate($AccountStatement, $ticket_info) : (string) $AccountStatement->created_at,
                 'airline' => $isTicket ? (string) $ticket_info->invoice_airline : '',
                 'route' => $isTicket ? trim($ticket_info->from_location . ' - ' . $ticket_info->to_location) : '',
@@ -187,6 +191,8 @@ class AccountatExport implements FromView, WithEvents, WithTitle
             }
         }
 
+        $this->rowOps = array_column($rows, 'op');
+
         return view('excel.accountat_excel', [
             'rows' => $rows,
             'st' => $st,
@@ -202,9 +208,9 @@ class AccountatExport implements FromView, WithEvents, WithTitle
     }
 
     /** "بيع تذكرة / فواتير الطيران" etc. -- same wording as the Print Preview. */
-    private function typeLabel($AccountStatement): string
+    private function typeLabel($AccountStatement, $invoice = null): string
     {
-        $kind = InvoicePassengerLedger::kindLabel($AccountStatement);
+        $kind = InvoicePassengerLedger::kindLabel($AccountStatement, $invoice);
         $prefix = [1 => ($kind ?? 'تذاكر') . ' / ', 2 => 'سندات / ', 3 => 'أرصدة افتتاحية / ', 4 => 'سداد / '][$AccountStatement->transaction_type] ?? '';
         $type = [
             1 => 'فواتير الطيران', 2 => 'فواتير تأشيرات', 3 => 'فواتير سياحة داخلية',
@@ -221,7 +227,7 @@ class AccountatExport implements FromView, WithEvents, WithTitle
     {
         $result = substr($AccountStatement->es_id, 0, 6);
         if ($result == 'FLY-RD') {
-            $lines = ['إلغاء تذكرة ' . $AccountStatement->es_id];
+            $lines = ['مرتجع تذكرة ' . $AccountStatement->es_id];
         } elseif ($result == 'FLY-RS') {
             $lines = ['إعادة إصدار تذكرة ' . $AccountStatement->es_id];
         } else {
@@ -306,6 +312,15 @@ class AccountatExport implements FromView, WithEvents, WithTitle
                         $tot = $sheet->getStyle("A{$totalRow}:{$last}{$totalRow}");
                         $tot->getFont()->setBold(true);
                         $tot->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('D9EAD3');
+                    }
+
+                    // edit / re-issue / refund rows: same colours as the screen / print
+                    $fills = ['edit' => 'FFF8E1', 'reissue' => 'E3F2FD', 'refund' => 'FDECEA'];
+                    foreach ($this->rowOps as $i => $op) {
+                        if (isset($fills[$op])) {
+                            $r = $headerRow + 1 + $i;
+                            $sheet->getStyle("A{$r}:{$last}{$r}")->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB($fills[$op]);
+                        }
                     }
 
                     $sheet->freezePane('A' . ($headerRow + 1));

@@ -30,7 +30,8 @@ swal("", "{{$errors->first()}}", "info");
                         تاريخ الفاتورة
                         <span class="text-danger">*</span>
                      </p>
-                     <input type="date" name="invoice_date" value="{{date('Y-m-d')}}" placeholder="تاريخ الفاتورة" class="form-control" style="text-align:right;">
+                     <input type="date" name="invoice_date" value="{{date('Y-m-d')}}" placeholder="تاريخ الفاتورة" class="form-control" style="text-align:right;" readonly>
+                     <small class="text-muted">إعادة الإصدار عملية جديدة بتاريخ اليوم؛ الفاتورة الأصلية لا تتغير.</small>
                   </div>
                   <div class="col-6">
                     <p>
