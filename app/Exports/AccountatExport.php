@@ -1,99 +1,100 @@
 <?php
 
 namespace App\Exports;
+
 use App\Models\{AccountStatement, Supplier, Bond, Invoice, TicketUser, Bank, Collector, SubStorage, User};
-//use Maatwebsite\Excel\Concerns\FromCollection;
-
-
 use Illuminate\Contracts\View\View;
 use Maatwebsite\Excel\Concerns\FromView;
+use Maatwebsite\Excel\Concerns\WithEvents;
+use Maatwebsite\Excel\Concerns\WithTitle;
+use Maatwebsite\Excel\Events\AfterSheet;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Worksheet\PageSetup;
 
-class AccountatExport implements FromView
+/**
+ * Account Statement Excel export.
+ *
+ * Mirrors the CURRENT Account Statement screen (accounts_statement/show.blade.php)
+ * and Print Preview (accounts_statement/print_report.blade.php):
+ *  - same filters and chronological order (crt_date ASC, id ASC)
+ *  - same carried-forward opening balance (AccountStatement::openingBalanceBefore)
+ *  - same running balance: once per transaction, float, rounded to 2 dp per row
+ *  - same passenger breakdown: one visual row per passenger for flight tickets,
+ *    showing that passenger's share; the running balance still advances once
+ *    per transaction and is only repeated for display on each passenger row
+ *  - same columns (plus employee, as on the screen)
+ *
+ * All display rows are built here, so the Blade view runs no queries.
+ */
+class AccountatExport implements FromView, WithEvents, WithTitle
 {
-    /**
-    * @return \Illuminate\Support\Collection
-    */
-    
+    /** Last column of the 12-column layout (RTL: column A is the right-most). */
+    const LAST_COL = 'L';
+    const HEADER_LABEL = 'رقم العملية';
+
     protected $invoice_beneficiaries;
     protected $date_from;
     protected $date_to;
     protected $transaction_type;
 
- function __construct($invoice_beneficiaries , $date_from , $date_to , $transaction_type) {
+    function __construct($invoice_beneficiaries, $date_from, $date_to, $transaction_type)
+    {
         $this->invoice_beneficiaries = $invoice_beneficiaries;
         $this->date_from = $date_from;
         $this->date_to = $date_to;
         $this->transaction_type = $transaction_type;
- }
-    
-    
+    }
+
+    public function title(): string
+    {
+        return 'كشف حساب';
+    }
+
     public function view(): View
     {
-        
-                $search_status = (int) $this->invoice_beneficiaries;
+        $search_status = (int) $this->invoice_beneficiaries;
 
-//        dd($request);
-       
+        $AccountStatements = AccountStatement::select('*')->where('is_storage', '!=', 1);
 
-        $AccountStatements = AccountStatement::select('*')->where('is_storage', '!=' , 1);
-
-//        $st = 0;
-        
-        if($search_status == 0){
-            $supplier = [];
+        if ($search_status == 0) {
+            $supplier = null;
             $st = 0;
-            
-           $AccountStatements = $AccountStatements->where('is_supp_account' , '!=',1);
-            
-        }else{
-            $AccountStatements = $AccountStatements->where('supp_client_id' , $search_status);
-             
-            $supplier = Supplier::select('*')->where('id' , $search_status)->get();
-            abort_if(count($supplier) == 0 , 404);
-            
-            $supplier = $supplier[0];
-            
+            $AccountStatements = $AccountStatements->where('is_supp_account', '!=', 1);
+        } else {
+            $AccountStatements = $AccountStatements->where('supp_client_id', $search_status);
+            $supplier = Supplier::select('*')->where('id', $search_status)->first();
+            abort_if(!$supplier, 404);
             $st = 1;
-            
-            
         }
-        
-//       dd($st , $AccountStatements->get());
-        
-        
+
         $isDateFiltered = isset($this->date_from) && isset($this->date_to);
 
-        if($isDateFiltered){
-            $AccountStatements = $AccountStatements->whereBetween('crt_date' , [$this->date_from , $this->date_to]);
+        if ($isDateFiltered) {
+            $AccountStatements = $AccountStatements->whereBetween('crt_date', [$this->date_from, $this->date_to]);
         }
-        
-        if(isset($this->transaction_type)){
-            $AccountStatements = $AccountStatements->where('transaction_type' , $this->transaction_type);
+
+        if (isset($this->transaction_type)) {
+            $AccountStatements = $AccountStatements->where('transaction_type', $this->transaction_type);
         }
-         
-        
-        // Same chronological ledger order as the Account Statement screen and
-        // Print Preview (see AccountsController::accounts_statement_search()).
+
+        // Same chronological ledger order as the screen and Print Preview.
         $AccountStatements = $AccountStatements->orderBy('crt_date', 'asc')->orderBy('id', 'asc')->get();
 
         // Same carried-forward opening balance as the screen and Print Preview.
         $opening_balance_for_period = $isDateFiltered
             ? AccountStatement::openingBalanceBefore($search_status, $this->invoice_beneficiaries, $this->date_from, $this->transaction_type)
             : 0;
-        
-        
-        
+
         $total_debit_balance = 0;
-        foreach ($AccountStatements as $AccountStatement) {
-            $total_debit_balance += $AccountStatement->debit_balance;
-        }
         $total_credit_balance = 0;
         foreach ($AccountStatements as $AccountStatement) {
+            $total_debit_balance += $AccountStatement->debit_balance;
             $total_credit_balance += $AccountStatement->credit_balance;
         }
 
-        // Batched lookups replacing the per-row queries the Excel view used to
-        // run (same approach as accounts_statement_search()).
+        // Batched lookups (same as accounts_statement_search()) -- no per-row queries.
         $esIds = $AccountStatements->pluck('es_id')->filter()->unique();
         $bondsByEsId = Bond::whereIn('es_id', $esIds)->get()->keyBy('es_id');
         $invoicesByEsId = Invoice::whereIn('es_id', $esIds)->get()->keyBy('es_id');
@@ -114,24 +115,204 @@ class AccountatExport implements FromView
 
         $addedByIds = $AccountStatements->pluck('added_by')->filter()->unique();
         $usersById = User::whereIn('id', $addedByIds)->get()->keyBy('id');
-        
-     return view('excel.accountat_excel', [
-            'AccountStatements' => $AccountStatements,
-         "st" => $st,
-                     "total_debit_balance" => $total_debit_balance,
-            "total_credit_balance" => $total_credit_balance,
-            "opening_balance_for_period" => $opening_balance_for_period,
-            "supplier" => $supplier,
-            "bondsByEsId" => $bondsByEsId,
-            "invoicesByEsId" => $invoicesByEsId,
-            "usersByTicketSystemId" => $usersByTicketSystemId,
-            "banksById" => $banksById,
-            "collectorsById" => $collectorsById,
-            "subStoragesById" => $subStoragesById,
-            "usersById" => $usersById,
-         
-            "date_from" => $this->date_from,
-            "date_to" => $this->date_to,
+
+        $rows = [];
+        $total_blnc = $opening_balance_for_period;
+
+        foreach ($AccountStatements as $AccountStatement) {
+            // Running balance: once per accounting transaction, never per passenger.
+            $closing = (float) $AccountStatement->debit_balance - (float) $AccountStatement->credit_balance;
+            $total_blnc = round($total_blnc + $closing, 2);
+
+            $ticket_info = null;
+            $users = collect();
+            $bond = null;
+
+            if ($AccountStatement->trans_storage == 1) {
+                $ticket_info = $bondsByEsId->get($AccountStatement->es_id);
+                $bond = $ticket_info;
+            } elseif ($AccountStatement->is_supp_account == 0) {
+                $ticket_info = $invoicesByEsId->get($AccountStatement->es_id);
+                if ($ticket_info) {
+                    $users = $usersByTicketSystemId->get($ticket_info->ticket_system_id) ?? collect();
+                }
+            }
+
+            $isTicket = $AccountStatement->transaction_type == 1 && $ticket_info;
+            $hasPassengerBreakdown = $AccountStatement->es_id != 'FLY-OPEN-BALANCE'
+                && $AccountStatement->transaction_type == 1 && $ticket_info && $users->count() > 0;
+            $debitHasAmount = $AccountStatement->debit_balance > 0;
+            $creditHasAmount = $AccountStatement->credit_balance > 0;
+            // Same rule as the screen/print: passenger shares only when they add up
+            // exactly to the transaction amount (not for FLY-RD cancellations, whose
+            // TicketUser prices are the original ticket's); otherwise the transaction
+            // amount is shown once, on the first passenger row.
+            $debitSplit = $hasPassengerBreakdown && $debitHasAmount && abs($users->sum('client_bought_price') - $AccountStatement->debit_balance) < 0.005;
+            $creditSplit = $hasPassengerBreakdown && $creditHasAmount && abs($users->sum('client_net_pice') - $AccountStatement->credit_balance) < 0.005;
+
+            $base = [
+                'es_id' => $AccountStatement->es_id,
+                'type' => $this->typeLabel($AccountStatement),
+                'date' => $isTicket ? (string) $ticket_info->invoice_date : (string) $AccountStatement->created_at,
+                'airline' => $isTicket ? (string) $ticket_info->invoice_airline : '',
+                'route' => $isTicket ? trim($ticket_info->from_location . ' - ' . $ticket_info->to_location) : '',
+                'travel_date' => $isTicket ? (string) $ticket_info->invoice_travel_date : '',
+                'balance' => $total_blnc,
+            ];
+            $mem = $usersById->get($AccountStatement->added_by);
+
+            if ($hasPassengerBreakdown) {
+                foreach ($users->values() as $i => $user) {
+                    $rows[] = $base + [
+                        'details' => (string) $user->client_name,
+                        'booking' => (string) $user->client_booking_id,
+                        'debit' => $debitSplit ? (float) $user->client_bought_price
+                            : ($debitHasAmount && $i === 0 ? (float) $AccountStatement->debit_balance : null),
+                        'credit' => $creditSplit ? (float) $user->client_net_pice
+                            : ($creditHasAmount && $i === 0 ? (float) $AccountStatement->credit_balance : null),
+                        'employee' => $i === 0 && $mem ? $mem->name : '',
+                        'first' => $i === 0,
+                    ];
+                }
+            } else {
+                $rows[] = $base + [
+                    'details' => $this->detailsLines($AccountStatement, $bond, $banksById, $collectorsById, $subStoragesById),
+                    'booking' => '',
+                    'debit' => (float) $AccountStatement->debit_balance,
+                    'credit' => (float) $AccountStatement->credit_balance,
+                    'employee' => $mem ? $mem->name : '',
+                    'first' => true,
+                ];
+            }
+        }
+
+        return view('excel.accountat_excel', [
+            'rows' => $rows,
+            'st' => $st,
+            'supplier' => $supplier,
+            'total_debit_balance' => $total_debit_balance,
+            'total_credit_balance' => $total_credit_balance,
+            'opening_balance_for_period' => $opening_balance_for_period,
+            'total_blnc' => $total_blnc,
+            'date_from' => $this->date_from,
+            'date_to' => $this->date_to,
+            'isDateFiltered' => $isDateFiltered,
         ]);
- }
+    }
+
+    /** "تذاكر / فواتير الطيران" etc. -- same wording as the Print Preview. */
+    private function typeLabel($AccountStatement): string
+    {
+        $prefix = [1 => 'تذاكر / ', 2 => 'سندات / ', 3 => 'أرصدة افتتاحية / ', 4 => 'سداد / '][$AccountStatement->transaction_type] ?? '';
+        $type = [
+            1 => 'فواتير الطيران', 2 => 'فواتير تأشيرات', 3 => 'فواتير سياحة داخلية',
+            4 => 'فواتير سياحة خارجية', 5 => 'فواتير سياحة دينية', 6 => 'فواتير تأمينات السفر',
+            7 => 'فواتير تحاليل السفر', 8 => 'فواتير نقل سياحي', 9 => 'سند دفع',
+            10 => 'سند قبض', 11 => 'أرصدة', 12 => 'سداد فاتورة',
+        ][$AccountStatement->invoice_type] ?? 'أخرى';
+
+        return $prefix . $type;
+    }
+
+    /** Transaction description lines for non-passenger rows (same content as the screen). */
+    private function detailsLines($AccountStatement, $bond, $banksById, $collectorsById, $subStoragesById): array
+    {
+        $result = substr($AccountStatement->es_id, 0, 6);
+        if ($result == 'FLY-RD') {
+            $lines = ['إلغاء تذكرة ' . $AccountStatement->es_id];
+        } elseif ($result == 'FLY-RS') {
+            $lines = ['إعادة إصدار تذكرة ' . $AccountStatement->es_id];
+        } else {
+            $lines = [(string) $AccountStatement->transaction_txt];
+        }
+
+        if ($AccountStatement->transaction_type == 2 && $bond) {
+            if ($bond->money_way == 1) {
+                $way = 'دفع نقدي';
+            } elseif ($bond->money_way == 2) {
+                $bank = $banksById->get($bond->bank_id);
+                $way = 'تحويل بنكي' . ($bank ? ' - ' . $bank->bank_name : '');
+            } else {
+                $collector = $collectorsById->get($bond->collector_info);
+                $way = 'تحصيل من المندوب: ' . ($collector ? $collector->name : '');
+            }
+            $lines[] = trim($way . ' ' . $bond->info);
+        }
+
+        if ($AccountStatement->trans_storage == 1 && (int) $AccountStatement->sub_id !== 0) {
+            $sub = $subStoragesById->get((int) $AccountStatement->sub_id);
+            if ($sub) {
+                $lines[] = 'خزينة فرعية: ' . $sub->name;
+            }
+        }
+
+        return array_values(array_filter(array_map('trim', $lines), 'strlen'));
+    }
+
+    public function registerEvents(): array
+    {
+        return [
+            AfterSheet::class => function (AfterSheet $event) {
+                $sheet = $event->sheet->getDelegate();
+                $last = self::LAST_COL;
+                $highest = $sheet->getHighestRow();
+
+                $sheet->setRightToLeft(true);
+                $sheet->getParent()->getDefaultStyle()->getFont()->setName('Arial')->setSize(10);
+
+                // Locate the transaction table (header row .. totals row).
+                $headerRow = null;
+                $totalRow = null;
+                for ($r = 1; $r <= $highest; $r++) {
+                    $a = trim((string) $sheet->getCell("A$r")->getValue());
+                    if ($headerRow === null && $a === self::HEADER_LABEL) {
+                        $headerRow = $r;
+                    } elseif ($headerRow !== null && $a === 'الإجمالي') {
+                        $totalRow = $r;
+                        break;
+                    }
+                }
+
+                foreach (['A' => 17, 'B' => 24, 'C' => 20, 'D' => 12, 'E' => 18, 'F' => 13,
+                          'G' => 38, 'H' => 16, 'I' => 15, 'J' => 15, 'K' => 16, 'L' => 16] as $col => $w) {
+                    $sheet->getColumnDimension($col)->setWidth($w);
+                }
+
+                $all = $sheet->getStyle("A1:{$last}{$highest}");
+                $all->getAlignment()->setWrapText(true)->setVertical(Alignment::VERTICAL_TOP)
+                    ->setReadOrder(Alignment::READORDER_RTL);
+
+                // Title block
+                $sheet->getStyle("A1:{$last}1")->getFont()->setBold(true)->setSize(14);
+                $sheet->getStyle("A1:{$last}2")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                if ($headerRow) {
+                    $end = $totalRow ?? $highest;
+                    $sheet->getStyle("A{$headerRow}:{$last}{$end}")->getBorders()->getAllBorders()
+                        ->setBorderStyle(Border::BORDER_THIN)->getColor()->setRGB('BFBFBF');
+
+                    $head = $sheet->getStyle("A{$headerRow}:{$last}{$headerRow}");
+                    $head->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
+                    $head->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('212529');
+                    $head->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER)->setVertical(Alignment::VERTICAL_CENTER);
+
+                    // Amount columns right-aligned as numbers.
+                    $sheet->getStyle("I" . ($headerRow + 1) . ":K{$end}")->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+
+                    if ($totalRow) {
+                        $tot = $sheet->getStyle("A{$totalRow}:{$last}{$totalRow}");
+                        $tot->getFont()->setBold(true);
+                        $tot->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setRGB('D9EAD3');
+                    }
+
+                    $sheet->freezePane('A' . ($headerRow + 1));
+                    $sheet->getPageSetup()->setRowsToRepeatAtTopByStartAndEnd($headerRow, $headerRow);
+                }
+
+                $sheet->getPageSetup()->setOrientation(PageSetup::ORIENTATION_LANDSCAPE)
+                    ->setPaperSize(PageSetup::PAPERSIZE_A4)->setFitToWidth(1)->setFitToHeight(0);
+            },
+        ];
+    }
 }

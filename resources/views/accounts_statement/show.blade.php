@@ -224,6 +224,13 @@ $url2 = route('site.accounts_statement_print_excel' , [
     // stays blank, matching the transaction's own zero value on that side.
     $debitHasAmount = $AccountStatement->debit_balance > 0;
     $creditHasAmount = $AccountStatement->credit_balance > 0;
+    // Per-passenger shares are shown only when they add up exactly to this
+    // transaction's amount. Cancellations (FLY-RD) carry the refund amount while
+    // TicketUser still holds the original ticket prices; there the transaction
+    // amount is shown once, on the first passenger row, so the column still sums
+    // to the period total and nothing is counted twice.
+    $debitSplit = $hasPassengerBreakdown && $debitHasAmount && abs($users->sum('client_bought_price') - $AccountStatement->debit_balance) < 0.005;
+    $creditSplit = $hasPassengerBreakdown && $creditHasAmount && abs($users->sum('client_net_pice') - $AccountStatement->credit_balance) < 0.005;
 
     $mem = $usersById[$AccountStatement->added_by] ?? null;
     ?>
@@ -320,16 +327,16 @@ $url2 = route('site.accounts_statement_print_excel' , [
         </td>
 
         <td style="text-align: right;">
-            @if($hasPassengerBreakdown && $debitHasAmount)
+            @if($debitSplit)
                 {{number_format($user->client_bought_price, 2)}}
-            @elseif(!$hasPassengerBreakdown)
+            @elseif(!$hasPassengerBreakdown || ($debitHasAmount && $rowIndex === 0))
                 {{number_format($AccountStatement->debit_balance , 2)}}
             @endif
         </td>
         <td style="text-align: right;color:#ff7900;">
-            @if($hasPassengerBreakdown && $creditHasAmount)
+            @if($creditSplit)
                 {{number_format($user->client_net_pice, 2)}}
-            @elseif(!$hasPassengerBreakdown)
+            @elseif(!$hasPassengerBreakdown || ($creditHasAmount && $rowIndex === 0))
                 {{number_format($AccountStatement->credit_balance , 2)}}
             @endif
         </td>
