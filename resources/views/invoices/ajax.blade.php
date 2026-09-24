@@ -3,6 +3,13 @@
 @section('title', 'الفواتير')
 
 @include('components.flash-messages')
+@if(session('success'))
+    {{-- confirmation after an action that returns to the list (e.g. «تم تسجيل السداد», «تم رد المبلغ للعميل») --}}
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="ri-checkbox-circle-line me-2"></i>{{ session('success') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+@endif
 
 <x-page-header title="قائمة الفواتير">
    <div class="ey-action-group">
