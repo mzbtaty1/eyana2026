@@ -422,7 +422,7 @@ $rname = Route::currentRouteName();
                      <div class="menu-dropdown collapse" id="sidebarTables" style="">
                         <ul class="nav nav-sm flex-column">
                            <li class="nav-item">
-                              <a href="{{route('site.invoices_ajax')}}" class="nav-link" data-key="t-basic-tables">كل الفواتير</a>
+                              <a href="{{route('site.invoices')}}" class="nav-link" data-key="t-basic-tables">كل الفواتير</a>
                            </li>
                            <li class="nav-item">
                               <a href="{{route('site.invoices_create')}}" class="nav-link" data-key="t-basic-tables">إضافة فاتورة</a>

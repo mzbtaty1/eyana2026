@@ -308,7 +308,7 @@ $date = $request->crt_date;
             return $payoutError;
         }
         if ($linkInvoiceId) {
-            return redirect()->route('site.invoices_ajax')->with('success', 'تم رد المبلغ للعميل');
+            return redirect()->route('site.invoices')->with('success', 'تم رد المبلغ للعميل');
         }
 
 

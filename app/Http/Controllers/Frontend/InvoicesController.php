@@ -204,7 +204,8 @@ public function getInvoices3Months(Request $request)
             // Resolve the related matches once (ticket_system_id is an unindexed text
             // column, so correlated EXISTS per invoice would be very slow).
             $paxSystems = DB::table('ticket_users')->where(fn ($w) => $w->where('client_name', 'like', $like)
-                ->orWhere('client_booking_id', 'like', $like)->orWhere('client_ticket_id', 'like', $like))
+                ->orWhere('client_booking_id', 'like', $like)->orWhere('client_ticket_id', 'like', $like)
+                ->orWhere('client_passport_id', 'like', $like))
                 ->distinct()->pluck('ticket_system_id')->all();
             $vendorSystems = DB::table('ticket_vendors as tv')->join('suppliers as sv', 'sv.id', '=', 'tv.vendor_id')
                 ->where('sv.name', 'like', $like)->distinct()->pluck('tv.ticket_system_id')->all();
@@ -238,7 +239,7 @@ public function getInvoices3Months(Request $request)
         $length = $length > 0 ? min($length, 500) : 25;
         $rows = $base->select('i.id', 'i.es_id', 'i.ticket_system_id', 'i.invoice_ticket_file', 'i.invoice_date', 'i.created_at', 'i.invoice_travel_date',
                 'i.from_location', 'i.to_location', 'i.invoice_beneficiaries', 'i.invoice_money_pay', 'i.invoice_status', 'i.invoice_shared',
-                'i.invoice_account_1', 'i.invoice_account_2', 'i.invoice_create_by')
+                'i.invoice_account_1', 'i.invoice_account_2', 'i.invoice_create_by', 'i.invoice_section')
             ->skip(max(0, (int) $request->input('start', 0)))->take($length)->get();
 
         // batched lookups for this page only
@@ -246,7 +247,9 @@ public function getInvoices3Months(Request $request)
         $vendorNames = DB::table('ticket_vendors as tv')->join('suppliers as s', 's.id', '=', 'tv.vendor_id')->whereIn('tv.ticket_system_id', $systems)
             ->orderBy('tv.id')->get(['tv.ticket_system_id', 'tv.vendor_id', 's.name'])->groupBy('ticket_system_id');
         $passengers = TicketUser::whereIn('ticket_system_id', $systems)->orderBy('id')
-            ->get(['ticket_system_id', 'client_name', 'client_booking_id', 'client_ticket_id', 'client_net_pice', 'client_bought_price'])->groupBy('ticket_system_id');
+            ->get(['ticket_system_id', 'client_name', 'client_booking_id', 'client_ticket_id', 'client_passport_id', 'client_net_pice', 'client_bought_price'])->groupBy('ticket_system_id');
+        $sections = [1 => 'فواتير الطيران', 2 => 'فواتير تأشيرات', 3 => 'فواتير سياحه داخليه', 4 => 'فواتير سياحه خارجيه',
+            5 => 'فواتير سياحه دينيه', 6 => 'فواتير تأمينات السفر', 7 => 'فواتير تحاليل السفر', 8 => 'فواتير نقل سياحى'];
         $supplierNames = DB::table('suppliers')->whereIn('id', $rows->pluck('invoice_beneficiaries')->filter()->unique())->pluck('name', 'id');
         $userNames = DB::table('users')->whereIn('id', $rows->pluck('invoice_create_by')->merge($rows->pluck('invoice_account_1'))->merge($rows->pluck('invoice_account_2'))->filter()->unique())->pluck('name', 'id');
         $refundRows = AccountStatement::whereIn('es_id', $rows->pluck('es_id')->filter(fn ($e) => str_starts_with((string) $e, 'FLY-RD')))
@@ -258,7 +261,7 @@ public function getInvoices3Months(Request $request)
         // payment status / paid / remaining: Counter Customer invoices only (batched for the page)
         $counterSummaries = CounterPayments::summaries($rows);
 
-        $data = $rows->map(function ($r) use ($vendorNames, $passengers, $supplierNames, $userNames, $refundRows, $markedRows, $counterSummaries) {
+        $data = $rows->map(function ($r) use ($vendorNames, $passengers, $supplierNames, $userNames, $refundRows, $markedRows, $counterSummaries, $sections) {
             $pax = $passengers->get($r->ticket_system_id, collect());
             $isRefund = str_starts_with((string) $r->es_id, 'FLY-RD');
             $sumNet = $pax->sum(fn ($u) => (float) ($u->client_net_pice ?? 0));
@@ -314,7 +317,8 @@ public function getInvoices3Months(Request $request)
                 'invoice_travel_date' => $r->invoice_travel_date,
                 'vendors' => $vendorNames->get($r->ticket_system_id, collect())->pluck('name')->filter()->implode(' / '),
                 'beneficiary' => $supplierNames[$r->invoice_beneficiaries] ?? '',
-                'passengers' => $pax->map(fn ($u) => ['name' => $u->client_name, 'booking' => $u->client_booking_id, 'ticket' => $u->client_ticket_id])->values(),
+                'passengers' => $pax->map(fn ($u) => ['name' => $u->client_name, 'booking' => $u->client_booking_id, 'ticket' => $u->client_ticket_id, 'passport' => $u->client_passport_id])->values(),
+                'section' => $sections[(int) $r->invoice_section] ?? '',
                 'locations' => trim((string) $r->from_location) !== '' || trim((string) $r->to_location) !== '' ? $r->from_location . ' / ' . $r->to_location : '',
                 'cost' => number_format($cost, 2, '.', ''),
                 'sale' => number_format($sale, 2, '.', ''),
@@ -669,29 +673,11 @@ private function getCreatedBy($userId)
     }
     public function index()
     {
-        // Eager-loads the same relations the row loop in invoices/all.blade.php
-        // needs (previously fetched with a handful of per-row queries each).
-        $eagerLoad = ['ticketVendors.supplier', 'beneficiaries', 'users', 'creator', 'mostarad', 'mortaga'];
-
-        if(Auth::user()->account_type == 2){
-        $invoices = Invoice::select('*')
-            ->with($eagerLoad)
-            ->orderBy('id', 'DESC')
-            ->where('invoice_shared', '!=', 1)
-            ->get();
-        }else{
-
-$invoices = Invoice::select('*')
-            ->with($eagerLoad)
-            ->orderBy('id', 'DESC')
-            ->where('invoice_shared', '!=', 1)
-            ->where('invoice_create_by', Auth::user()->id)
-            ->get();
-        }
-
-        return view('invoices.all', [
-            "invoices" => $invoices,
-        ]);
+        // The one invoice list (all invoice kinds incl. shared, operation badges,
+        // Counter Customer payment status). Its rows are loaded page by page from
+        // invoicesListData (site.invoices_list_data), which applies the same
+        // "own invoices only" rule for non-admin users.
+        return view('invoices.ajax');
     }
  public function daily_report()
     {
@@ -933,7 +919,7 @@ $invoices = Invoice::select('*')
         if ($request->route('counter')) {
             $counterCustomer = $suppliers->firstWhere('id', CounterPayments::counterIds()[0] ?? 0);
             if (!$counterCustomer) {
-                return redirect()->route('site.invoices_ajax')->withErrors(['msg' => 'حساب عميل كونتر غير موجود أو غير مفعل']);
+                return redirect()->route('site.invoices')->withErrors(['msg' => 'حساب عميل كونتر غير موجود أو غير مفعل']);
             }
         }
 
@@ -1092,7 +1078,7 @@ $invoices = Invoice::select('*')
         
         
 
-        return redirect()->route('site.invoices_ajax');
+        return redirect()->route('site.invoices');
     }
 
     /**
@@ -1619,7 +1605,7 @@ $invoices = Invoice::select('*')
         $reissued = Invoice::find($create->id);
         InvoicePassengerLedger::freezeRows($reissued, InvoicePassengerLedger::passengers($reissued), 'reissue');
 
-        return redirect()->route('site.invoices_ajax');
+        return redirect()->route('site.invoices');
     }
 
     public function invoices_refund($id)
@@ -1902,7 +1888,7 @@ $invoices = Invoice::select('*')
             "description" => $refund_markers['credit'],
         ]);
 
-        return redirect()->route('site.invoices_ajax');
+        return redirect()->route('site.invoices');
     }
     
     public function pay_part($id){
@@ -2086,6 +2072,6 @@ $invoices = Invoice::select('*')
             return $result;
         }
 
-        return redirect()->route('site.invoices_ajax')->with('success', 'تم تسجيل السداد');
+        return redirect()->route('site.invoices')->with('success', 'تم تسجيل السداد');
     }
 }

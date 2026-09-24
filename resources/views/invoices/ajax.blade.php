@@ -102,6 +102,13 @@
                         <button type="button" id="flt_apply" class="btn btn-primary btn-sm">تطبيق</button>
                         <button type="button" id="flt_clear" class="btn btn-light btn-sm">كل الفواتير</button>
                     </div>
+                    <div class="col-auto dropdown">
+                        {{-- show / hide columns (optional ones: invoice type, description) --}}
+                        <button type="button" class="btn btn-light btn-sm dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                            <i class="ri-layout-column-line"></i> <span>الأعمدة</span>
+                        </button>
+                        <ul class="dropdown-menu p-2" id="colChooser" style="min-width: 210px;"></ul>
+                    </div>
                     <div class="col-auto ms-auto small">
                         <span class="op-badge op-sale">بيع</span>
                         <span class="op-badge op-reissue">إعادة إصدار</span>
@@ -124,6 +131,8 @@
                                 <th>البيع</th>
                                 <th>الربح</th>
                                 <th>الموظف</th>
+                                <th>نوع الفاتورة</th>
+                                <th>وصف الفاتورة</th>
                                 <th>حالة السداد</th>
                                 <th>اجراء</th>
                             </tr>
@@ -207,6 +216,16 @@ $(document).ready(function () {
             { data: 'sale', orderable: false },
             { data: 'profit', orderable: false },
             { data: 'creator', orderable: false, render: function (data) { return esc(data); } },
+            // optional columns (hidden by default, «الأعمدة»)
+            { data: 'section', orderable: false, visible: false, render: function (data) { return esc(data); } },
+            {
+                data: 'passengers', orderable: false, visible: false,
+                render: function (data, type, row) {
+                    const list = (key) => (data || []).map(u => esc(u[key] || '-')).join(' / ');
+                    return `حجز الرحلة ${esc(row.es_id)}<br>اسماء : ${list('name')}<br>ارقام الحجز : ${list('booking')}<br>`
+                        + `ارقام التذاكر : ${list('ticket')}<br>ارقام الجواز : ${list('passport')}`;
+                }
+            },
             {
                 data: 'counter', orderable: false,
                 render: function (data, type, row) {
@@ -285,6 +304,17 @@ $(document).ready(function () {
                 $(row).addClass(cls);
             }
         }
+    });
+    // column chooser: one checkbox per column (the actions column always stays)
+    const dt = $('#invoicesTable').DataTable();
+    dt.columns().every(function (i) {
+        if (i === dt.columns().count() - 1) { return; }
+        const col = this;
+        const item = $(`<li><label class="dropdown-item d-flex align-items-center gap-2 mb-0" style="cursor:pointer;">`
+            + `<input type="checkbox" class="form-check-input m-0"> <span></span></label></li>`);
+        item.find('span').text($(col.header()).text());
+        item.find('input').prop('checked', col.visible()).on('change', function () { col.visible(this.checked); });
+        $('#colChooser').append(item);
     });
     $('#flt_apply').on('click', function () { $('#invoicesTable').DataTable().ajax.reload(); });
     $('#flt_clear').on('click', function () { $('#flt_from').val(''); $('#flt_to').val(''); $('#invoicesTable').DataTable().ajax.reload(); });
