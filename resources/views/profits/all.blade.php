@@ -93,11 +93,7 @@
                         $percent = $value / 100;
                         
                                  if($result == "FLY-RD"){
-                               $mostarad = App\Models\AccountStatement::select('*')->where('es_id',$invoice->es_id)
-                                   ->where('credit_balance',0)->first();
-                               
-                                $mortaga = App\Models\AccountStatement::select('*')->where('es_id',$invoice->es_id)
-                                   ->where('debit_balance',0)->first();
+                               [$mostarad, $mortaga] = App\Services\InvoicePassengerLedger::refundRows($invoice);
                               
                             // Check if records exist and cast to float
                             if($mostarad && $mortaga) {
@@ -124,11 +120,7 @@
                                مسترد للعميل = net_pice_total = client row credit_balance ($mortaga)
                               */
                               
-                              $mostarad = App\Models\AccountStatement::select('*')->where('es_id',$invoice->es_id)
-                                  ->where('credit_balance',0)->first();
-                              
-                               $mortaga = App\Models\AccountStatement::select('*')->where('es_id',$invoice->es_id)
-                                  ->where('debit_balance',0)->first();
+                              [$mostarad, $mortaga] = App\Services\InvoicePassengerLedger::refundRows($invoice);
                               
                               
                               

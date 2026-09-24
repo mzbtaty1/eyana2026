@@ -130,8 +130,7 @@ $invoices = $invoicesQuery->get();
         $total_client_bought_price = $invoice->users->sum(fn($u) => (float)($u->client_bought_price ?? 0));
 
         if($result == "FLY-RD"){
-            $mostarad = $invoice->accountStatements->where('credit_balance',0)->first();
-            $mortaga  = $invoice->accountStatements->where('debit_balance',0)->first();
+            [$mostarad, $mortaga] = App\Services\InvoicePassengerLedger::refundRows($invoice);
             $invoice_profit = ($mostarad && $mortaga)
                 ? (float)($mostarad->debit_balance ?? 0) - (float)($mortaga->credit_balance ?? 0)
                 : 0;

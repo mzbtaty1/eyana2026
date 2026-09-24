@@ -110,8 +110,7 @@
         ?>
         @if($result == "FLY-RD")
             <?php
-                $mostarad = $invoice->mostarad;
-                $mortaga = $invoice->mortaga;
+                [$mostarad, $mortaga] = App\Services\InvoicePassengerLedger::refundRows($invoice);
             ?>
             <td class="{{$bg}}" style="{{$style}}">{{ (float)($mostarad->debit_balance ?? 0) }}</td>
             <td class="{{$bg}}" style="{{$style}}">{{ (float)($mortaga->credit_balance ?? 0) }}</td>

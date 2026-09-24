@@ -216,10 +216,8 @@ $(document).ready(function () {
                         render: function (data, type, row) {
                             // للفواتير الملغاة (FLY-RD)
                             if (row.es_id && row.es_id.startsWith("FLY-RD")) {
-                                const mostarad = (row.account_statements || []).find(st =>
-                                    parseFloat(st.credit_balance) > 0 && parseFloat(st.debit_balance) === 0
-                                );
-                                return mostarad ? parseFloat(mostarad.credit_balance).toFixed(2) : "0.00";
+                                // «مسترد للعميل»: all client rows of the refund (incl. edits), computed server-side
+                                return parseFloat(row.refund_client_total || 0).toFixed(2);
                             }
 
                             // للفواتير العادية
@@ -234,10 +232,8 @@ $(document).ready(function () {
                         render: function (data, type, row) {
                             // للفواتير الملغاة (FLY-RD)
                             if (row.es_id && row.es_id.startsWith("FLY-RD")) {
-                                const mortaga = (row.account_statements || []).find(st =>
-                                    parseFloat(st.debit_balance) > 0 && parseFloat(st.credit_balance) === 0
-                                );
-                                return mortaga ? parseFloat(mortaga.debit_balance).toFixed(2) : "0.00";
+                                // «مرتجع لنا من المورد»: all supplier rows of the refund (incl. edits), computed server-side
+                                return parseFloat(row.refund_supplier_total || 0).toFixed(2);
                             }
 
                             // للفواتير العادية
@@ -252,15 +248,8 @@ $(document).ready(function () {
                         render: function (data, type, row) {
                             // للفواتير الملغاة (FLY-RD)
                             if (row.es_id && row.es_id.startsWith("FLY-RD")) {
-                                const mostarad = (row.account_statements || []).find(st =>
-                                    parseFloat(st.credit_balance) > 0 && parseFloat(st.debit_balance) === 0
-                                );
-                                const mortaga = (row.account_statements || []).find(st =>
-                                    parseFloat(st.debit_balance) > 0 && parseFloat(st.credit_balance) === 0
-                                );
-
-                                const net = mostarad ? parseFloat(mostarad.credit_balance) : 0;
-                                const bought = mortaga ? parseFloat(mortaga.debit_balance) : 0;
+                                const net = parseFloat(row.refund_client_total || 0);
+                                const bought = parseFloat(row.refund_supplier_total || 0);
 
                                 return (bought - net).toFixed(2);
                             }

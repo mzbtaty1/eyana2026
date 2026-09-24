@@ -263,13 +263,7 @@ $url = route('site.employee_log_print') . "?user_id=$id&invoice_section=$invoice
                 $percent = $value / 100;
 
              if($result == "FLY-RD"){
-                           $mostarad = App\Models\AccountStatement::select('*')->where('es_id',$invoice->es_id)
-                               ->where('credit_balance',0)->get();
-                           $mostarad = $mostarad[0];
-                           
-                            $mortaga = App\Models\AccountStatement::select('*')->where('es_id',$invoice->es_id)
-                               ->where('debit_balance',0)->get();
-                           $mortaga = $mortaga[0];
+                           [$mostarad, $mortaga] = App\Services\InvoicePassengerLedger::refundRows($invoice);
                           
                         $perbest = $mostarad->debit_balance - $mortaga->credit_balance;
                           
@@ -290,13 +284,7 @@ $url = route('site.employee_log_print') . "?user_id=$id&invoice_section=$invoice
                             مسترد للعميل = net_pice_total = client row credit_balance ($mortaga)
                            */
                            
-                           $mostarad = App\Models\AccountStatement::select('*')->where('es_id',$invoice->es_id)
-                               ->where('credit_balance',0)->get();
-                           $mostarad = $mostarad[0];
-                           
-                            $mortaga = App\Models\AccountStatement::select('*')->where('es_id',$invoice->es_id)
-                               ->where('debit_balance',0)->get();
-                           $mortaga = $mortaga[0];
+                           [$mostarad, $mortaga] = App\Services\InvoicePassengerLedger::refundRows($invoice);
                            
                            
                            
@@ -485,13 +473,7 @@ $shared_invoices = $shared_invoices->get();
                 $percent = $value / 100;
 
              if($result == "FLY-RD"){
-                           $mostarad = App\Models\AccountStatement::select('*')->where('es_id',$invoice->es_id)
-                               ->where('credit_balance',0)->get();
-                           $mostarad = $mostarad[0];
-                           
-                            $mortaga = App\Models\AccountStatement::select('*')->where('es_id',$invoice->es_id)
-                               ->where('debit_balance',0)->get();
-                           $mortaga = $mortaga[0];
+                           [$mostarad, $mortaga] = App\Services\InvoicePassengerLedger::refundRows($invoice);
                           
                         $perbest = $mostarad->debit_balance - $mortaga->credit_balance;
                           
@@ -511,13 +493,7 @@ $shared_invoices = $shared_invoices->get();
                             مسترد للعميل = net_pice_total = client row credit_balance ($mortaga)
                            */
                            
-                           $mostarad = App\Models\AccountStatement::select('*')->where('es_id',$invoice->es_id)
-                               ->where('credit_balance',0)->get();
-                           $mostarad = $mostarad[0];
-                           
-                            $mortaga = App\Models\AccountStatement::select('*')->where('es_id',$invoice->es_id)
-                               ->where('debit_balance',0)->get();
-                           $mortaga = $mortaga[0];
+                           [$mostarad, $mortaga] = App\Services\InvoicePassengerLedger::refundRows($invoice);
                            
                            
                            

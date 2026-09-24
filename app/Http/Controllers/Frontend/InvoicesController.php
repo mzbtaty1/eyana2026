@@ -149,6 +149,17 @@ public function getInvoices3Months(Request $request)
         ->orderBy('updated_at', 'desc')
         ->get();
 
+    // Refund totals per account from the already loaded rows (includes edits of the
+    // refund): refund_supplier_total = «مرتجع لنا من المورد», refund_client_total = «مسترد للعميل».
+    foreach ($invoices as $invoice) {
+        if (str_starts_with((string) $invoice->es_id, 'FLY-RD')) {
+            $t = InvoicePassengerLedger::refundTotalsFromRows($invoice->accountStatements,
+                optional($invoice->ticketVendors->first())->vendor_id, $invoice->invoice_beneficiaries);
+            $invoice->setAttribute('refund_supplier_total', $t['supplier']);
+            $invoice->setAttribute('refund_client_total', $t['client']);
+        }
+    }
+
     return response()->json([
         'draw' => intval($request->input('draw')),
         'recordsTotal' => $total,

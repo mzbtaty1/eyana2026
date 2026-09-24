@@ -136,6 +136,50 @@ class InvoicePassengerLedger
         }
     }
 
+    // ------------------------------------------------------------------ refund totals for reports
+
+    /**
+     * A refund invoice's totals from ALL its ledger rows, per account -- so an
+     * edit of the refund (adjustment rows dated later) is included:
+     *   supplier = «مرتجع لنا من المورد» = supplier-account debits minus credits
+     *   client   = «مسترد للعميل»        = client-account credits minus debits
+     * For a refund that was never edited this equals the old first-row values
+     * (supplier row debit, client row credit).
+     * $rows: the invoice's account_statements rows (any transaction_type is filtered here).
+     */
+    public static function refundTotalsFromRows($rows, $vendorId, $clientId): array
+    {
+        $rows = collect($rows)->filter(fn ($r) => (int) $r->transaction_type === 1);
+        $supplier = $rows->filter(fn ($r) => (string) $r->supp_client_id === (string) $vendorId)
+            ->sum(fn ($r) => (float) $r->debit_balance - (float) $r->credit_balance);
+        $client = $rows->filter(fn ($r) => (string) $r->supp_client_id === (string) $clientId)
+            ->sum(fn ($r) => (float) $r->credit_balance - (float) $r->debit_balance);
+        return ['supplier' => round($supplier, 2), 'client' => round($client, 2)];
+    }
+
+    /** refundTotalsFromRows() for one invoice (model or row with es_id, ticket_system_id, invoice_beneficiaries). */
+    public static function refundTotals($invoice): array
+    {
+        $vendorId = TicketVendor::where('ticket_system_id', $invoice->ticket_system_id)->value('vendor_id');
+        $rows = AccountStatement::where('es_id', $invoice->es_id)->where('is_storage', '!=', 1)
+            ->get(['supp_client_id', 'transaction_type', 'debit_balance', 'credit_balance']);
+        return self::refundTotalsFromRows($rows, $vendorId, $invoice->invoice_beneficiaries);
+    }
+
+    /**
+     * The same totals shaped like the reports' former first-row lookups:
+     * [$mostarad, $mortaga] with $mostarad->debit_balance = «مرتجع لنا من المورد»
+     * and $mortaga->credit_balance = «مسترد للعميل».
+     */
+    public static function refundRows($invoice): array
+    {
+        $t = self::refundTotals($invoice);
+        return [
+            (object) ['debit_balance' => $t['supplier'], 'credit_balance' => 0],
+            (object) ['debit_balance' => 0, 'credit_balance' => $t['client']],
+        ];
+    }
+
     // ------------------------------------------------------------------ markers / statement display
 
     public static function marker($row): ?array

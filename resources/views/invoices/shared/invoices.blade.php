@@ -112,13 +112,7 @@
                       ?>
                        @if($result == "FLY-RD")
                       <?php
-                        $mostarad = App\Models\AccountStatement::select('*')->where('es_id',$invoice->es_id)
-                               ->where('credit_balance',0)->get();
-                           $mostarad = $mostarad[0];
-                           
-                            $mortaga = App\Models\AccountStatement::select('*')->where('es_id',$invoice->es_id)
-                               ->where('debit_balance',0)->get();
-                           $mortaga = $mortaga[0];
+                        [$mostarad, $mortaga] = App\Services\InvoicePassengerLedger::refundRows($invoice);
                            
                       
                       ?>

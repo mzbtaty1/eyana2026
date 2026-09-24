@@ -54,12 +54,7 @@
     $profitAmount = $totalClientBoughtPrice - $totalClientNetPrice;
 
     if ($esIdPrefix == "FLY-RD") {
-        $mostarad = App\Models\AccountStatement::where('es_id', $invoice->es_id)
-                                               ->where('credit_balance', 0)
-                                               ->first();
-        $mortaga = App\Models\AccountStatement::where('es_id', $invoice->es_id)
-                                              ->where('debit_balance', 0)  
-                                              ->first();
+        [$mostarad, $mortaga] = App\Services\InvoicePassengerLedger::refundRows($invoice);
         
         $costAmount = (float)($mostarad->debit_balance ?? 0);
         $sellAmount = (float)($mortaga->credit_balance ?? 0);
