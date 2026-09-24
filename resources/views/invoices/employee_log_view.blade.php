@@ -286,8 +286,8 @@ $url = route('site.employee_log_print') . "?user_id=$id&invoice_section=$invoice
                            @if($result == "FLY-RD")
                            <?php
                            /* 
-                            net_pice_total = المسترد له / debit_balance
-                            bought_price_total = المرتجع لنا / credit_balance
+                            مرتجع لنا من المورد = bought_price_total = supplier row debit_balance ($mostarad)
+                            مسترد للعميل = net_pice_total = client row credit_balance ($mortaga)
                            */
                            
                            $mostarad = App\Models\AccountStatement::select('*')->where('es_id',$invoice->es_id)
@@ -507,8 +507,8 @@ $shared_invoices = $shared_invoices->get();
                            @if($result == "FLY-RD")
                            <?php
                            /* 
-                            net_pice_total = المسترد له / debit_balance
-                            bought_price_total = المرتجع لنا / credit_balance
+                            مرتجع لنا من المورد = bought_price_total = supplier row debit_balance ($mostarad)
+                            مسترد للعميل = net_pice_total = client row credit_balance ($mortaga)
                            */
                            
                            $mostarad = App\Models\AccountStatement::select('*')->where('es_id',$invoice->es_id)

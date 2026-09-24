@@ -443,13 +443,13 @@ $invoices = Invoice::select('*')
         // never blocked here — only invalid input, or a loss submitted
         // without the employee's explicit confirmation, is rejected.
         if (!is_numeric($request->bought_price_total) || (float) $request->bought_price_total <= 0) {
-            return Redirect::back()->withErrors(['msg' => 'برجاء إدخال قيمة صحيحة أكبر من صفر للمبلغ المرتجع من المورد']);
+            return Redirect::back()->withErrors(['msg' => 'برجاء إدخال قيمة صحيحة أكبر من صفر في «مرتجع لنا من المورد»']);
         }
         if (!is_numeric($request->net_pice_total) || (float) $request->net_pice_total < 0) {
-            return Redirect::back()->withErrors(['msg' => 'برجاء إدخال قيمة صحيحة للمبلغ المسترد للعميل']);
+            return Redirect::back()->withErrors(['msg' => 'برجاء إدخال قيمة صحيحة في «مسترد للعميل»']);
         }
         if ((float) $request->net_pice_total > (float) $request->bought_price_total && $request->loss_confirmed != '1') {
-            return Redirect::back()->withErrors(['msg' => 'هذه العملية تسجل خسارة، برجاء تأكيد الموافقة على الخسارة قبل الحفظ']);
+            return Redirect::back()->withErrors(['msg' => 'هذه العملية تسجل خسارة («مسترد للعميل» أكبر من «مرتجع لنا من المورد»)، برجاء تأكيد الموافقة على الخسارة قبل الحفظ']);
         }
 
                $id = (int) $request->id;
@@ -467,6 +467,26 @@ $invoices = Invoice::select('*')
             $refund_users = $refund_users->where('id', (int) $request->refund_passenger_id)->values();
             if ($refund_users->isEmpty()) {
                 return Redirect::back()->withErrors(['msg' => 'برجاء اختيار الراكب المسترد من الجدول']);
+            }
+        }
+
+        // «مرتجع لنا من المورد» (bought_price_total) is what the supplier returns to us;
+        // «مسترد للعميل» (net_pice_total) is what we return to the client. Neither
+        // should exceed what the original invoice holds for the refunded passenger(s)
+        // -- if one does, the two fields were most likely swapped. Allowed only after
+        // explicit confirmation.
+        if ($request->over_refund_confirmed != '1') {
+            $refund_cost = round((float) $refund_users->sum('client_net_pice'), 2);
+            $refund_sale = round((float) $refund_users->sum('client_bought_price'), 2);
+            $over = [];
+            if ((float) $request->bought_price_total > $refund_cost + 0.005) {
+                $over[] = '«مرتجع لنا من المورد» (' . number_format((float) $request->bought_price_total, 2) . ') أكبر مما دُفع للمورد في الفاتورة الأصلية (' . number_format($refund_cost, 2) . ')';
+            }
+            if ((float) $request->net_pice_total > $refund_sale + 0.005) {
+                $over[] = '«مسترد للعميل» (' . number_format((float) $request->net_pice_total, 2) . ') أكبر مما دفعه العميل في الفاتورة الأصلية (' . number_format($refund_sale, 2) . ')';
+            }
+            if ($over) {
+                return Redirect::back()->withErrors(['msg' => 'تنبيه: ' . implode(' ، ', $over) . '. برجاء التأكد من عدم عكس الحقلين ثم تأكيد الموافقة قبل الحفظ']);
             }
         }
 

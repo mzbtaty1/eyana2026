@@ -10,8 +10,8 @@ swal("", "{{$errors->first()}}", "info");
 
 <?php
 // Column meaning by ledger side (client_bought_price = debit share, client_net_pice = credit share).
-$debitLabel = $isRefund ? 'المرتجع لنا (مدين المورد)' : 'سعر البيع (مدين العميل)';
-$creditLabel = $isRefund ? 'المسترد له (دائن العميل)' : 'سعر التكلفة (دائن المورد)';
+$debitLabel = $isRefund ? 'مرتجع لنا من المورد (مدين المورد)' : 'سعر البيع (مدين العميل)';
+$creditLabel = $isRefund ? 'مسترد للعميل (دائن العميل)' : 'سعر التكلفة (دائن المورد)';
 ?>
 <div class="row">
    <div class="col-lg-12">

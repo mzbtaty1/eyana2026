@@ -261,7 +261,7 @@ swal("", "{{$errors->first()}}", "info");
                   <?php $x = 0; ?>
                    @foreach($users as $user)
                   <tr id="remove{{$user->id}}">
-                     <td class="refund-pick" style="display:none;"><input type="radio" name="refund_passenger_id" value="{{$user->id}}" class="form-check-input"></td>
+                     <td class="refund-pick" style="display:none;"><input type="radio" name="refund_passenger_id" value="{{$user->id}}" data-cost="{{round((float) $user->client_net_pice, 2)}}" data-sale="{{round((float) $user->client_bought_price, 2)}}" class="form-check-input"></td>
                      <td>
                         <input type="text" value="{{$user->client_name}}" name="ticket_info[{{$x}}][name]" placeholder="الاسم" class="form-control" required disabled>
                      </td>
@@ -293,23 +293,21 @@ swal("", "{{$errors->first()}}", "info");
                    @endforeach
                </table>
                <br>
-                   <div class="row">
+    <div class="row" id="refund_amounts" data-cost="{{round($total_client_net_pice, 2)}}" data-sale="{{round($total_client_bought_price, 2)}}">
       <div class="col-6 mb-3">
-          <p>
-          المسترد له
-          </p>
-          <input type="number" name="net_pice_total" id="net_pice_total" class="form-control" style="text-align:right;" oninput="calculateRefundLoss()">
+          <p class="mb-1"><b>مرتجع لنا من المورد</b> <span class="text-danger">*</span></p>
+          <input type="number" step="0.01" min="0" name="bought_price_total" id="bought_price_total" class="form-control" style="text-align:right;" oninput="calculateRefundLoss(); checkOverRefund()">
+          <small class="text-muted">المبلغ الذي يرده المورد لشركتنا — يُسجل مدين على المورد</small>
       </div>
-      <div class="col-6">
-          <p>
-          المرتجع لنا
-          </p>
-            <input type="number" name="bought_price_total" id="bought_price_total" class="form-control" onchange="" style="text-align:right;" oninput="calculateRefundLoss()">
+      <div class="col-6 mb-3">
+          <p class="mb-1"><b>مسترد للعميل</b> <span class="text-danger">*</span></p>
+          <input type="number" step="0.01" min="0" name="net_pice_total" id="net_pice_total" class="form-control" style="text-align:right;" oninput="calculateRefundLoss(); checkOverRefund()">
+          <small class="text-muted">المبلغ الذي ترده شركتنا للعميل — يُسجل دائن للعميل</small>
       </div>
     </div>
     <div id="loss_warning" class="alert alert-warning border-0" style="display:none;">
         <center>
-        تنويه: سيتم تسجيل خسارة على هذه العملية بقيمة <b id="loss_amount"></b> {{$invoice_info->invoice_currency}} نتيجة أن المبلغ المسترد للعميل أكبر من المبلغ المرتجع من المورد.
+        تنويه: سيتم تسجيل خسارة على هذه العملية بقيمة <b id="loss_amount"></b> {{$invoice_info->invoice_currency}} نتيجة أن «مسترد للعميل» أكبر من «مرتجع لنا من المورد».
         <br>
         <div class="form-check mt-2" style="display:inline-block;">
             <input class="form-check-input" type="checkbox" id="loss_confirm_checkbox" onchange="onLossConfirmChange()">
@@ -318,6 +316,18 @@ swal("", "{{$errors->first()}}", "info");
         </center>
     </div>
     <input type="hidden" name="loss_confirmed" id="loss_confirmed" value="0">
+    <div id="over_refund_warning" class="alert alert-danger border-0" style="display:none;">
+        <center>
+        تنبيه: <span id="over_refund_text"></span>
+        <br>برجاء التأكد من عدم عكس الحقلين: «مرتجع لنا من المورد» هو ما يرده المورد لنا، و«مسترد للعميل» هو ما نرده نحن للعميل.
+        <br>
+        <div class="form-check mt-2" style="display:inline-block;">
+            <input class="form-check-input" type="checkbox" id="over_refund_checkbox" onchange="document.getElementById('over_refund_confirmed').value = this.checked ? '1' : '0'">
+            <label class="form-check-label" for="over_refund_checkbox">المبالغ صحيحة، أوافق على الحفظ</label>
+        </div>
+        </center>
+    </div>
+    <input type="hidden" name="over_refund_confirmed" id="over_refund_confirmed" value="0">
                 
 <!--
                   <div class="row">
@@ -541,5 +551,39 @@ document.getElementById('refundForm').addEventListener('submit', function (e) {
     }
 });
 onRefundModeChange();
+</script>
+<script>
+// Warn when an amount is more than the original invoice holds for the refunded
+// passenger(s): «مرتجع لنا من المورد» above what the supplier was paid (cost),
+// or «مسترد للعميل» above what the client was charged (sale) -- usually the two
+// fields were swapped.
+function checkOverRefund() {
+    var single = document.getElementById('refund_mode_single').checked;
+    var picked = document.querySelector('input[name="refund_passenger_id"]:checked');
+    var box = document.getElementById('refund_amounts');
+    var src = single ? picked : box;
+    var warn = document.getElementById('over_refund_warning');
+    document.getElementById('over_refund_confirmed').value = '0';
+    document.getElementById('over_refund_checkbox').checked = false;
+    if (!src) { warn.style.display = 'none'; return; }
+    var cost = parseFloat(src.dataset.cost), sale = parseFloat(src.dataset.sale);
+    var ret = parseFloat(document.getElementById('bought_price_total').value);
+    var cli = parseFloat(document.getElementById('net_pice_total').value);
+    var msgs = [];
+    if (!isNaN(ret) && ret > cost + 0.005) msgs.push('«مرتجع لنا من المورد» (' + ret.toFixed(2) + ') أكبر مما دُفع للمورد في الفاتورة الأصلية (' + cost.toFixed(2) + ')');
+    if (!isNaN(cli) && cli > sale + 0.005) msgs.push('«مسترد للعميل» (' + cli.toFixed(2) + ') أكبر مما دفعه العميل في الفاتورة الأصلية (' + sale.toFixed(2) + ')');
+    document.getElementById('over_refund_text').textContent = msgs.join(' ، ');
+    warn.style.display = msgs.length ? 'block' : 'none';
+}
+document.querySelectorAll('input[name="refund_mode"], input[name="refund_passenger_id"]').forEach(function (el) {
+    el.addEventListener('change', checkOverRefund);
+});
+document.getElementById('refundForm').addEventListener('submit', function (e) {
+    var warn = document.getElementById('over_refund_warning');
+    if (warn.style.display === 'block' && document.getElementById('over_refund_confirmed').value !== '1') {
+        e.preventDefault();
+        warn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+});
 </script>
 @endsection

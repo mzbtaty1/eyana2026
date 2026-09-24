@@ -214,8 +214,8 @@ swal("", "{{$errors->first()}}", "info");
                      <th>الاسم</th>
                      <th>نوع الراكب</th>
                      @if($result == "FLY-RD")
-                     <th>المسترد له (دائن العميل)</th>
-                     <th>المرتجع لنا (مدين المورد)</th>
+                     <th>مسترد للعميل (دائن العميل)</th>
+                     <th>مرتجع لنا من المورد (مدين المورد)</th>
                      @else
                      <th>سعر التكلفة</th>
                      <th>سعر البيع</th>
@@ -276,13 +276,13 @@ swal("", "{{$errors->first()}}", "info");
                   <div class="row">
       <div class="col-6 mb-3">
           <p>
-          المسترد له (مجموع الركاب)
+          مسترد للعميل (مجموع الركاب)
           </p>
           <input type="number" value="{{$refund_credit_total}}" class="form-control" style="text-align:right;" readonly>
       </div>
       <div class="col-6">
           <p>
-          المرتجع لنا (مجموع الركاب)
+          مرتجع لنا من المورد (مجموع الركاب)
           </p>
             <input type="number" value="{{$refund_debit_total}}" class="form-control" style="text-align:right;" readonly>
       </div>
