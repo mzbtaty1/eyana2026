@@ -116,8 +116,8 @@
                            
                       
                       ?>
-                      <td class="{{$bg}}" style="{{$style}}">{{$mostarad->debit_balance}}</td>
                       <td class="{{$bg}}" style="{{$style}}">{{$mortaga->credit_balance}}</td>
+                      <td class="{{$bg}}" style="{{$style}}">{{$mostarad->debit_balance}}</td>
                       @else
                       <td class="{{$bg}}" style="{{$style}}">{{$total_client_net_pice}}</td>
                       <td class="{{$bg}}" style="{{$style}}">{{$total_client_bought_price}}</td>
@@ -156,7 +156,7 @@
                       </td>
                         <td class="{{$bg}}" style="{{$style}}">
                           @if($result == "FLY-RD")
-                          {{$mortaga->credit_balance - $mostarad->debit_balance}}
+                          {{$mostarad->debit_balance - $mortaga->credit_balance}}
 
                           @else
                           {{$total_client_bought_price - $total_client_net_pice}}
