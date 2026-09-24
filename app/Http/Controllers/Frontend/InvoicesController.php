@@ -910,7 +910,7 @@ $invoices = Invoice::select('*')
      * Show the form for creating a new resource.
      */
 
-    public function create()
+    public function create(Request $request)
     {
         $suppliers = Supplier::select('*')
             ->where('status', 1)
@@ -927,10 +927,20 @@ $invoices = Invoice::select('*')
             ->orderBy('id', 'DESC')
             ->get();
 
+        // "عميل كونتر": the normal Add Invoice form with the customer fixed to the Counter Customer
+        $counterCustomer = null;
+        if ($request->route('counter')) {
+            $counterCustomer = $suppliers->firstWhere('id', CounterPayments::counterIds()[0] ?? 0);
+            if (!$counterCustomer) {
+                return redirect()->route('site.invoices_ajax')->withErrors(['msg' => 'حساب عميل كونتر غير موجود أو غير مفعل']);
+            }
+        }
+
         return view('invoices.create', [
             "suppliers" => $suppliers,
             "my_suppliers" => $my_suppliers,
             "airlines" => $airlines,
+            "counterCustomer" => $counterCustomer,
         ]);
     }
 

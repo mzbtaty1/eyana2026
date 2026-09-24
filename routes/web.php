@@ -121,6 +121,8 @@ Route::middleware(['auth' , 'check_status'])->group(function(){
     Route::get('/invoices/reissue/{id}' , [InvoicesController::class , 'invoices_reissue_create'])->name('site.invoices_reissue_create');
     Route::post('/invoices/reissue/save' , [InvoicesController::class , 'invoices_reissue_save'])->name('site.invoices_reissue_save');
     Route::get('/invoices/create' , [InvoicesController::class , 'create'])->name('site.invoices_create');
+    // same Add Invoice form, customer fixed to the Counter Customer (config eyana.counter_customer_ids)
+    Route::get('/invoices/create/counter' , [InvoicesController::class , 'create'])->defaults('counter', true)->name('site.invoices_create_counter');
     Route::post('/invoices/save' , [InvoicesController::class , 'store'])->name('site.invoices_save');
     Route::get('/invoices/{id}/show' , [InvoicesController::class , 'show'])->name('site.invoices_show');
     

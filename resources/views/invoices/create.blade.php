@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('content')
-@section('title' , "اضافة فاتورة")
+@section('title' , !empty($counterCustomer) ? "اضافة فاتورة - عميل كونتر" : "اضافة فاتورة")
 
 
 @if($errors->any())
@@ -19,10 +19,11 @@ swal("", "{{$errors->first()}}", "info");
       <div class="card">
          <div class="card-header">
             <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-               <h5 class="card-title mb-0"> اضافة فاتورة </h5>
+               <h5 class="card-title mb-0"> اضافة فاتورة{{ !empty($counterCustomer) ? ' - عميل كونتر' : '' }} </h5>
                <div class="btn-group">
-                  <a href="{{route('site.invoices_create')}}" class="btn btn-primary btn-sm active" aria-current="page"><i class="ri-file-add-line"></i> إضافة فاتورة</a>
+                  <a href="{{route('site.invoices_create')}}" class="btn btn-sm {{ empty($counterCustomer) ? 'btn-primary active' : 'btn-outline-primary' }}" @if(empty($counterCustomer)) aria-current="page" @endif><i class="ri-file-add-line"></i> إضافة فاتورة</a>
                   <a href="{{route('site.shared_invoices_create')}}" class="btn btn-outline-dark btn-sm"><i class="ri-team-line"></i> إضافة فاتورة مشتركة</a>
+                  <a href="{{route('site.invoices_create_counter')}}" class="btn btn-sm {{ !empty($counterCustomer) ? 'btn-success active' : 'btn-outline-success' }}" @if(!empty($counterCustomer)) aria-current="page" @endif><i class="ri-store-2-line"></i> عميل كونتر</a>
                </div>
             </div>
          </div>
@@ -87,11 +88,17 @@ swal("", "{{$errors->first()}}", "info");
                   اسم العميل (المستفيد)
                   <span class="text-danger">*</span>
                </p>
+               @if(!empty($counterCustomer))
+               {{-- Counter Customer invoice: the customer is fixed, no search / selection --}}
+               <input type="hidden" name="invoice_beneficiaries" id="invoice_beneficiaries" value="{{$counterCustomer->id}}">
+               <input type="text" class="form-control" value="{{$counterCustomer->name}}" style="text-align:right;" readonly>
+               @else
                <select class="form-control" name="invoice_beneficiaries" id="invoice_beneficiaries" style="text-align:right;" required>
                   @foreach($suppliers as $supplier)
                   <option value="{{$supplier->id}}">{{$supplier->name}} - @if($supplier->acc_type == 1) عميل @else مورد @endif</option>
                   @endforeach
                </select>
+               @endif
                <br>
                <table class="table table-bordered">
                   <tr>
@@ -273,10 +280,12 @@ swal("", "{{$errors->first()}}", "info");
 <script type="text/javascript">
     
     
+@if(empty($counterCustomer))
  var invoice_beneficiaries = document.querySelector('#invoice_beneficiaries');
   dselect(invoice_beneficiaries, {
             search: true
         });
+@endif
     
      var vendor_id = document.querySelector('#vendor_id');
   dselect(vendor_id, {

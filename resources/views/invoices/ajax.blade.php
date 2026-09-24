@@ -17,6 +17,12 @@
          إضافة فاتورة مشتركة
       </button>
    </a>
+   <a href="{{route('site.invoices_create_counter')}}">
+      <button class="btn btn-success">
+         <i class="ri-store-2-line"></i>
+         عميل كونتر
+      </button>
+   </a>
 </x-page-header>
 
 <style>
