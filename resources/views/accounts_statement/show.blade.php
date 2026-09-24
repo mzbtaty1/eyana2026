@@ -166,16 +166,13 @@ $url2 = route('site.accounts_statement_print_excel' , [
     <?php $x = 0; ?>
     @foreach($AccountStatements as $key => $AccountStatement)
     <?php
-    // Cumulative running balance: computed exactly once per accounting
-    // transaction (this AccountStatement row), exactly as before this change.
-    // The passenger breakdown rows below only DISPLAY this same value on
-    // their first row -- they never recompute or add to it again, so a
-    // multi-passenger invoice still advances the running balance by exactly
-    // one transaction's worth, never once per passenger.
+    // $total_blnc = balance after this whole AccountStatement row. For a
+    // multi-passenger invoice the rows below step through each passenger's
+    // ticket from $balance_before_tx and end on this same value.
     // Balances are DECIMAL(14,2): keep the cents (an (int) cast truncated them).
     $closing = (float) $AccountStatement->debit_balance - (float) $AccountStatement->credit_balance;
+    $balance_before_tx = $total_blnc;
     $total_blnc = round($total_blnc + $closing, 2);
-    $total_blnc_display = number_format($total_blnc, 2);
 
     $ticket_info = null;
     $users = collect();
@@ -216,17 +213,34 @@ $url2 = route('site.accounts_statement_print_excel' , [
     $hasPassengerBreakdown = $AccountStatement->transaction_type == 1 && $ticket_info && $users->count() > 0;
     $breakdownRows = $hasPassengerBreakdown ? $users->values() : collect([null]);
 
-    // One ticket = one financial transaction, however many passengers it has.
-    // Its debit/credit is shown ONCE, on the first passenger row (other passenger
-    // rows leave the amount blank), exactly as it is counted once in $total_blnc
-    // and in the period totals. Only the side that carries an amount is shown.
+    // A multi-passenger invoice keeps ONE invoice number, but every passenger's
+    // ticket is its own financial movement: each passenger row shows that ticket's
+    // amount and the running balance steps through them one by one. The ticket
+    // amounts add up to the invoice amount, so the balance after the last
+    // passenger equals $total_blnc and the period totals are unchanged.
+    // Only when TicketUser prices do NOT add up to the ledger amount (FLY-RD
+    // cancellations keep the original ticket prices, not the refund) is the
+    // ledger amount kept as a single movement on the first passenger row.
     $debitHasAmount = $AccountStatement->debit_balance > 0;
     $creditHasAmount = $AccountStatement->credit_balance > 0;
+    $perPassenger = $hasPassengerBreakdown
+        && (!$debitHasAmount || abs($users->sum('client_bought_price') - $AccountStatement->debit_balance) < 0.005)
+        && (!$creditHasAmount || abs($users->sum('client_net_pice') - $AccountStatement->credit_balance) < 0.005);
 
     $mem = $usersById[$AccountStatement->added_by] ?? null;
     ?>
 
     @foreach($breakdownRows as $rowIndex => $user)
+    <?php
+    if ($perPassenger) {
+        $balance_before_tx = round($balance_before_tx
+            + ($debitHasAmount ? (float) $user->client_bought_price : 0)
+            - ($creditHasAmount ? (float) $user->client_net_pice : 0), 2);
+        $row_balance = $balance_before_tx;
+    } else {
+        $row_balance = $total_blnc;
+    }
+    ?>
     <tr>
         <td style="text-align: right;">{{$AccountStatement->es_id}}</td>
         <td style="text-align: right;">
@@ -318,22 +332,23 @@ $url2 = route('site.accounts_statement_print_excel' , [
         </td>
 
         <td style="text-align: right;">
-            @if(!$hasPassengerBreakdown || ($debitHasAmount && $rowIndex === 0))
+            @if($perPassenger && $debitHasAmount)
+                {{number_format($user->client_bought_price, 2)}}
+            @elseif(!$perPassenger && (!$hasPassengerBreakdown || ($debitHasAmount && $rowIndex === 0)))
                 {{number_format($AccountStatement->debit_balance , 2)}}
             @endif
         </td>
         <td style="text-align: right;color:#ff7900;">
-            @if(!$hasPassengerBreakdown || ($creditHasAmount && $rowIndex === 0))
+            @if($perPassenger && $creditHasAmount)
+                {{number_format($user->client_net_pice, 2)}}
+            @elseif(!$perPassenger && (!$hasPassengerBreakdown || ($creditHasAmount && $rowIndex === 0)))
                 {{number_format($AccountStatement->credit_balance , 2)}}
             @endif
         </td>
         <td style="text-align: right;">
-            {{-- Repeated on every passenger row of this same booking so the
-            balance column is never blank; this is display-only -- the
-            transaction itself is still counted exactly once above ($closing /
-            $total_blnc are computed once per AccountStatement row, not once
-            per passenger). --}}
-            {{$total_blnc_display}}
+            {{-- Balance after this row: after each passenger's ticket, or after the whole --}}
+            {{-- invoice when it is kept as a single movement (see $perPassenger). --}}
+            {{number_format($row_balance, 2)}}
         </td>
 
         <td style="text-align: right;">

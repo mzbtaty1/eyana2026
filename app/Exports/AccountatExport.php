@@ -21,10 +21,10 @@ use PhpOffice\PhpSpreadsheet\Worksheet\PageSetup;
  *  - same filters and chronological order (crt_date ASC, id ASC)
  *  - same carried-forward opening balance (AccountStatement::openingBalanceBefore)
  *  - same running balance: once per transaction, float, rounded to 2 dp per row
- *  - same passenger breakdown: one visual row per passenger for flight tickets;
- *    the ticket is ONE transaction -- its debit/credit is shown once (first
- *    passenger row), the running balance advances once and the same
- *    transaction-level balance is repeated on each of its passenger rows
+ *  - same passenger breakdown: one row per passenger for flight tickets, all
+ *    under the same invoice number; each passenger's ticket is its own
+ *    movement (own amount, running balance steps through them), except when
+ *    the ticket prices don't add up to the ledger amount (FLY-RD cancellations)
  *  - same columns (plus employee, as on the screen)
  *
  * All display rows are built here, so the Blade view runs no queries.
@@ -121,8 +121,8 @@ class AccountatExport implements FromView, WithEvents, WithTitle
         $total_blnc = $opening_balance_for_period;
 
         foreach ($AccountStatements as $AccountStatement) {
-            // Running balance: once per accounting transaction, never per passenger.
             $closing = (float) $AccountStatement->debit_balance - (float) $AccountStatement->credit_balance;
+            $balance_before_tx = $total_blnc;
             $total_blnc = round($total_blnc + $closing, 2);
 
             $ticket_info = null;
@@ -142,10 +142,15 @@ class AccountatExport implements FromView, WithEvents, WithTitle
             $isTicket = $AccountStatement->transaction_type == 1 && $ticket_info;
             $hasPassengerBreakdown = $AccountStatement->es_id != 'FLY-OPEN-BALANCE'
                 && $AccountStatement->transaction_type == 1 && $ticket_info && $users->count() > 0;
-            // One ticket = one transaction: its amount goes on the first passenger row
-            // only (same as the screen/print); only the side carrying an amount is shown.
+            // Same rule as the screen/print: one invoice number, but each passenger's
+            // ticket is its own movement (own amount, own running balance). Only when
+            // the TicketUser prices do not add up to the ledger amount (FLY-RD
+            // cancellations) is the ledger amount kept as one movement on the first row.
             $debitHasAmount = $AccountStatement->debit_balance > 0;
             $creditHasAmount = $AccountStatement->credit_balance > 0;
+            $perPassenger = $hasPassengerBreakdown
+                && (!$debitHasAmount || abs($users->sum('client_bought_price') - $AccountStatement->debit_balance) < 0.005)
+                && (!$creditHasAmount || abs($users->sum('client_net_pice') - $AccountStatement->credit_balance) < 0.005);
 
             $base = [
                 'es_id' => $AccountStatement->es_id,
@@ -154,17 +159,27 @@ class AccountatExport implements FromView, WithEvents, WithTitle
                 'airline' => $isTicket ? (string) $ticket_info->invoice_airline : '',
                 'route' => $isTicket ? trim($ticket_info->from_location . ' - ' . $ticket_info->to_location) : '',
                 'travel_date' => $isTicket ? (string) $ticket_info->invoice_travel_date : '',
-                'balance' => $total_blnc,
             ];
             $mem = $usersById->get($AccountStatement->added_by);
 
             if ($hasPassengerBreakdown) {
                 foreach ($users->values() as $i => $user) {
+                    if ($perPassenger) {
+                        $debit = $debitHasAmount ? (float) $user->client_bought_price : null;
+                        $credit = $creditHasAmount ? (float) $user->client_net_pice : null;
+                        $balance_before_tx = round($balance_before_tx + (float) $debit - (float) $credit, 2);
+                        $rowBalance = $balance_before_tx;
+                    } else {
+                        $debit = $debitHasAmount && $i === 0 ? (float) $AccountStatement->debit_balance : null;
+                        $credit = $creditHasAmount && $i === 0 ? (float) $AccountStatement->credit_balance : null;
+                        $rowBalance = $total_blnc;
+                    }
                     $rows[] = $base + [
                         'details' => (string) $user->client_name,
                         'booking' => (string) $user->client_booking_id,
-                        'debit' => $debitHasAmount && $i === 0 ? (float) $AccountStatement->debit_balance : null,
-                        'credit' => $creditHasAmount && $i === 0 ? (float) $AccountStatement->credit_balance : null,
+                        'debit' => $debit,
+                        'credit' => $credit,
+                        'balance' => $rowBalance,
                         'employee' => $i === 0 && $mem ? $mem->name : '',
                         'first' => $i === 0,
                     ];
@@ -175,6 +190,7 @@ class AccountatExport implements FromView, WithEvents, WithTitle
                     'booking' => '',
                     'debit' => (float) $AccountStatement->debit_balance,
                     'credit' => (float) $AccountStatement->credit_balance,
+                    'balance' => $total_blnc,
                     'employee' => $mem ? $mem->name : '',
                     'first' => true,
                 ];
