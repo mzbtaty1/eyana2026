@@ -111,9 +111,9 @@
                   @endforeach
                </select>
             </div>
-            <div class="col-12 col-md-auto">
-               <button class="btn btn-primary btn-sm"><i class="ri-search-line"></i> عرض التقرير</button>
-               <a href="{{ route('site.invoices_full_report') }}" class="btn btn-light btn-sm">مسح الفلاتر</a>
+            <div class="col-12 col-md-6 col-xl-2 d-flex gap-2">
+               <button class="btn btn-primary btn-sm text-nowrap flex-fill"><i class="ri-search-line"></i> عرض التقرير</button>
+               <a href="{{ route('site.invoices_full_report') }}" class="btn btn-light btn-sm text-nowrap">مسح الفلاتر</a>
             </div>
          </div>
       </form>
@@ -284,14 +284,26 @@ $(document).ready(function () {
         });
     };
 
+    // DataTables' own ajax needs $.ajax, which the layout's slim jQuery build does not have: load with fetch.
+    const toParams = function (obj, prefix, p) {
+        p = p || new URLSearchParams();
+        Object.entries(obj).forEach(function ([k, v]) {
+            const key = prefix ? prefix + '[' + k + ']' : k;
+            if (v !== null && typeof v === 'object') { toParams(v, key, p); } else if (v !== undefined) { p.append(key, v); }
+        });
+        return p;
+    };
     const table = $('#frTable').DataTable({
         serverSide: true,
         processing: true,
-        ajax: {
-            url: urls.data,
-            data: function (d) { Object.assign(d, filters); },
-            dataSrc: function (json) { showSummary(json.summary); return json.data; },
-            error: function (xhr) { console.error('full report:', xhr.responseText); },
+        ajax: function (d, callback) {
+            fetch(urls.data + '?' + toParams(Object.assign({}, d, filters)).toString(), { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+                .then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); })
+                .then(function (json) { showSummary(json.summary); callback(json); })
+                .catch(function (e) {
+                    console.error('full report:', e);
+                    callback({ draw: d.draw, recordsTotal: 0, recordsFiltered: 0, data: [] });
+                });
         },
         order: [],
         columns: [
@@ -329,7 +341,13 @@ $(document).ready(function () {
         lengthMenu: [10, 25, 50, 100, 250, 500],
         searchDelay: 400,
         autoWidth: false,
-        language: { url: '//cdn.datatables.net/plug-ins/1.11.3/i18n/ar.json' },
+        // inline: language.url is loaded with $.ajax too
+        language: {
+            processing: 'جاري التحميل...', search: 'بحث:', lengthMenu: 'عرض _MENU_ صف',
+            info: 'عرض _START_ إلى _END_ من _TOTAL_ صف', infoEmpty: 'لا توجد نتائج', infoFiltered: '',
+            emptyTable: 'لا توجد نتائج', zeroRecords: 'لا توجد نتائج',
+            paginate: { first: 'الأول', previous: 'السابق', next: 'التالي', last: 'الأخير' },
+        },
         rowCallback: function (row, r) {
             $(row).removeClass('fr-reissue fr-refund');
             if (r.op === 'reissue') { $(row).addClass('fr-reissue'); }
