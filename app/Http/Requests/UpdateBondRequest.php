@@ -24,7 +24,7 @@ class UpdateBondRequest extends FormRequest
                 'type_slctd' => ['required'],
                 'storage_id' => ['required', 'integer', 'exists:storages,id'],
                 'supp_id' => ['required', 'integer', 'exists:suppliers,id'],
-                'amount' => ['required', 'numeric'],
+                'amount' => ['required', 'numeric', 'gt:0'],
                 'money_way' => ['required'],
                 'bank_id' => ['required_if:money_way,2', 'nullable', 'integer', 'exists:banks,id'],
                 'crt_date' => ['required', 'date'],
@@ -36,10 +36,19 @@ class UpdateBondRequest extends FormRequest
             'type_slctd' => ['required'],
             'storage_id2' => ['required', 'integer', 'exists:storages,id'],
             'supp_id2' => ['required', 'integer', 'exists:suppliers,id'],
-            'amount2' => ['required', 'numeric'],
+            'amount2' => ['required', 'numeric', 'gt:0'],
             'money_way2' => ['required'],
             'bank_id2' => ['required_if:money_way2,2', 'nullable', 'integer', 'exists:banks,id'],
             'crt_date2' => ['required', 'date'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        // amounts must be positive (a zero / negative voucher would move money the wrong way)
+        return [
+            'amount.gt' => 'برجاء إدخال مبلغ صحيح أكبر من صفر',
+            'amount2.gt' => 'برجاء إدخال مبلغ صحيح أكبر من صفر',
         ];
     }
 
