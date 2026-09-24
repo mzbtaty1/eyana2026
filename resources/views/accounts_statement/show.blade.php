@@ -218,24 +218,23 @@ $url2 = route('site.accounts_statement_print_excel' , [
     // amount and the running balance steps through them one by one. The ticket
     // amounts add up to the invoice amount, so the balance after the last
     // passenger equals $total_blnc and the period totals are unchanged.
-    // Only when TicketUser prices do NOT add up to the ledger amount (FLY-RD
-    // cancellations keep the original ticket prices, not the refund) is the
-    // ledger amount kept as a single movement on the first passenger row.
+    // Per-passenger amounts come from AccountStatement::passengerAmounts(): the
+    // TicketUser prices, or -- when they don't add up to the ledger amount (FLY-RD
+    // cancellations) -- the ledger amount split equally between the passengers.
     $debitHasAmount = $AccountStatement->debit_balance > 0;
     $creditHasAmount = $AccountStatement->credit_balance > 0;
-    $perPassenger = $hasPassengerBreakdown
-        && (!$debitHasAmount || abs($users->sum('client_bought_price') - $AccountStatement->debit_balance) < 0.005)
-        && (!$creditHasAmount || abs($users->sum('client_net_pice') - $AccountStatement->credit_balance) < 0.005);
+    $paxDebit = $hasPassengerBreakdown && $debitHasAmount
+        ? App\Models\AccountStatement::passengerAmounts($users, 'client_bought_price', $AccountStatement->debit_balance) : [];
+    $paxCredit = $hasPassengerBreakdown && $creditHasAmount
+        ? App\Models\AccountStatement::passengerAmounts($users, 'client_net_pice', $AccountStatement->credit_balance) : [];
 
     $mem = $usersById[$AccountStatement->added_by] ?? null;
     ?>
 
     @foreach($breakdownRows as $rowIndex => $user)
     <?php
-    if ($perPassenger) {
-        $balance_before_tx = round($balance_before_tx
-            + ($debitHasAmount ? (float) $user->client_bought_price : 0)
-            - ($creditHasAmount ? (float) $user->client_net_pice : 0), 2);
+    if ($hasPassengerBreakdown) {
+        $balance_before_tx = round($balance_before_tx + ($paxDebit[$rowIndex] ?? 0) - ($paxCredit[$rowIndex] ?? 0), 2);
         $row_balance = $balance_before_tx;
     } else {
         $row_balance = $total_blnc;
@@ -332,22 +331,21 @@ $url2 = route('site.accounts_statement_print_excel' , [
         </td>
 
         <td style="text-align: right;">
-            @if($perPassenger && $debitHasAmount)
-                {{number_format($user->client_bought_price, 2)}}
-            @elseif(!$perPassenger && (!$hasPassengerBreakdown || ($debitHasAmount && $rowIndex === 0)))
+            @if($hasPassengerBreakdown)
+                @if($debitHasAmount){{number_format($paxDebit[$rowIndex], 2)}}@endif
+            @else
                 {{number_format($AccountStatement->debit_balance , 2)}}
             @endif
         </td>
         <td style="text-align: right;color:#ff7900;">
-            @if($perPassenger && $creditHasAmount)
-                {{number_format($user->client_net_pice, 2)}}
-            @elseif(!$perPassenger && (!$hasPassengerBreakdown || ($creditHasAmount && $rowIndex === 0)))
+            @if($hasPassengerBreakdown)
+                @if($creditHasAmount){{number_format($paxCredit[$rowIndex], 2)}}@endif
+            @else
                 {{number_format($AccountStatement->credit_balance , 2)}}
             @endif
         </td>
         <td style="text-align: right;">
-            {{-- Balance after this row: after each passenger's ticket, or after the whole --}}
-            {{-- invoice when it is kept as a single movement (see $perPassenger). --}}
+            {{-- Balance after this row (after this passenger's ticket for a multi-passenger invoice). --}}
             {{number_format($row_balance, 2)}}
         </td>
 

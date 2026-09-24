@@ -23,8 +23,8 @@ use PhpOffice\PhpSpreadsheet\Worksheet\PageSetup;
  *  - same running balance: once per transaction, float, rounded to 2 dp per row
  *  - same passenger breakdown: one row per passenger for flight tickets, all
  *    under the same invoice number; each passenger's ticket is its own
- *    movement (own amount, running balance steps through them), except when
- *    the ticket prices don't add up to the ledger amount (FLY-RD cancellations)
+ *    movement (own amount, running balance steps through them); amounts from
+ *    AccountStatement::passengerAmounts() (equal split for FLY-RD refunds)
  *  - same columns (plus employee, as on the screen)
  *
  * All display rows are built here, so the Blade view runs no queries.
@@ -143,14 +143,14 @@ class AccountatExport implements FromView, WithEvents, WithTitle
             $hasPassengerBreakdown = $AccountStatement->es_id != 'FLY-OPEN-BALANCE'
                 && $AccountStatement->transaction_type == 1 && $ticket_info && $users->count() > 0;
             // Same rule as the screen/print: one invoice number, but each passenger's
-            // ticket is its own movement (own amount, own running balance). Only when
-            // the TicketUser prices do not add up to the ledger amount (FLY-RD
-            // cancellations) is the ledger amount kept as one movement on the first row.
+            // ticket is its own movement (own amount, own running balance), with the
+            // amounts from AccountStatement::passengerAmounts().
             $debitHasAmount = $AccountStatement->debit_balance > 0;
             $creditHasAmount = $AccountStatement->credit_balance > 0;
-            $perPassenger = $hasPassengerBreakdown
-                && (!$debitHasAmount || abs($users->sum('client_bought_price') - $AccountStatement->debit_balance) < 0.005)
-                && (!$creditHasAmount || abs($users->sum('client_net_pice') - $AccountStatement->credit_balance) < 0.005);
+            $paxDebit = $hasPassengerBreakdown && $debitHasAmount
+                ? AccountStatement::passengerAmounts($users, 'client_bought_price', $AccountStatement->debit_balance) : [];
+            $paxCredit = $hasPassengerBreakdown && $creditHasAmount
+                ? AccountStatement::passengerAmounts($users, 'client_net_pice', $AccountStatement->credit_balance) : [];
 
             $base = [
                 'es_id' => $AccountStatement->es_id,
@@ -164,16 +164,10 @@ class AccountatExport implements FromView, WithEvents, WithTitle
 
             if ($hasPassengerBreakdown) {
                 foreach ($users->values() as $i => $user) {
-                    if ($perPassenger) {
-                        $debit = $debitHasAmount ? (float) $user->client_bought_price : null;
-                        $credit = $creditHasAmount ? (float) $user->client_net_pice : null;
-                        $balance_before_tx = round($balance_before_tx + (float) $debit - (float) $credit, 2);
-                        $rowBalance = $balance_before_tx;
-                    } else {
-                        $debit = $debitHasAmount && $i === 0 ? (float) $AccountStatement->debit_balance : null;
-                        $credit = $creditHasAmount && $i === 0 ? (float) $AccountStatement->credit_balance : null;
-                        $rowBalance = $total_blnc;
-                    }
+                    $debit = $debitHasAmount ? $paxDebit[$i] : null;
+                    $credit = $creditHasAmount ? $paxCredit[$i] : null;
+                    $balance_before_tx = round($balance_before_tx + (float) $debit - (float) $credit, 2);
+                    $rowBalance = $balance_before_tx;
                     $rows[] = $base + [
                         'details' => (string) $user->client_name,
                         'booking' => (string) $user->client_booking_id,

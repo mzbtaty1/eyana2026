@@ -59,5 +59,34 @@ class AccountStatement extends Model
 
         return ($totals->d ?? 0) - ($totals->c ?? 0);
     }
+
+    /**
+     * Each passenger's share of a multi-passenger ticket's ledger amount, in
+     * passenger order. Every passenger ticket is its own movement in the Account
+     * Statement (screen, Print Preview, Excel), so these shares must add up
+     * exactly to $total.
+     *
+     * Normally the TicketUser price ($priceField) of each passenger is used. When
+     * those prices do not add up to the ledger amount -- FLY-RD cancellations keep
+     * the original ticket prices, not the refund -- the ledger amount is split
+     * equally in whole cents; any leftover cent goes to the last passenger.
+     */
+    public static function passengerAmounts($users, string $priceField, $total): array
+    {
+        $total = round((float) $total, 2);
+        $prices = collect($users)->values()->map(fn ($u) => round((float) $u->{$priceField}, 2))->all();
+        $n = count($prices);
+
+        if ($n === 0 || abs(array_sum($prices) - $total) < 0.005) {
+            return $prices;
+        }
+
+        $cents = (int) round($total * 100);
+        $each = intdiv($cents, $n);
+        $shares = array_fill(0, $n, $each / 100);
+        $shares[$n - 1] = ($cents - $each * ($n - 1)) / 100;
+
+        return $shares;
+    }
     
 }
