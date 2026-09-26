@@ -8,6 +8,7 @@ use Auth;
 use Redirect;
 use App\Http\Requests\StoreSupplierRequest;
 use App\Http\Requests\UpdateSupplierRequest;
+use App\Services\SupplierDirectory;
 use App\Models\{
     Supplier,
     Log,
@@ -33,10 +34,12 @@ class SuppliersController extends Controller
      */
     public function index()
     {
-        $suppliers = Supplier::select('*')->orderBy('id','DESC')->get();
-        return view('suppliers.all' , [ 
-          "suppliers" => $suppliers,
-        ]); 
+        // accounts (without expense accounts) with role, balance, last activity and
+        // invoice counts -- a fixed number of grouped queries (SupplierDirectory)
+        return view('suppliers.all' , [
+          "rows" => SupplierDirectory::rows(),
+          "expenseAccounts" => SupplierDirectory::expenseAccountsCount(),
+        ]);
     }
 
     /**

@@ -2,10 +2,16 @@
 
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\NormalizesMoneyInput;
 use Illuminate\Foundation\Http\FormRequest;
 
 class StoreSupplierRequest extends FormRequest
 {
+    use NormalizesMoneyInput;
+
+    /** Arabic digits / «٫» normalized before validation (see NormalizesMoneyInput). */
+    protected array $moneyFields = ['debit_opening_balance', 'opening_credit_balance', 'limit_balance'];
+
     public function authorize(): bool
     {
         return true;
@@ -36,12 +42,13 @@ class StoreSupplierRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'debit_opening_balance.numeric' => 'الرصيد الافتتاحي المدين يجب أن يكون رقماً (مثال: 1500 أو 1500.50)',
+            'debit_opening_balance.numeric' => 'الرصيد الافتتاحي المدين يجب أن يكون رقماً (مثال: 1500 أو 1500.50) - استخدم النقطة للكسور وبدون فاصلة',
             'debit_opening_balance.decimal' => 'الرصيد الافتتاحي المدين: رقمان عشريان كحد أقصى (مثال: 1500.50)',
             'debit_opening_balance.min' => 'الرصيد الافتتاحي المدين لا يمكن أن يكون سالباً - إذا كان الرصيد دائناً اكتبه في خانة الرصيد الافتتاحي الدائن',
-            'opening_credit_balance.numeric' => 'الرصيد الافتتاحي الدائن يجب أن يكون رقماً (مثال: 1500 أو 1500.50)',
+            'opening_credit_balance.numeric' => 'الرصيد الافتتاحي الدائن يجب أن يكون رقماً (مثال: 1500 أو 1500.50) - استخدم النقطة للكسور وبدون فاصلة',
             'opening_credit_balance.decimal' => 'الرصيد الافتتاحي الدائن: رقمان عشريان كحد أقصى (مثال: 1500.50)',
             'opening_credit_balance.min' => 'الرصيد الافتتاحي الدائن لا يمكن أن يكون سالباً - إذا كان الرصيد مديناً اكتبه في خانة الرصيد الافتتاحي المدين',
+            'limit_balance.numeric' => 'الحد الائتماني يجب أن يكون رقماً (مثال: 5000 أو 5000.50) - استخدم النقطة للكسور وبدون فاصلة',
         ];
     }
 
