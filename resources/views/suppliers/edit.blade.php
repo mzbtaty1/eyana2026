@@ -65,12 +65,12 @@
                <div class="row">
                   <div class="col-md-6 mb-3">
                      <label class="form-label">الرصيد الافتتاحي المدين</label>
-                     <input type="text" name="debit_opening_balance" inputmode="numeric" oninput="this.value = this.value.replace(/\D+/g, '')" value="{{old('debit_opening_balance', $supplier->debit_opening_balance)}}" placeholder="" class="form-control @error('debit_opening_balance') is-invalid @enderror" required="">
+                     <input type="text" name="debit_opening_balance" inputmode="decimal" oninput="this.value = this.value.replace(/[^0-9.\-]+/g, '')" value="{{old('debit_opening_balance', $supplier->debit_opening_balance)}}" placeholder="" class="form-control @error('debit_opening_balance') is-invalid @enderror" required="">
                      @error('debit_opening_balance') <div class="invalid-feedback">{{$message}}</div> @enderror
                   </div>
                   <div class="col-md-6 mb-3">
                      <label class="form-label">رصيد افتتاحى الدائن</label>
-                     <input type="text" name="opening_credit_balance" inputmode="numeric" oninput="this.value = this.value.replace(/\D+/g, '')" value="{{old('opening_credit_balance', $supplier->opening_credit_balance)}}" placeholder="" class="form-control @error('opening_credit_balance') is-invalid @enderror" required>
+                     <input type="text" name="opening_credit_balance" inputmode="decimal" oninput="this.value = this.value.replace(/[^0-9.\-]+/g, '')" value="{{old('opening_credit_balance', $supplier->opening_credit_balance)}}" placeholder="" class="form-control @error('opening_credit_balance') is-invalid @enderror" required>
                      @error('opening_credit_balance') <div class="invalid-feedback">{{$message}}</div> @enderror
                   </div>
                </div>

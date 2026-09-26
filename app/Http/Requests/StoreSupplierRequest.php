@@ -20,12 +20,28 @@ class StoreSupplierRequest extends FormRequest
             'phone_1' => ['required', 'string', 'max:30'],
             'phone_2' => ['nullable', 'string', 'max:30'],
             'limit_balance' => ['nullable', 'numeric'],
-            'debit_opening_balance' => ['required', 'numeric'],
-            'opening_credit_balance' => ['required', 'numeric'],
+            'debit_opening_balance' => ['required', 'numeric', 'decimal:0,2', 'min:0'],
+            'opening_credit_balance' => ['required', 'numeric', 'decimal:0,2', 'min:0'],
             'status' => ['required', 'in:0,1'],
             'type' => ['required', 'in:1,2'],
             'in_index' => ['required', 'in:0,1'],
             'in_stat' => ['required', 'in:0,1'],
+        ];
+    }
+
+    /**
+     * Opening balances: up to 2 decimal places, never negative -- a credit
+     * balance goes in the credit field, not as a negative debit (and vice versa).
+     */
+    public function messages(): array
+    {
+        return [
+            'debit_opening_balance.numeric' => 'الرصيد الافتتاحي المدين يجب أن يكون رقماً (مثال: 1500 أو 1500.50)',
+            'debit_opening_balance.decimal' => 'الرصيد الافتتاحي المدين: رقمان عشريان كحد أقصى (مثال: 1500.50)',
+            'debit_opening_balance.min' => 'الرصيد الافتتاحي المدين لا يمكن أن يكون سالباً - إذا كان الرصيد دائناً اكتبه في خانة الرصيد الافتتاحي الدائن',
+            'opening_credit_balance.numeric' => 'الرصيد الافتتاحي الدائن يجب أن يكون رقماً (مثال: 1500 أو 1500.50)',
+            'opening_credit_balance.decimal' => 'الرصيد الافتتاحي الدائن: رقمان عشريان كحد أقصى (مثال: 1500.50)',
+            'opening_credit_balance.min' => 'الرصيد الافتتاحي الدائن لا يمكن أن يكون سالباً - إذا كان الرصيد مديناً اكتبه في خانة الرصيد الافتتاحي المدين',
         ];
     }
 

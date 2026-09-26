@@ -17,6 +17,18 @@ use App\Models\{
 class SuppliersController extends Controller
 {
     /**
+     * «الموردين و العملاء» is admin-only (account_type 2), the same rule the
+     * sidebar uses -- enforced here too so the URLs cannot be opened directly.
+     */
+    public function __construct()
+    {
+        $this->middleware(function ($request, $next) {
+            abort_unless(Auth::user()->account_type == 2, 403);
+            return $next($request);
+        });
+    }
+
+    /**
      * Display a listing of the resource.
      */
     public function index()
@@ -177,8 +189,14 @@ class SuppliersController extends Controller
         $supplier = Supplier::select('*')->where('id',$id)->get();
         abort_if(count($supplier) == 0 , 404);
         $supplier = $supplier[0];
+
+        $blockers = $supplier->deletionBlockers();
+        if ($blockers) {
+            return Redirect::back()->withErrors(['delete' => "لا يمكن حذف «{$supplier->name}» لوجود: " . implode(' ، ', $blockers) . ". يمكنك إيقاف الحساب بدلاً من حذفه."]);
+        }
+
         $delete = Supplier::select('*')->where('id',$id)->delete();
-        
+
          $msg = "تم حذف بيانات المورد " . $supplier->name;
         
         

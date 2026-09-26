@@ -59,7 +59,7 @@
                         <form id="delete-form-{{$supplier->id}}" action="{{route('site.suppliers_delete', $supplier->id)}}" method="POST" style="display:none;">
                            @csrf
                         </form>
-                        <button class="btn btn-soft-danger btn-sm dropdown" type="button" style="font-size: 16px;" onclick="confirmDeleteForm('delete-form-{{$supplier->id}}', 'هل انت متأكد؟', 'سيتم حذف ذلك المورد وازالة كل البيانات المرتبطه به')">
+                        <button class="btn btn-soft-danger btn-sm dropdown" type="button" style="font-size: 16px;" onclick="confirmDeleteForm('delete-form-{{$supplier->id}}', 'هل انت متأكد؟', 'سيتم حذف ذلك الحساب نهائياً. لا يمكن حذف حساب له فواتير أو سندات أو حركات في كشف الحساب')">
                         <i class="ri-delete-bin-line align-middle"></i>
                         </button>
                      </td>

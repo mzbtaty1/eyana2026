@@ -160,6 +160,13 @@ class CustomersController extends Controller
         $Customer = Supplier::select('*')->where('id',$id)->get();
         abort_if(count($Customer) == 0 , 404);
         $Customer = $Customer[0];
+
+        // same accounts table as /suppliers -- same guard (Supplier::deletionBlockers)
+        $blockers = $Customer->deletionBlockers();
+        if ($blockers) {
+            return Redirect::back()->withErrors(['delete' => "لا يمكن حذف «{$Customer->name}» لوجود: " . implode(' ، ', $blockers) . ". يمكنك إيقاف الحساب بدلاً من حذفه."]);
+        }
+
         $delete = Supplier::select('*')->where('id',$id)->delete();
         
          $msg = "تم حذف بيانات العميل " . $Customer->name;

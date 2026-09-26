@@ -172,6 +172,13 @@ class ExpensesController extends Controller
         $supplier = Supplier::select('*')->where('id',$id)->get();
         abort_if(count($supplier) == 0 , 404);
         $supplier = $supplier[0];
+
+        // same accounts table as /suppliers -- same guard (Supplier::deletionBlockers)
+        $blockers = $supplier->deletionBlockers();
+        if ($blockers) {
+            return Redirect::back()->withErrors(['delete' => "لا يمكن حذف «{$supplier->name}» لوجود: " . implode(' ، ', $blockers) . ". يمكنك إيقاف الحساب بدلاً من حذفه."]);
+        }
+
         $delete = Supplier::select('*')->where('id',$id)->delete();
         
          $msg = "تم حذف بيانات المصروفات " . $supplier->name;
