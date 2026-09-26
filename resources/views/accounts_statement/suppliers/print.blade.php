@@ -81,28 +81,13 @@ $title = "كشف حساب موردين " . \Str::random(8);
                    <?php
 
                    $x = 1;
-
-                   // Batch the per-supplier credit/debit totals in one grouped query instead of
-                   // one AccountStatement query per supplier row (was N+1). SUM() over the same
-                   // filtered rows is numerically identical to the previous PHP accumulation.
-                   $supplier_ids_for_totals = $suppliers->pluck('id')->all();
-                   $totals_query = App\Models\AccountStatement::whereIn('supp_client_id', $supplier_ids_for_totals)
-                       ->where('is_storage', '!=', 1);
-                   if ($sts != 0) {
-                       $totals_query = $totals_query->whereBetween('crt_date', [$date_from, $date_to]);
-                   }
-                   $totals_by_supplier = $totals_query
-                       ->selectRaw('supp_client_id, SUM(credit_balance) as total_credit, SUM(debit_balance) as total_debit')
-                       ->groupBy('supp_client_id')
-                       ->get()
-                       ->keyBy('supp_client_id');
                    ?>
                     @foreach($suppliers as $supplier)
 
                      <?php
-                      $supplier_totals_row = $totals_by_supplier->get($supplier->id);
-                      $total_credit = $supplier_totals_row->total_credit ?? 0;
-                      $total_debit = $supplier_totals_row->total_debit ?? 0;
+                      // totals from AccountStatement::balancesByAccount() (one grouped query, see controller)
+                      $total_credit = $totals->get($supplier->id)->total_credit ?? 0;
+                      $total_debit = $totals->get($supplier->id)->total_debit ?? 0;
                       ?>
                     
                                 @if($total_debit - $total_credit == 0)

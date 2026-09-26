@@ -62,6 +62,30 @@ class AccountStatement extends Model
     }
 
     /**
+     * Credit / debit totals per account for the accounts-balances report, in one
+     * grouped query: same rows as each account's statement (is_storage != 1),
+     * optionally limited to crt_date between $date_from and $date_to.
+     * Keyed by account id; accounts without rows are absent (treat as 0).
+     * Totals are floats, exactly what the per-account PHP sums used to produce.
+     */
+    public static function balancesByAccount(array $ids, $date_from = null, $date_to = null)
+    {
+        $q = static::whereIn('supp_client_id', $ids)->where('is_storage', '!=', 1);
+
+        if ($date_from !== null && $date_to !== null) {
+            $q = $q->whereBetween('crt_date', [$date_from, $date_to]);
+        }
+
+        return $q->selectRaw('supp_client_id, SUM(credit_balance) as total_credit, SUM(debit_balance) as total_debit')
+            ->groupBy('supp_client_id')
+            ->get()
+            ->mapWithKeys(fn ($r) => [(int) $r->supp_client_id => (object) [
+                'total_credit' => (float) $r->total_credit,
+                'total_debit' => (float) $r->total_debit,
+            ]]);
+    }
+
+    /**
      * Each passenger's share of a multi-passenger ticket's ledger amount, in
      * passenger order. Every passenger ticket is its own movement in the Account
      * Statement (screen, Print Preview, Excel), so these shares must add up

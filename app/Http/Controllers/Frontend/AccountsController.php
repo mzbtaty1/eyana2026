@@ -412,23 +412,22 @@ public function accounts_statement_suppliers_get()
         }
         
         
-        if(isset($request->date_from) && isset($request->date_to)){
+        // date range applies only when both dates are given -- same rule as the print report
+        // (accounts_statement_suppliers_print), so screen and print show the same totals
+        if($request->date_from == NULL OR $request->date_to == NULL){
             $sts = 0;
         }else{
-            
-        
-            if($request->date_from == NULL OR $request->date_to == NULL){
-                $sts = 0;
-            }else{
-                
-                $sts = 1;
-            }
-            
+            $sts = 1;
         }
-//        dd($sts);
+        // one grouped query for every account's totals (was one query per account in the view)
+        $totals = $sts != 0
+            ? AccountStatement::balancesByAccount($suppliers->pluck('id')->all(), $request->date_from, $request->date_to)
+            : AccountStatement::balancesByAccount($suppliers->pluck('id')->all());
+
         return view('accounts_statement.suppliers.all' , [
             "report_type" => $report_type,
             "suppliers" => $suppliers,
+            "totals" => $totals,
             "sts" => $sts,
             "date_from" => $request->date_from,
             "date_to" => $request->date_to,
@@ -513,9 +512,14 @@ public function accounts_statement_suppliers_get()
                 
                 $sts = 1;
             }
+        $totals = $sts != 0
+            ? AccountStatement::balancesByAccount($suppliers->pluck('id')->all(), $from, $to)
+            : AccountStatement::balancesByAccount($suppliers->pluck('id')->all());
+
         return view('accounts_statement.suppliers.print' , [
             "report_type" => $report_type,
             "suppliers" => $suppliers,
+            "totals" => $totals,
             "sts" => $sts,
             "date_from" => $from,
             "date_to" => $to,

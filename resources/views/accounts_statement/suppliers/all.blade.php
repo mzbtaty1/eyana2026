@@ -48,17 +48,9 @@
                         <?php $x = 1; ?>
                         @foreach($suppliers as $supplier)
                         <?php
-                            $trsnactions = App\Models\AccountStatement::where('supp_client_id' , $supplier->id)
-                                ->where('is_storage','!=',1);
-
-                            if($sts != 0){
-                                $trsnactions = $trsnactions->whereBetween('crt_date' , [$date_from , $date_to]);
-                            }
-
-                            $trsnactions = $trsnactions->get();
-
-                            $total_credit = $trsnactions->sum('credit_balance');
-                            $total_debit = $trsnactions->sum('debit_balance');
+                            // totals from AccountStatement::balancesByAccount() (one grouped query, see controller)
+                            $total_credit = $totals->get($supplier->id)->total_credit ?? 0;
+                            $total_debit = $totals->get($supplier->id)->total_debit ?? 0;
                             $balance = $total_debit - $total_credit;
                         ?>
 
