@@ -171,6 +171,53 @@
    </div>
 </div>
 
+{{-- movements by kind: the account statement's rows, each in exactly one kind (AccountMovements) --}}
+<div class="card mt-3">
+   <div class="card-body">
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+         <h6 class="text-muted fs-13 mb-0">تفصيل الحركات</h6>
+         <span class="text-muted fs-12">من كشف الحساب ({{ number_format($movements['rows']) }} حركة) — كل حركة في نوع واحد، والمجموع = أرقام الكشف</span>
+      </div>
+      @if($movements['kinds'])
+      <div class="table-responsive">
+         <table class="table table-sm table-bordered align-middle mb-0" id="ovMovements">
+            <thead class="table-light">
+               <tr>
+                  <th>النوع</th>
+                  <th class="text-center">عدد الحركات</th>
+                  <th>مدين</th>
+                  <th>دائن</th>
+               </tr>
+            </thead>
+            <tbody>
+               @foreach($movements['kinds'] as $k)
+               <tr data-kind="{{$k->key}}">
+                  <td>
+                     <div class="fw-medium">{{$k->label}}</div>
+                     <div class="text-muted fs-11">{{$k->hint}}</div>
+                  </td>
+                  <td class="text-center">{{ number_format($k->count) }}</td>
+                  <td>@if($k->debit) {{ number_format($k->debit, 2) }} @else <span class="text-muted">0.00</span> @endif</td>
+                  <td>@if($k->credit) {{ number_format($k->credit, 2) }} @else <span class="text-muted">0.00</span> @endif</td>
+               </tr>
+               @endforeach
+            </tbody>
+            <tfoot class="table-light fw-semibold">
+               <tr data-kind="total">
+                  <td>الإجمالي</td>
+                  <td class="text-center">{{ number_format($movements['rows']) }}</td>
+                  <td>{{ number_format($movements['debit'], 2) }}</td>
+                  <td>{{ number_format($movements['credit'], 2) }}</td>
+               </tr>
+            </tfoot>
+         </table>
+      </div>
+      @else
+      <p class="text-muted mb-0">لا توجد حركات في كشف الحساب.</p>
+      @endif
+   </div>
+</div>
+
 <script>
 document.getElementById('openStatement').addEventListener('click', function () {
     document.getElementById('statementForm').submit();

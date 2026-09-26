@@ -8,7 +8,7 @@ use Auth;
 use Redirect;
 use App\Http\Requests\StoreSupplierRequest;
 use App\Http\Requests\UpdateSupplierRequest;
-use App\Services\SupplierDirectory;
+use App\Services\{AccountMovements, SupplierDirectory};
 use App\Models\{
     Supplier,
     Log,
@@ -122,7 +122,8 @@ class SuppliersController extends Controller
 
     /**
      * Account overview (read-only): role, ledger balance and totals, last activity and
-     * invoice counts -- the same figures as the list (SupplierDirectory), for one account.
+     * invoice counts -- the same figures as the list (SupplierDirectory), for one account --
+     * and its movements by kind (AccountMovements).
      */
     public function overview($id)
     {
@@ -131,6 +132,7 @@ class SuppliersController extends Controller
 
         return view('suppliers.overview', [
             "row" => SupplierDirectory::row($account),
+            "movements" => AccountMovements::forAccount($account->id),
         ]);
     }
 
