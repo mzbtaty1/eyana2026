@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\CounterPayments;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -33,6 +34,31 @@ class Supplier extends Model
     ];
 
     /**
+     * Fixed system account: the Counter Customer (config eyana.counter_customer_ids,
+     * via CounterPayments -- the same list the counter invoices use). Always listed
+     * first on /suppliers, never deleted, account type and type fixed.
+     */
+    public function isSystemAccount(): bool
+    {
+        return CounterPayments::isCounterClient($this->id);
+    }
+
+    /**
+     * Error when saving $accType / $type would change a system account's account
+     * type (acc_type) or type (فرد / شركة); null when allowed. Other fields stay editable.
+     */
+    public function systemAccountChangeError($accType, $type): ?string
+    {
+        if (! $this->isSystemAccount()) {
+            return null;
+        }
+        if ((string) $accType !== (string) $this->acc_type || (string) $type !== (string) $this->type) {
+            return "«{$this->name}» حساب نظام (عميل كونتر): لا يمكن تغيير نوع الحساب أو التصنيف.";
+        }
+        return null;
+    }
+
+    /**
      * Why this account must not be deleted: one Arabic reason per kind of
      * financial / invoice / voucher activity it has; empty when deletion is safe.
      *
@@ -46,6 +72,10 @@ class Supplier extends Model
     {
         $id = (int) $this->id;
         $out = [];
+
+        if ($this->isSystemAccount()) {
+            $out[] = 'حساب نظام (عميل كونتر) لا يُحذف';
+        }
 
         $ledger = AccountStatement::where('supp_client_id', $id)
             ->where('is_storage', '!=', 1)

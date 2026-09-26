@@ -11,6 +11,15 @@
                @csrf
                <input type="hidden" value="{{$supplier->id}}" name="id">
 @include('components.flash-messages')
+               @if($supplier->isSystemAccount())
+               {{-- disabled selects are not submitted: send the fixed values (the server refuses any other) --}}
+               <input type="hidden" name="type" value="{{$supplier->type}}">
+               <input type="hidden" name="acc_type" value="{{$supplier->acc_type}}">
+               <div class="alert alert-primary d-flex align-items-center gap-2 py-2" role="note">
+                  <i class="ri-lock-2-line fs-16"></i>
+                  <span><b>حساب نظام (عميل كونتر)</b> — لا يمكن حذفه ولا تغيير نوع الحساب أو التصنيف. باقي البيانات قابلة للتعديل.</span>
+               </div>
+               @endif
 
                <h6 class="text-uppercase text-muted fs-13 mb-3">البيانات الأساسية</h6>
                <div class="row">
@@ -86,14 +95,14 @@
                   </div>
                   <div class="col-md-3 mb-3">
                      <label class="form-label">النوع</label>
-                     <select name="type" class="form-control @error('type') is-invalid @enderror" required="">
+                     <select name="type" class="form-control @error('type') is-invalid @enderror" required="" @if($supplier->isSystemAccount()) disabled @endif>
                      <option value="1" @if(old('type', $supplier->type) == 1) selected @endif>فرد</option>
                      <option value="2" @if(old('type', $supplier->type) == 2) selected @endif>شركة</option>
                      </select>
                   </div>
                   <div class="col-md-3 mb-3">
                      <label class="form-label">نوع الحساب</label>
-                     <select name="acc_type" class="form-control @error('acc_type') is-invalid @enderror" required="">
+                     <select name="acc_type" class="form-control @error('acc_type') is-invalid @enderror" required="" @if($supplier->isSystemAccount()) disabled @endif>
                      <option value="1" @if(old('acc_type', $supplier->acc_type) == 1) selected @endif>عميل</option>
                      <option value="2" @if(old('acc_type', $supplier->acc_type) == 2) selected @endif>مورد</option>
                      </select>

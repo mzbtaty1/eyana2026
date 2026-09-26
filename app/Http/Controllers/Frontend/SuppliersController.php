@@ -147,6 +147,12 @@ class SuppliersController extends Controller
 //        dd($opening_credit_balance , $debit_opening_balance);
         
         $supplier = $supplier[0];
+
+        // Counter Customer (system account): account type / type are fixed
+        if ($error = $supplier->systemAccountChangeError($request->acc_type, $request->type)) {
+            return Redirect::back()->withInput()->withErrors(['acc_type' => $error]);
+        }
+
         $update_supplier = Supplier::select('*')->where('id',$id)->update([
            "name" => $request->name,
            "email" => $request->email,

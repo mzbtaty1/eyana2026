@@ -45,8 +45,8 @@ class SupplierListTest extends TestCase
         $ids = $res->viewData('rows')->map(fn ($r) => $r->account->id)->sort()->values()->all();
         $this->assertSame(Supplier::where('acc_type', '!=', 3)->orderBy('id')->pluck('id')->all(), $ids);
         $this->assertSame(Supplier::where('acc_type', 3)->count(), $res->viewData('expenseAccounts'));
-        foreach (Supplier::where('acc_type', 3)->pluck('name') as $name) {
-            $this->assertStringNotContainsString('<td>' . e($name) . '</td>', $res->getContent(), "expense account $name listed");
+        foreach (Supplier::where('acc_type', 3)->pluck('id') as $id) {
+            $this->assertStringNotContainsString('data-id="' . $id . '"', $res->getContent(), "expense account $id listed");
         }
     }
 
@@ -83,8 +83,9 @@ class SupplierListTest extends TestCase
         $html = $res->getContent();
         $rows = $res->viewData('rows');
 
-        $this->assertStringContainsString("search: 'بحث:'", $html);
+        $this->assertStringContainsString('بحث بالاسم أو الهاتف', $html);
         $this->assertStringContainsString("next: 'التالي'", $html);
+        $this->assertStringContainsString('layout: { topEnd: null }', $html, 'English built-in search box removed');
         $this->assertStringNotContainsString('رقم الباسبور', $html);
 
         foreach ($rows as $row) {
@@ -102,6 +103,52 @@ class SupplierListTest extends TestCase
         $this->assertMatchesRegularExpression('/' . preg_quote(number_format(-$neg->balance, 2), '/') . '<\/span>\s*<span class="badge bg-danger-subtle text-danger">علينا</', $html);
         foreach (['supplier', 'customer', 'both'] as $role) {
             $this->assertTrue($rows->contains(fn ($r) => $r->role === $role), "some $role in the data");
+        }
+    }
+
+    /** Phase 2: every row carries the values the filters use, and the right action buttons. */
+    public function test_rows_carry_filter_data_and_action_buttons(): void
+    {
+        $res = $this->get(route('site.suppliers'))->assertOk();
+        $html = $res->getContent();
+        $this->assertStringContainsString('id="statementForm" action="' . route('site.accounts_statement_search') . '" method="POST" target="_blank"', $html);
+
+        preg_match_all('/<tr[^>]*data-id="(\d+)"[^>]*>(.*?)<\/tr>/s', $html, $m, PREG_SET_ORDER);
+        $trs = [];
+        foreach ($m as $t) {
+            $trs[(int) $t[1]] = $t[0];
+        }
+        $rows = $res->viewData('rows');
+        $this->assertCount($rows->count(), $trs);
+
+        foreach ($rows as $row) {
+            $id = $row->account->id;
+            $tr = $trs[$id];
+            $attr = fn ($a) => preg_match('/data-' . $a . '="([^"]*)"/', $tr, $x) ? html_entity_decode($x[1], ENT_QUOTES) : null;
+            $sign = $row->balance > 0 ? 'pos' : ($row->balance < 0 ? 'neg' : 'zero');
+
+            $this->assertSame($row->role ?? 'none', $attr('role'), "$id role");
+            $this->assertSame($sign, $attr('sign'), "$id sign");
+            $this->assertSame($row->account->status == 1 ? '1' : '0', $attr('status'), "$id status");
+            $this->assertSame((string) $row->last_activity, $attr('last'), "$id last");
+            $this->assertStringContainsString(mb_strtolower($row->account->name), $attr('search'), "$id search text");
+            foreach ($row->phones as $p) {
+                $this->assertStringContainsString($p, $attr('search'), "$id phone searchable");
+            }
+
+            $this->assertStringContainsString('class="btn btn-soft-info btn-sm js-statement" data-id="' . $id . '"', $tr, "$id statement");
+            $sup = e(route('site.invoices_full_report', ['supplier_id' => $id]));
+            $cus = e(route('site.invoices_full_report', ['customer_id' => $id]));
+            $this->assertSame($row->invoices_as_supplier > 0, str_contains($tr, $sup), "$id supplier invoices link");
+            $this->assertSame($row->invoices_as_customer > 0, str_contains($tr, $cus), "$id customer invoices link");
+            $this->assertSame($row->role === 'both', str_contains($tr, 'data-bs-toggle="dropdown"'), "$id invoices menu");
+
+            $remind = $row->balance > 0 && ! $row->system;
+            $this->assertSame($remind, str_contains($tr, 'js-remind'), "$id reminder");
+            if ($remind) {
+                $this->assertStringContainsString('data-amount="' . number_format($row->balance, 2) . '"', $tr);
+            }
+            $this->assertSame(! $row->system, str_contains($tr, 'id="delete-form-' . $id . '"'), "$id delete");
         }
     }
 

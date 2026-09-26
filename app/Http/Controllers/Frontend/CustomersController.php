@@ -117,6 +117,12 @@ class CustomersController extends Controller
         abort_if(count($Customer) == 0 , 404);
         
         $Customer = $Customer[0];
+
+        // Counter Customer (system account): account type / type are fixed
+        if ($error = $Customer->systemAccountChangeError($request->acc_type, $request->type)) {
+            return Redirect::back()->withInput()->withErrors(['acc_type' => $error]);
+        }
+
         $update_Customer = Supplier::select('*')->where('id',$id)->update([
            "name" => $request->name,
            "email" => $request->email,

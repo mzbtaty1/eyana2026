@@ -20,12 +20,18 @@ use Illuminate\Support\Facades\DB;
  *   last_activity  latest crt_date (the statement's accounting date) of those rows,
  *                  ignoring a zero opening-balance row; null when there is none
  *   phones         phone_1 / phone_2 without empty or all-zero placeholders ("0", "0000000")
+ *   system         fixed system account (Counter Customer, Supplier::isSystemAccount): listed
+ *                  first, whatever its acc_type; never hidden, never deleted
  */
 class SupplierDirectory
 {
     public static function rows(): Collection
     {
-        $accounts = Supplier::where('acc_type', '!=', 3)->orderBy('id', 'DESC')->get();
+        // system accounts (Counter Customer) are always listed, and first
+        $systemIds = CounterPayments::counterIds();
+        $accounts = Supplier::where(fn ($q) => $q->where('acc_type', '!=', 3)->orWhereIn('id', $systemIds ?: [0]))
+            ->orderBy('id', 'DESC')->get()
+            ->sortBy(fn ($a) => in_array((int) $a->id, $systemIds, true) ? 0 : 1)->values();
         $ids = $accounts->pluck('id')->all();
 
         $totals = AccountStatement::balancesByAccount($ids);
@@ -62,6 +68,7 @@ class SupplierDirectory
 
             return (object) [
                 'account' => $a,
+                'system' => $a->isSystemAccount(),
                 'phones' => array_values(array_filter([self::phone($a->phone_1), self::phone($a->phone_2)])),
                 'role' => $asSup && $asCus ? 'both' : ($asSup ? 'supplier' : ($asCus ? 'customer' : null)),
                 'invoices_as_supplier' => $asSup,
