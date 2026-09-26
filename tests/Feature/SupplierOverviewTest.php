@@ -98,8 +98,9 @@ class SupplierOverviewTest extends TestCase
             $counts[$id] = count(DB::getQueryLog());
         }
         fwrite(STDERR, "\n[info] overview queries per account: " . json_encode($counts) . "\n");
+        // the invoice analysis (step 4) loads afterwards from its own URL -- SupplierOverviewInvoicesTest
         $this->assertCount(1, array_unique($counts), 'same number of queries for every account');
-        $this->assertLessThanOrEqual(16, max($counts));   // + latest movements and vouchers (step 3)
+        $this->assertLessThanOrEqual(16, max($counts));
     }
 
     private function quietAccountId(): int

@@ -55,6 +55,7 @@ Route::middleware(['auth' , 'check_status'])->group(function(){
     Route::post('/suppliers/save', [SuppliersController::class , 'save'])->name('site.suppliers_save');
     Route::get('/suppliers/{id}', [SuppliersController::class , 'edit'])->name('site.suppliers_edit');
     Route::get('/suppliers/{id}/overview', [SuppliersController::class , 'overview'])->name('site.suppliers_overview');
+    Route::get('/suppliers/{id}/overview/invoices', [SuppliersController::class , 'overviewInvoices'])->name('site.suppliers_overview_invoices');
     Route::post('/suppliers/{id}/delete', [SuppliersController::class , 'delete'])->name('site.suppliers_delete');
     Route::post('/suppliers/update', [SuppliersController::class , 'update'])->name('site.suppliers_update');
      

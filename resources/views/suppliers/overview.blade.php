@@ -218,6 +218,19 @@
    </div>
 </div>
 
+{{-- invoice analysis per role: loaded after the page opens (the report reads every invoice
+     and passenger, which would slow the whole page for the biggest accounts) --}}
+@if($row->role)
+<div id="ovInvoicesLoader" data-url="{{route('site.suppliers_overview_invoices', $account->id)}}">
+   <div class="card mt-3">
+      <div class="card-body d-flex align-items-center gap-2 text-muted" data-state="loading">
+         <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+         <span>جاري تحميل تحليل الفواتير...</span>
+      </div>
+   </div>
+</div>
+@endif
+
 {{-- latest movements: the statement's last rows (crt_date, id order), newest first, with the running balance --}}
 <div class="card mt-3">
    <div class="card-body">
@@ -352,6 +365,30 @@
 </div>
 
 <script>
+// invoice analysis: fetch the section (same markup and figures) and put it in place
+(function () {
+    var box = document.getElementById('ovInvoicesLoader');
+    if (!box) { return; }
+    var load = function () {
+        fetch(box.dataset.url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'text/html' } })
+            .then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.text(); })
+            .then(function (html) { box.innerHTML = html; box.dataset.loaded = '1'; })
+            .catch(function (e) {
+                box.innerHTML = '<div class="card mt-3"><div class="card-body text-danger fs-13" data-state="error">'
+                    + 'تعذر تحميل تحليل الفواتير (' + e.message + '). '
+                    + '<a href="#" class="js-retry-invoices">إعادة المحاولة</a> · '
+                    + '<a href="{{ route('site.invoices_full_report', [($row->role == 'customer' ? 'customer_id' : 'supplier_id') => $account->id]) }}">فتح التقرير التفصيلي</a></div></div>';
+                box.querySelector('.js-retry-invoices').addEventListener('click', function (ev) {
+                    ev.preventDefault();
+                    box.innerHTML = '<div class="card mt-3"><div class="card-body d-flex align-items-center gap-2 text-muted" data-state="loading">'
+                        + '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span><span>جاري تحميل تحليل الفواتير...</span></div></div>';
+                    load();
+                });
+            });
+    };
+    load();
+})();
+
 document.querySelectorAll('.js-open-statement').forEach(function (a) {
     a.addEventListener('click', function (e) { e.preventDefault(); document.getElementById('statementForm').submit(); });
 });

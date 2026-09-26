@@ -8,7 +8,7 @@ use Auth;
 use Redirect;
 use App\Http\Requests\StoreSupplierRequest;
 use App\Http\Requests\UpdateSupplierRequest;
-use App\Services\{AccountMovements, SupplierDirectory};
+use App\Services\{AccountInvoices, AccountMovements, SupplierDirectory};
 use App\Models\{
     Supplier,
     Log,
@@ -123,7 +123,8 @@ class SuppliersController extends Controller
     /**
      * Account overview (read-only): role, ledger balance and totals, last activity and
      * invoice counts -- the same figures as the list (SupplierDirectory), for one account --
-     * and its movements by kind, latest movements and vouchers (AccountMovements).
+     * and its movements by kind, latest movements and vouchers (AccountMovements). Its invoice
+     * analysis loads afterwards from overviewInvoices().
      */
     public function overview($id)
     {
@@ -134,6 +135,21 @@ class SuppliersController extends Controller
             "row" => SupplierDirectory::row($account),
             "movements" => AccountMovements::forAccount($account->id),
             "vouchers" => AccountMovements::vouchers($account->id),
+        ]);
+    }
+
+    /**
+     * The overview's invoice analysis (AccountInvoices), as an HTML fragment the overview
+     * loads after it opens -- the report reads every invoice and passenger of the account.
+     */
+    public function overviewInvoices($id)
+    {
+        $account = Supplier::find((int) $id);
+        abort_if(! $account, 404);
+
+        return view('suppliers._overview_invoices', [
+            "account" => $account,
+            "invoices" => AccountInvoices::forAccount(SupplierDirectory::row($account), Auth::user()),
         ]);
     }
 
