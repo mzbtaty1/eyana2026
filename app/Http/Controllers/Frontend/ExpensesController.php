@@ -131,8 +131,8 @@ class ExpensesController extends Controller
         
         $supplier = $supplier[0];
 
-        // Counter Customer (system account): this form always saves type 1
-        if ($error = $supplier->systemAccountChangeError($supplier->acc_type, 1)) {
+        // Counter Customer (system account): this form always saves type 1 (and status 1)
+        if ($error = $supplier->systemAccountChangeError($supplier->acc_type, 1, 1)) {
             return Redirect::back()->withInput()->withErrors(['acc_type' => $error]);
         }
 

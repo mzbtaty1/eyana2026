@@ -118,8 +118,8 @@ class CustomersController extends Controller
         
         $Customer = $Customer[0];
 
-        // Counter Customer (system account): account type / type are fixed
-        if ($error = $Customer->systemAccountChangeError($request->acc_type, $request->type)) {
+        // Counter Customer (system account): account type / type fixed, never suspended
+        if ($error = $Customer->systemAccountChangeError($request->acc_type, $request->type, $request->status)) {
             return Redirect::back()->withInput()->withErrors(['acc_type' => $error]);
         }
 

@@ -142,7 +142,7 @@
                      <td class="ey-name">
                         {{$supplier->name}}
                         @if($row->system)
-                        <span class="badge bg-primary ms-1" title="حساب نظام: لا يُحذف ولا يتغير نوعه"><i class="ri-lock-2-line"></i> حساب نظام</span>
+                        <span class="badge bg-primary ms-1" title="حساب نظام: لا يُحذف ولا يُوقف ولا يتغير نوعه"><i class="ri-lock-2-line"></i> حساب نظام</span>
                         @endif
                      </td>
                      <td>

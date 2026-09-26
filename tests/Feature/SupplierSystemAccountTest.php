@@ -167,6 +167,45 @@ class SupplierSystemAccountTest extends TestCase
         $this->assertSame('2', (string) Supplier::find(4)->type);
     }
 
+    public function test_the_edit_page_locks_the_counter_customer_as_active(): void
+    {
+        $html = $this->get(route('site.suppliers_edit', 4))->assertOk()->getContent();
+        $this->assertMatchesRegularExpression('/<select name="status"[^>]*\bdisabled\b/', $html, 'status select locked');
+        $this->assertStringContainsString('ولا إيقافه', $html);
+        $this->assertSame('1', $this->editFormFields($this->counter)['status'], 'the form always submits active');
+
+        // an ordinary account keeps an editable status
+        $other = Supplier::where('id', '!=', 4)->where('acc_type', 2)->firstOrFail();
+        $this->assertDoesNotMatchRegularExpression('/<select name="status"[^>]*\bdisabled\b/',
+            $this->get(route('site.suppliers_edit', $other->id))->assertOk()->getContent());
+    }
+
+    public function test_suspending_the_counter_customer_is_refused_on_every_route(): void
+    {
+        $before = $this->snapshot();
+
+        $this->post(route('site.suppliers_update'), array_merge($this->editFormFields($this->counter), ['status' => '0']))
+            ->assertSessionHasErrors('acc_type');
+        $this->assertStringContainsString('لا يمكن إيقافه', session('errors')->first('acc_type'));
+
+        $this->post(route('site.customers_update'), ['id' => 4, 'name' => $this->counter->name, 'phone_1' => '0',
+            'debit_opening_balance' => $this->counter->debit_opening_balance, 'opening_credit_balance' => $this->counter->opening_credit_balance,
+            'status' => 0, 'type' => $this->counter->type, 'acc_type' => $this->counter->acc_type])
+            ->assertSessionHasErrors('acc_type');
+        $this->assertStringContainsString('لا يمكن إيقافه', session('errors')->first('acc_type'));
+
+        $this->assertSame(1, (int) Supplier::find(4)->status);
+        $this->assertEquals($before, $this->snapshot(), 'nothing saved');
+    }
+
+    public function test_an_ordinary_account_can_still_be_suspended(): void
+    {
+        $other = Supplier::where('id', '!=', 4)->where('acc_type', 2)->where('status', 1)->firstOrFail();
+        $this->post(route('site.suppliers_update'), array_merge($this->editFormFields($other), ['status' => '0']))
+            ->assertSessionDoesntHaveErrors(['acc_type', 'status'])->assertSessionHasErrors('msg');
+        $this->assertSame(0, (int) $other->fresh()->status);
+    }
+
     public function test_account_and_every_ledger_row_are_untouched_by_a_refused_save(): void
     {
         $rows = fn () => AccountStatement::where('supp_client_id', 4)->orderBy('id')->get()->toArray();

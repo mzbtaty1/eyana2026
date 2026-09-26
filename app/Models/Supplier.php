@@ -44,16 +44,20 @@ class Supplier extends Model
     }
 
     /**
-     * Error when saving $accType / $type would change a system account's account
-     * type (acc_type) or type (فرد / شركة); null when allowed. Other fields stay editable.
+     * Error when saving $accType / $type / $status would change a system account's
+     * account type (acc_type) or type (فرد / شركة), or leave it anything but active
+     * (status 1); null when allowed. Other fields stay editable.
      */
-    public function systemAccountChangeError($accType, $type): ?string
+    public function systemAccountChangeError($accType, $type, $status): ?string
     {
         if (! $this->isSystemAccount()) {
             return null;
         }
         if ((string) $accType !== (string) $this->acc_type || (string) $type !== (string) $this->type) {
             return "«{$this->name}» حساب نظام (عميل كونتر): لا يمكن تغيير نوع الحساب أو التصنيف.";
+        }
+        if ((string) $status !== '1') {
+            return "«{$this->name}» حساب نظام (عميل كونتر): لا يمكن إيقافه، يبقى فعالاً دائماً.";
         }
         return null;
     }

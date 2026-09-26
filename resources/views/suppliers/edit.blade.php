@@ -15,9 +15,10 @@
                {{-- disabled selects are not submitted: send the fixed values (the server refuses any other) --}}
                <input type="hidden" name="type" value="{{$supplier->type}}">
                <input type="hidden" name="acc_type" value="{{$supplier->acc_type}}">
+               <input type="hidden" name="status" value="1">
                <div class="alert alert-primary d-flex align-items-center gap-2 py-2" role="note">
                   <i class="ri-lock-2-line fs-16"></i>
-                  <span><b>حساب نظام (عميل كونتر)</b> — لا يمكن حذفه ولا تغيير نوع الحساب أو التصنيف. باقي البيانات قابلة للتعديل.</span>
+                  <span><b>حساب نظام (عميل كونتر)</b> — لا يمكن حذفه ولا إيقافه ولا تغيير نوع الحساب أو التصنيف. باقي البيانات قابلة للتعديل.</span>
                </div>
                @endif
 
@@ -88,7 +89,7 @@
                <div class="row">
                   <div class="col-md-3 mb-3">
                      <label class="form-label">الحالة</label>
-                     <select name="status" class="form-control @error('status') is-invalid @enderror" required="">
+                     <select name="status" class="form-control @error('status') is-invalid @enderror" required="" @if($supplier->isSystemAccount()) disabled @endif>
                      <option value="0" @if(old('status', $supplier->status) == 0) selected @endif>موقوف</option>
                      <option value="1" @if(old('status', $supplier->status) == 1) selected @endif>مفعل</option>
                      </select>
