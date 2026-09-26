@@ -140,7 +140,7 @@
                       data-search="{{ mb_strtolower($supplier->name . ' ' . implode(' ', $row->phones)) }}">
                      <td style="display:none;">{{$row->system ? 0 : 1}}</td>
                      <td class="ey-name">
-                        {{$supplier->name}}
+                        <a href="{{route('site.suppliers_overview', $supplier->id)}}" class="text-body" title="تفاصيل الحساب">{{$supplier->name}}</a>
                         @if($row->system)
                         <span class="badge bg-primary ms-1" title="حساب نظام: لا يُحذف ولا يُوقف ولا يتغير نوعه"><i class="ri-lock-2-line"></i> حساب نظام</span>
                         @endif

@@ -121,6 +121,20 @@ class SuppliersController extends Controller
     }
 
     /**
+     * Account overview (read-only): role, ledger balance and totals, last activity and
+     * invoice counts -- the same figures as the list (SupplierDirectory), for one account.
+     */
+    public function overview($id)
+    {
+        $account = Supplier::find((int) $id);
+        abort_if(! $account, 404);
+
+        return view('suppliers.overview', [
+            "row" => SupplierDirectory::row($account),
+        ]);
+    }
+
+    /**
      * Update the specified resource in storage.
      */
     public function update(UpdateSupplierRequest $request)

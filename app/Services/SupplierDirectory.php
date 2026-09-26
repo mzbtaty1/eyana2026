@@ -14,6 +14,8 @@ use Illuminate\Support\Facades\DB;
  *   role           'supplier' -- supplier on at least one invoice (ticket_vendors linked
  *                  to an invoice); 'customer' -- customer (invoice_beneficiaries) on at
  *                  least one invoice; 'both'; null -- no invoices
+ *   total_debit / total_credit
+ *                  sums of the account's statement rows (is_storage != 1), all time
  *   balance        debit - credit of the account's statement rows (is_storage != 1), all
  *                  time: the account statement's closing balance and the balances report
  *                  figure. > 0 لنا (the account owes us), < 0 علينا (we owe the account)
@@ -32,6 +34,19 @@ class SupplierDirectory
         $accounts = Supplier::where(fn ($q) => $q->where('acc_type', '!=', 3)->orWhereIn('id', $systemIds ?: [0]))
             ->orderBy('id', 'DESC')->get()
             ->sortBy(fn ($a) => in_array((int) $a->id, $systemIds, true) ? 0 : 1)->values();
+
+        return self::build($accounts);
+    }
+
+    /** The same row for one account (any account, expense accounts included): the account overview. */
+    public static function row(Supplier $account): object
+    {
+        return self::build(collect([$account]))->first();
+    }
+
+    /** Rows of $accounts, in their order; see the class comment for each field. */
+    private static function build(Collection $accounts): Collection
+    {
         $ids = $accounts->pluck('id')->all();
 
         $totals = AccountStatement::balancesByAccount($ids);
@@ -73,6 +88,8 @@ class SupplierDirectory
                 'role' => $asSup && $asCus ? 'both' : ($asSup ? 'supplier' : ($asCus ? 'customer' : null)),
                 'invoices_as_supplier' => $asSup,
                 'invoices_as_customer' => $asCus,
+                'total_debit' => (float) ($t->total_debit ?? 0),
+                'total_credit' => (float) ($t->total_credit ?? 0),
                 'balance' => $balance == 0 ? 0.0 : $balance, // no "-0"
                 'last_activity' => $lastActivity[$a->id] ?? null,
             ];
