@@ -99,7 +99,7 @@ class SupplierOverviewTest extends TestCase
         }
         fwrite(STDERR, "\n[info] overview queries per account: " . json_encode($counts) . "\n");
         $this->assertCount(1, array_unique($counts), 'same number of queries for every account');
-        $this->assertLessThanOrEqual(8, max($counts));
+        $this->assertLessThanOrEqual(16, max($counts));   // + latest movements and vouchers (step 3)
     }
 
     private function quietAccountId(): int

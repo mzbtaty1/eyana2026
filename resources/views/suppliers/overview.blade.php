@@ -218,7 +218,143 @@
    </div>
 </div>
 
+{{-- latest movements: the statement's last rows (crt_date, id order), newest first, with the running balance --}}
+<div class="card mt-3">
+   <div class="card-body">
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+         <h6 class="text-muted fs-13 mb-0">آخر الحركات</h6>
+         <span class="text-muted fs-12">
+            آخر {{ number_format(count($movements['latest'])) }} من {{ number_format($movements['rows']) }} حركة — الترتيب والرصيد كما في كشف الحساب
+            @if($movements['rows'] > count($movements['latest']))
+            · <a href="#" class="js-open-statement">كشف الحساب كاملاً</a>
+            @endif
+         </span>
+      </div>
+      @if($movements['latest'])
+      <div class="table-responsive">
+         <table class="table table-sm table-striped align-middle mb-0 text-nowrap" id="ovLatest">
+            <thead class="table-light">
+               <tr>
+                  <th>التاريخ</th>
+                  <th>رقم العملية</th>
+                  <th>النوع</th>
+                  <th>البيان</th>
+                  <th>مدين</th>
+                  <th>دائن</th>
+                  <th>الرصيد بعد الحركة</th>
+                  <th>الموظف</th>
+               </tr>
+            </thead>
+            <tbody>
+               @foreach($movements['latest'] as $m)
+               <tr data-row="{{$m->row->id}}">
+                  <td>{{$m->row->crt_date}}</td>
+                  <td>
+                     @if($m->invoice)
+                     <a href="{{route('site.invoice_info', $m->invoice)}}" title="عرض الفاتورة">{{$m->row->es_id}}</a>
+                     @elseif($m->bond)
+                     <a href="{{route('site.bonds_edit', $m->bond)}}" title="فتح السند (صفحة السند)">{{$m->row->es_id}}</a>
+                     @else
+                     {{$m->row->es_id}}
+                     @endif
+                  </td>
+                  <td>
+                     {{$m->label}}
+                     @if($m->section) <div class="text-muted fs-11">{{$m->section}}</div> @endif
+                  </td>
+                  <td class="text-wrap" style="min-width: 220px;">{{$m->row->transaction_txt}}</td>
+                  <td>@if((float) $m->row->debit_balance) {{ number_format($m->row->debit_balance, 2) }} @else <span class="text-muted">—</span> @endif</td>
+                  <td>@if((float) $m->row->credit_balance) {{ number_format($m->row->credit_balance, 2) }} @else <span class="text-muted">—</span> @endif</td>
+                  <td class="fw-medium">
+                     @if($m->balance_after > 0)
+                     <span class="text-success">{{ number_format($m->balance_after, 2) }}</span> <span class="badge bg-success-subtle text-success">لنا</span>
+                     @elseif($m->balance_after < 0)
+                     <span class="text-danger">{{ number_format(-$m->balance_after, 2) }}</span> <span class="badge bg-danger-subtle text-danger">علينا</span>
+                     @else
+                     <span class="text-muted">0.00</span>
+                     @endif
+                  </td>
+                  <td>{{ $m->employee ?? '—' }}</td>
+               </tr>
+               @endforeach
+            </tbody>
+         </table>
+      </div>
+      @else
+      <p class="text-muted mb-0">لا توجد حركات في كشف الحساب.</p>
+      @endif
+   </div>
+</div>
+
+{{-- vouchers from / to the account (a list with links; amounts are the vouchers', totals come from the ledger above) --}}
+<div class="card mt-3">
+   <div class="card-body">
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+         <h6 class="text-muted fs-13 mb-0">السندات</h6>
+         <span class="text-muted fs-12">
+            @if($vouchers['count'])
+            آخر {{ number_format(count($vouchers['latest'])) }} من {{ number_format($vouchers['count']) }} سند (قبض من الحساب أو دفع له)
+            @endif
+         </span>
+      </div>
+      @if($vouchers['latest'])
+      <div class="table-responsive">
+         <table class="table table-sm table-striped align-middle mb-0 text-nowrap" id="ovVouchers">
+            <thead class="table-light">
+               <tr>
+                  <th>رقم السند</th>
+                  <th>التاريخ</th>
+                  <th>النوع</th>
+                  <th>المبلغ</th>
+                  <th>طريقة الدفع</th>
+                  <th>الفاتورة</th>
+                  <th>الاعتماد</th>
+               </tr>
+            </thead>
+            <tbody>
+               @foreach($vouchers['latest'] as $v)
+               <tr data-bond="{{$v->bond->id}}">
+                  <td><a href="{{route('site.bonds_edit', $v->bond->id)}}" title="فتح السند (صفحة السند)">{{ $v->bond->es_id ?: '#' . $v->bond->id }}</a></td>
+                  <td>{{$v->bond->crt_date}}</td>
+                  <td>
+                     @if($v->direction == 'receipt')
+                     <span class="badge bg-success-subtle text-success">سند قبض</span>
+                     @else
+                     <span class="badge bg-danger-subtle text-danger">سند دفع</span>
+                     @endif
+                     @if($v->bond->is_invoice) <div class="text-muted fs-11">سداد فاتورة</div> @endif
+                  </td>
+                  <td>{{ number_format($v->bond->amount, 2) }}</td>
+                  <td>{{$v->method}}</td>
+                  <td>
+                     @if($v->invoice)
+                     <a href="{{route('site.invoice_info', $v->invoice->id)}}" title="عرض الفاتورة">{{$v->invoice->es_id}}</a>
+                     @elseif($v->missing_invoice)
+                     <span class="text-danger fs-12" title="الفاتورة المرتبطة بهذا السند لم تعد موجودة">فاتورة محذوفة #{{$v->missing_invoice}}</span>
+                     @else <span class="text-muted">—</span> @endif
+                  </td>
+                  <td>
+                     @if($v->bond->bond_status == 1)
+                     <span class="badge bg-success my_badge">معتمد</span>
+                     @else
+                     <span class="badge bg-light text-muted my_badge">غير معتمد</span>
+                     @endif
+                  </td>
+               </tr>
+               @endforeach
+            </tbody>
+         </table>
+      </div>
+      @else
+      <p class="text-muted mb-0">لا توجد سندات لهذا الحساب.</p>
+      @endif
+   </div>
+</div>
+
 <script>
+document.querySelectorAll('.js-open-statement').forEach(function (a) {
+    a.addEventListener('click', function (e) { e.preventDefault(); document.getElementById('statementForm').submit(); });
+});
 document.getElementById('openStatement').addEventListener('click', function () {
     document.getElementById('statementForm').submit();
 });

@@ -148,7 +148,7 @@ class SupplierOverviewMovementsTest extends TestCase
             DB::flushQueryLog();
             DB::enableQueryLog();
             $res = $this->get(route('site.suppliers_overview', $id))->assertOk();
-            $this->assertLessThanOrEqual(8, count(DB::getQueryLog()));
+            $this->assertLessThanOrEqual(16, count(DB::getQueryLog()));   // + latest movements and vouchers (step 3)
             $html = $res->getContent();
             $m = $res->viewData('movements');
             $row = $res->viewData('row');
