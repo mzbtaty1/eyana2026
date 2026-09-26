@@ -157,7 +157,9 @@ class SuppliersController extends Controller
            "status" => $request->status,
            "type" => $request->type,
            "acc_type" => $request->acc_type,
-           "limit_balance" => $request->limit_balance,
+           // the edit form has no limit field: keep the current limit unless one is sent
+           // (writing NULL into the NOT NULL column made every save from the edit page fail)
+           "limit_balance" => $request->filled('limit_balance') ? $request->limit_balance : $supplier->limit_balance,
            "in_index" => $request->in_index,
              "in_stat" => $request->in_stat,
         ]);
