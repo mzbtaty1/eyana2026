@@ -147,7 +147,7 @@ $(document).ready(function () {
                         title: 'ES ID',
                         render: function(data, type, row) {
                             let esIdDisplay = data;
-                            if (row.invoice_ticket_file) {
+                            if (row.invoice_ticket_file && row.invoice_ticket_file !== 'no') { // "no" = no file
                                 const fileUrl = `/public/storage/${row.invoice_ticket_file.replace('storage/', '')}`;
                                 esIdDisplay = `<a href="${fileUrl}" target="_blank">${data}</a>`;
                             }

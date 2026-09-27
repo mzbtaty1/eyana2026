@@ -15,8 +15,7 @@ class StoreVisaRequest extends FormRequest
     {
         return [
             'visa_name' => ['required', 'string', 'max:255'],
-            'visa_price' => ['required', 'numeric'],
-            'visa_ext_price' => ['required', 'numeric'],
+            'status' => ['required', 'in:0,1'],
         ];
     }
 
@@ -24,8 +23,7 @@ class StoreVisaRequest extends FormRequest
     {
         return [
             'visa_name' => 'اسم التأشيرة',
-            'visa_price' => 'سعر التأشيرة',
-            'visa_ext_price' => 'سعر التنفيذ',
+            'status' => 'الحالة',
         ];
     }
 }

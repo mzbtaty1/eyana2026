@@ -4,10 +4,11 @@ namespace App\Http\Controllers\Frontend;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Auth;
 use Redirect;
 use Illuminate\Support\Carbon;
-use App\Models\{Supplier, Invoice, TicketUser, TicketVendor, Airline, AccountStatement , Log , TransactionBalance,Storage,StorageStatement,Bond , User, Bank, BankStatement};
+use App\Models\{Supplier, Invoice, TicketUser, TicketVendor, Airline, AccountStatement , Log , TransactionBalance,Storage,StorageStatement,Bond , User, Bank, BankStatement, Visa};
 use Yajra\DataTables\Facades\DataTables;
 use App\Services\InvoicePassengerLedger;
 use App\Services\CounterPayments;
@@ -308,7 +309,7 @@ public function getInvoices3Months(Request $request)
                 'op_label' => $opLabel,
                 'edits' => $editRows->count(),
                 'last_edit' => $editRows->isEmpty() ? null : (string) $editRows->last()->crt_date,
-                'invoice_ticket_file' => $r->invoice_ticket_file,
+                'invoice_ticket_file' => Invoice::ticketFileOrNull($r->invoice_ticket_file), // "no" = no file: no link
                 'is_refund' => $isRefund,
                 'is_shared' => (int) $r->invoice_shared === 1,
                 'shared_owner' => $userNames[$r->invoice_account_1] ?? null,
@@ -932,10 +933,246 @@ private function getCreatedBy($userId)
     }
 
     /**
+     * Visa Invoice form («فاتورة تأشيرة», Visa step 2): a separate form without the airline
+     * fields, reached from the invoice type chooser. Visa types are names only -- their
+     * visa_price / visa_ext_price are NOT used; the employee enters cost and sale per
+     * applicant. The counter variant fixes the customer to the Counter Customer like create().
+     */
+    public function createVisa(Request $request)
+    {
+        $suppliers = Supplier::select('*')
+            ->where('status', 1)
+            ->where('acc_type', '!=' , 3)
+            ->orderBy('id', 'DESC')
+            ->get();
+        $visas = Visa::where('status', 1)->orderBy('visa_name')->get(['id', 'visa_name']);
+
+        $counterCustomer = null;
+        if ($request->route('counter')) {
+            $counterCustomer = $suppliers->firstWhere('id', CounterPayments::counterIds()[0] ?? 0);
+            if (!$counterCustomer) {
+                return redirect()->route('site.invoices')->withErrors(['msg' => 'حساب عميل كونتر غير موجود أو غير مفعل']);
+            }
+        }
+
+        return view('invoices.create_visa', [
+            "suppliers" => $suppliers,
+            "visas" => $visas,
+            "counterCustomer" => $counterCustomer,
+        ]);
+    }
+
+    /**
+     * Saves a Visa Invoice through the same store() as flight invoices -- the same invoice,
+     * ticket_users, ticket_vendors and account_statements rows and FLY-A numbering, so
+     * profit, payments and statements work as for any invoice. Visa fields map onto the
+     * existing columns (no migration):
+     *   invoice_section = 2 (Visa::SECTION), invoice_airline = the visa type's name,
+     *   invoice_travel_date / from_location / to_location = '' (NOT NULL, no flight data),
+     *   per applicant (ticket_users): client_net_pice = cost, client_bought_price = sale,
+     *   client_passport_id = passport, client_ticket_id = application / visa number,
+     *   client_booking_id = '', client_type = 3 (adult, so later confirm/refund/reissue
+     *   forms keep a valid passenger type).
+     */
+    public function storeVisa(Request $request)
+    {
+        $activeSupplier = fn () => Rule::exists('suppliers', 'id')->where(fn ($q) => $q->where('status', 1)->where('acc_type', '!=', 3));
+        $data = $request->validate([
+            'visa_id' => ['required', 'integer', Rule::exists('visas', 'id')->where('status', 1)],
+            'invoice_date' => ['required', 'date'],
+            'invoice_beneficiaries' => ['required', 'integer', $activeSupplier()],
+            'vendor_id' => ['required', 'integer', $activeSupplier()],
+            'applicants' => ['required', 'array', 'min:1'],
+            'applicants.*.name' => ['required', 'string', 'max:255'],
+            'applicants.*.passport' => ['required', 'string', 'max:50'],
+            'applicants.*.visa_number' => ['nullable', 'string', 'max:100'],
+            'applicants.*.cost' => ['required', 'numeric', 'min:0'],
+            'applicants.*.sale' => ['required', 'numeric', 'min:0'],
+            'invoice_comments' => ['nullable', 'string', 'max:1000'],
+            'myPoster' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:10240'],
+            'added_user' => ['nullable', 'integer', 'exists:users,id'],
+        ], [], [
+            'visa_id' => 'نوع التأشيرة',
+            'invoice_date' => 'تاريخ الفاتورة',
+            'invoice_beneficiaries' => 'العميل',
+            'vendor_id' => 'المورد',
+            'applicants' => 'مقدمو الطلب',
+            'applicants.*.name' => 'اسم مقدم الطلب',
+            'applicants.*.passport' => 'رقم جواز السفر',
+            'applicants.*.visa_number' => 'رقم الطلب / التأشيرة',
+            'applicants.*.cost' => 'سعر التكلفة',
+            'applicants.*.sale' => 'سعر البيع',
+            'invoice_comments' => 'الملاحظات',
+            'myPoster' => 'المرفق',
+        ]);
+
+        // Counter Customer visa invoice: the customer stays the Counter Customer, whatever is posted
+        if ($request->boolean('counter')) {
+            $data['invoice_beneficiaries'] = CounterPayments::counterIds()[0] ?? 0;
+            abort_unless(Supplier::where('id', $data['invoice_beneficiaries'])->where('status', 1)->exists(), 422);
+        }
+
+        $ticketInfo = [];
+        foreach (array_values($data['applicants']) as $a) {
+            $ticketInfo[] = [
+                'name' => $a['name'],
+                'client_type' => 3,
+                'net_price' => $a['cost'],
+                'bought_price' => $a['sale'],
+                'book_id' => '',
+                'tikcet_id' => $a['visa_number'] ?? '',
+                'client_phone' => null,
+                'passport_id' => $a['passport'],
+            ];
+        }
+
+        $request->merge([
+            'invoice_section' => Visa::SECTION,
+            'invoice_airline' => Visa::find($data['visa_id'])->visa_name,
+            'invoice_date' => $data['invoice_date'],
+            'invoice_travel_date' => '',
+            'return_date' => null,
+            'from_location' => '',
+            'to_location' => '',
+            'invoice_beneficiaries' => $data['invoice_beneficiaries'],
+            'vendor_id' => $data['vendor_id'],
+            'vendor_cost' => null, // as the flight form (its vendor_cost input is disabled, never posted)
+            'invoice_comments' => $data['invoice_comments'] ?? null,
+            'invoice_currency' => 'جنية مصري',
+            'invoice_draft' => null,
+            'added_user' => Auth::user()->account_type == 2 && !empty($data['added_user']) ? $data['added_user'] : Auth::user()->id,
+            'ticket_info' => $ticketInfo,
+        ]);
+
+        $request->attributes->set('visa_invoice', true);
+
+        return DB::transaction(fn () => $this->store($request));
+    }
+
+    /**
+     * Visa Invoice edit form (section 2): visa fields only, opened by edit_invoice() for visa
+     * invoices instead of the flight form and saved by saveVisaUpdate().
+     */
+    private function editVisa(Invoice $invoice_info)
+    {
+        $users = TicketUser::select('*')
+            ->where('ticket_system_id', $invoice_info->ticket_system_id)
+            ->get();
+        $suppliers = Supplier::select('*')
+            ->orderBy('id', 'DESC')
+            ->where('acc_type', '!=' , 3)
+            ->get();
+
+        return view('invoices.edit_visa', [
+            "invoice_info" => $invoice_info,
+            "users" => $users,
+            // each applicant's [debit share, credit share] as the Account Statement shows them (as the flight edit form)
+            "shares" => InvoicePassengerLedger::currentShares($invoice_info, $users),
+            "suppliers" => $suppliers,
+            "visaNames" => Visa::where('status', 1)->orderBy('visa_name')->pluck('visa_name'),
+            "vendorId" => TicketVendor::where('ticket_system_id', $invoice_info->ticket_system_id)->value('vendor_id'),
+            "isRefund" => InvoicePassengerLedger::isRefund($invoice_info),
+            "isCounter" => CounterPayments::isCounterClient($invoice_info->invoice_beneficiaries),
+        ]);
+    }
+
+    /**
+     * Saves an edited Visa Invoice through the existing save_update() -- the same
+     * passenger-by-passenger ledger adjustment rows (InvoicePassengerLedger::recordEdit)
+     * as a flight invoice edit. Only the visa fields change: the visa type (kept in
+     * invoice_airline), customer, supplier, applicants (name, passport, application / visa
+     * number, cost, sale), notes and attachment. The flight columns, passenger type, booking
+     * number and phone keep their stored values; applicants cannot be added or removed here
+     * (as in the flight edit form). A Counter Customer invoice keeps the Counter Customer.
+     */
+    public function saveVisaUpdate(Request $request)
+    {
+        $invoice = Invoice::where('id', (int) $request->input('id'))->where('invoice_section', Visa::SECTION)->first();
+        abort_if(!$invoice, 404);
+
+        $users = TicketUser::where('ticket_system_id', $invoice->ticket_system_id)->get()->keyBy('id');
+        // active visa types, plus the name the invoice already has (it may be disabled / historical)
+        $visaNames = Visa::where('status', 1)->pluck('visa_name')->push($invoice->invoice_airline)->unique()->values()->all();
+        $account = fn () => Rule::exists('suppliers', 'id')->where(fn ($q) => $q->where('acc_type', '!=', 3));
+
+        $data = $request->validate([
+            'visa_name' => ['required', 'string', Rule::in($visaNames)],
+            'invoice_beneficiaries' => ['required', 'integer', $account()],
+            'vendor_id' => ['required', 'integer', $account()],
+            'applicants' => ['required', 'array', 'size:' . $users->count()],
+            'applicants.*.id' => ['required', 'integer', 'distinct', Rule::in($users->keys()->all())],
+            'applicants.*.name' => ['required', 'string', 'max:255'],
+            'applicants.*.passport' => ['required', 'string', 'max:50'],
+            'applicants.*.visa_number' => ['nullable', 'string', 'max:100'],
+            'applicants.*.cost' => ['required', 'numeric', 'min:0'],
+            'applicants.*.sale' => ['required', 'numeric', 'min:0'],
+            'invoice_comments' => ['nullable', 'string', 'max:1000'],
+            'myPoster' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:10240'],
+            'added_user' => ['nullable', 'integer', 'exists:users,id'],
+        ], [], [
+            'visa_name' => 'نوع التأشيرة',
+            'invoice_beneficiaries' => 'العميل',
+            'vendor_id' => 'المورد',
+            'applicants' => 'مقدمو الطلب',
+            'applicants.*.name' => 'اسم مقدم الطلب',
+            'applicants.*.passport' => 'رقم جواز السفر',
+            'applicants.*.visa_number' => 'رقم الطلب / التأشيرة',
+            'applicants.*.cost' => 'سعر التكلفة',
+            'applicants.*.sale' => 'سعر البيع',
+            'invoice_comments' => 'الملاحظات',
+            'myPoster' => 'المرفق',
+        ]);
+
+        if (CounterPayments::isCounterClient($invoice->invoice_beneficiaries)) {
+            $data['invoice_beneficiaries'] = $invoice->invoice_beneficiaries;
+        }
+
+        $ticketInfo = [];
+        foreach (array_values($data['applicants']) as $a) {
+            $user = $users[(int) $a['id']];
+            $ticketInfo[] = [
+                'id' => $user->id,
+                'name' => $a['name'],
+                'client_type' => $user->client_type,
+                'net_price' => $a['cost'],
+                'bought_price' => $a['sale'],
+                'book_id' => $user->client_booking_id,
+                'tikcet_id' => $a['visa_number'] ?? '',
+                'client_phone' => $user->client_phone,
+                'passport_id' => $a['passport'],
+            ];
+        }
+
+        $request->merge([
+            'invoice_section' => Visa::SECTION,
+            'invoice_airline' => $data['visa_name'],
+            'invoice_travel_date' => $invoice->invoice_travel_date,
+            'return_date' => $invoice->return_date,
+            'from_location' => $invoice->from_location,
+            'to_location' => $invoice->to_location,
+            'invoice_currency' => $invoice->invoice_currency,
+            'invoice_draft' => $invoice->invoice_draft,
+            'invoice_beneficiaries' => $data['invoice_beneficiaries'],
+            'vendor_id' => $data['vendor_id'],
+            'invoice_comments' => $data['invoice_comments'] ?? null,
+            'added_user' => Auth::user()->account_type == 2 && !empty($data['added_user']) ? $data['added_user'] : $invoice->invoice_create_by,
+            'ticket_info' => $ticketInfo,
+        ]);
+        $request->attributes->set('visa_invoice', true);
+
+        return $this->save_update($request);
+    }
+
+    /**
      * Store a newly created resource in storage.
      */
     public function store(Request $request)
     {
+        // Visa invoices (section 2) are added only from the Visa Invoice form (storeVisa)
+        if ((int) $request->invoice_section === Visa::SECTION && !$request->attributes->get('visa_invoice')) {
+            return Redirect::back()->withErrors(['msg' => 'فواتير التأشيرات تضاف من نموذج فاتورة التأشيرة فقط']);
+        }
+
         if ($request->hasFile('myPoster')) {
             $imagePath = $request->file('myPoster');
             $imageName = $imagePath->getClientOriginalName();
@@ -974,8 +1211,10 @@ private function getCreatedBy($userId)
                 "client_booking_id" => $value['book_id'],
                 "client_ticket_id" => $value['tikcet_id'],
                 "client_phone" => $value['client_phone'],
-                //                "client_passport_id" => $value['passport_id'],
-            ]); 
+                // passport number: visa invoices only (section 2, Visa::SECTION); flight
+                // invoices keep saving none, exactly as before
+                "client_passport_id" => (int) $request->invoice_section === Visa::SECTION ? ($value['passport_id'] ?? null) : null,
+            ]);
         }
 
         $create = Invoice::create([
@@ -1126,6 +1365,12 @@ private function getCreatedBy($userId)
     }
     public function edit_invoice($id)
     {
+        // Visa invoices (section 2) open the Visa edit form, not the flight form
+        $visaInvoice = Invoice::where('id', (int) $id)->where('invoice_section', Visa::SECTION)->first();
+        if ($visaInvoice) {
+            return $this->editVisa($visaInvoice);
+        }
+
         $id = (int) $id;
         $invoice_info = Invoice::select('*')
             ->where('id', $id)
@@ -1178,6 +1423,10 @@ private function getCreatedBy($userId)
     {
         $invoice_info = Invoice::find((int) $id);
         abort_if(!$invoice_info, 404);
+        // visa invoices are edited from the Visa edit form (passport, application / visa number)
+        if ((int) $invoice_info->invoice_section === Visa::SECTION) {
+            return redirect()->route('site.invoices_edit', $invoice_info->id);
+        }
 
         $users = InvoicePassengerLedger::passengers($invoice_info);
         $shares = InvoicePassengerLedger::currentShares($invoice_info, $users);
@@ -1205,6 +1454,9 @@ private function getCreatedBy($userId)
 
         $invoice_info = Invoice::find((int) $request->id);
         abort_if(!$invoice_info, 404);
+        if ((int) $invoice_info->invoice_section === Visa::SECTION) {
+            return Redirect::back()->withErrors(['msg' => 'فواتير التأشيرات تُعدل من نموذج فاتورة التأشيرة فقط']);
+        }
 
         try {
             [$dDebit, $dCredit] = InvoicePassengerLedger::updatePassenger($invoice_info, (int) $request->passenger_id, [
@@ -1239,6 +1491,14 @@ private function getCreatedBy($userId)
             ->get();
         abort_if(count($invoice_info) == 0, 404);
         $invoice_info = $invoice_info[0];
+
+        // Visa invoices (section 2) are edited only through the Visa edit form (saveVisaUpdate),
+        // and the flight edit form cannot turn an invoice into a visa invoice
+        $isVisaInvoice = (int) $invoice_info->invoice_section === Visa::SECTION;
+        if ((bool) $request->attributes->get('visa_invoice') !== $isVisaInvoice
+            || (!$isVisaInvoice && (int) $request->invoice_section === Visa::SECTION)) {
+            return Redirect::back()->withErrors(['msg' => 'فواتير التأشيرات تُعدل من نموذج فاتورة التأشيرة فقط']);
+        }
         
         
         
@@ -1263,7 +1523,7 @@ private function getCreatedBy($userId)
         // own date) are never changed -- every financial change is booked as
         // adjustment rows dated TODAY, passenger by passenger
         // (see InvoicePassengerLedger::recordEdit).
-        DB::transaction(function () use ($request, $invoice_info, $path, $id) {
+        DB::transaction(function () use ($request, $invoice_info, $path, $id, $isVisaInvoice) {
             $oldAccounts = InvoicePassengerLedger::accounts($invoice_info);
             $before = InvoicePassengerLedger::beginEdit($invoice_info);
 
@@ -1286,6 +1546,10 @@ private function getCreatedBy($userId)
                     "client_ticket_id" => $value['tikcet_id'],
                     "client_phone" => $value['client_phone'],
                 ];
+                // passport number: visa invoices only (flight invoices unchanged)
+                if ($isVisaInvoice) {
+                    $ticket_data["client_passport_id"] = $value['passport_id'] ?? null;
+                }
                 $ticket_id = (int) ($value['id'] ?? 0);
                 if ($ticket_id && $existing_tickets->has($ticket_id)) {
                     $existing_tickets[$ticket_id]->update($ticket_data);

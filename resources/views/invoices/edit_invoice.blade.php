@@ -163,7 +163,6 @@ swal("", "{{$errors->first()}}", "info");
                </p>
                <select class="form-control" style="text-align:right;" name="invoice_section" required>
                   <option value="1" @if($invoice_info->invoice_section == 1) selected @endif>فواتير الطيران</option>
-                  <option value="2" @if($invoice_info->invoice_section == 2) selected @endif>فواتير تأشيرات</option>
                   <option value="3" @if($invoice_info->invoice_section == 3) selected @endif>فواتير سياحه داخليه</option>
                   <option value="4" @if($invoice_info->invoice_section == 4) selected @endif>فواتير سياحه خارجيه</option>
                   <option value="5" @if($invoice_info->invoice_section == 5) selected @endif>فواتير سياحه دينيه</option>

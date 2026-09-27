@@ -369,10 +369,21 @@ $rname = Route::currentRouteName();
                            </a>
                        </li>
                      -->
+                  {{-- «خطوط الطيران»: airlines (unchanged) and, separately, visa types (visas table) --}}
                   <li class="nav-item">
-                     <a class="nav-link menu-link" href="{{route('site.airlines')}}">
+                     <a class="nav-link menu-link collapsed" href="#sidebarAirlines" data-bs-toggle="collapse" role="button" aria-expanded="false" aria-controls="sidebarAirlines">
                      <i class="ri-flight-takeoff-line"></i><span data-key="t-widgets">خطوط الطيران</span>
                      </a>
+                     <div class="menu-dropdown collapse" id="sidebarAirlines">
+                        <ul class="nav nav-sm flex-column">
+                           <li class="nav-item">
+                              <a href="{{route('site.airlines')}}" class="nav-link">شركات الطيران</a>
+                           </li>
+                           <li class="nav-item">
+                              <a href="{{route('site.visas')}}" class="nav-link">التأشيرات</a>
+                           </li>
+                        </ul>
+                     </div>
                   </li>
                   <li class="nav-item">
                      <a class="nav-link menu-link" href="{{route('site.collectors')}}">

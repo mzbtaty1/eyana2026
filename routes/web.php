@@ -85,6 +85,7 @@ Route::middleware(['auth' , 'check_status'])->group(function(){
     Route::post('/visas/save', [VisaController::class , 'save'])->name('site.visas_save');
     Route::get('/visas/{id}', [VisaController::class , 'edit'])->name('site.visas_edit');
     Route::post('/visas/{id}/delete', [VisaController::class , 'delete'])->name('site.visas_delete');
+    Route::post('/visas/{id}/status', [VisaController::class , 'status'])->name('site.visas_status');
     Route::post('/visas/update', [VisaController::class , 'update'])->name('site.visas_update');
     
     Route::get('/airlines', [AirlineController::class , 'index'])->name('site.airlines');
@@ -131,6 +132,11 @@ Route::middleware(['auth' , 'check_status'])->group(function(){
     Route::get('/invoices/create' , [InvoicesController::class , 'create'])->name('site.invoices_create');
     // same Add Invoice form, customer fixed to the Counter Customer (config eyana.counter_customer_ids)
     Route::get('/invoices/create/counter' , [InvoicesController::class , 'create'])->defaults('counter', true)->name('site.invoices_create_counter');
+    // Visa Invoice (invoice_section 2): the invoice type chooser's second choice, normal and Counter Customer
+    Route::get('/invoices/create/visa' , [InvoicesController::class , 'createVisa'])->name('site.invoices_create_visa');
+    Route::get('/invoices/create/counter/visa' , [InvoicesController::class , 'createVisa'])->defaults('counter', true)->name('site.invoices_create_counter_visa');
+    Route::post('/invoices/visa/save' , [InvoicesController::class , 'storeVisa'])->name('site.invoices_visa_save');
+    Route::post('/invoices/visa/save-update' , [InvoicesController::class , 'saveVisaUpdate'])->name('site.invoices_visa_save_update');
     Route::post('/invoices/save' , [InvoicesController::class , 'store'])->name('site.invoices_save');
     Route::get('/invoices/{id}/show' , [InvoicesController::class , 'show'])->name('site.invoices_show');
     

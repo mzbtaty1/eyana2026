@@ -51,6 +51,15 @@ class Invoice extends Model
 //     return $this->hasMany(TicketVendor::class, 'ticket_system_id', 'ticket_system_id');
 // }
 
+/** invoice_ticket_file saved when no ticket file / attachment was uploaded (store(), storeVisa()). */
+const NO_FILE = 'no';
+
+/** The invoice's file path, or null when it has none ("no" or empty) -- so no file link is shown. */
+public static function ticketFileOrNull($file): ?string
+{
+    return ($file === null || $file === '' || $file === self::NO_FILE) ? null : (string) $file;
+}
+
 public function beneficiaries()
 {
     return $this->belongsTo(Supplier::class, 'invoice_beneficiaries');

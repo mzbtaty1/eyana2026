@@ -741,7 +741,7 @@ class InvoiceController extends Controller
                 'invoice_status' => $invoice->invoice_status ?? 0,
                 'employee_name' => $employeeName,
                 'invoice_comments' => $invoice->invoice_comments ?? '',
-                'invoice_ticket_file' => $invoice->invoice_ticket_file ?? null
+                'invoice_ticket_file' => \App\Models\Invoice::ticketFileOrNull($invoice->invoice_ticket_file ?? null) // "no" = no file
             ];
         } catch (Exception $e) {
             Log::error('Process invoice error: ' . $e->getMessage(), [

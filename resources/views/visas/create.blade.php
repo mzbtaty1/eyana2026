@@ -14,14 +14,12 @@
                <input type="text" name="visa_name" value="{{old('visa_name')}}" class="form-control @error('visa_name') is-invalid @enderror" style="text-align:right;" required="">
                @error('visa_name') <div class="invalid-feedback">{{$message}}</div> @enderror
                <br>
-                <p style="text-align: right;"> سعر التأشيرة</p>
-               <input type="text" name="visa_price" value="{{old('visa_price')}}" class="form-control @error('visa_price') is-invalid @enderror" style="text-align:right;" required="">
-               @error('visa_price') <div class="invalid-feedback">{{$message}}</div> @enderror
-                <br>
-                <p style="text-align: right;"> سعر التنفيذ التأشيرة</p>
-               <input type="text" name="visa_ext_price" value="{{old('visa_ext_price')}}" class="form-control @error('visa_ext_price') is-invalid @enderror" style="text-align:right;" required="">
-               @error('visa_ext_price') <div class="invalid-feedback">{{$message}}</div> @enderror
-<!--               <br>-->
+                <p style="text-align: right;"> الحالة</p>
+               <select name="status" class="form-select @error('status') is-invalid @enderror" required>
+                  <option value="1" @selected(old('status', '1') == '1')>مفعلة (تظهر في فواتير التأشيرات الجديدة)</option>
+                  <option value="0" @selected(old('status') === '0')>معطلة</option>
+               </select>
+               @error('status') <div class="invalid-feedback">{{$message}}</div> @enderror
 
                 <br>
                 

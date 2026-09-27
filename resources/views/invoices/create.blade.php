@@ -28,6 +28,7 @@ swal("", "{{$errors->first()}}", "info");
             </div>
          </div>
          <div class="card-body">
+            @include('invoices.partials.type_chooser', ['invoiceKind' => 'flight'])
             <form action="{{route('site.invoices_save')}}" method="POST" autocomplete="off" enctype="multipart/form-data">
                @csrf
                <div class="row">
@@ -130,7 +131,6 @@ swal("", "{{$errors->first()}}", "info");
                </p>
                <select class="form-control" style="text-align:right;" name="invoice_section" required>
                   <option value="1">فواتير الطيران</option>
-                  <option value="2">فواتير تأشيرات</option>
                   <option value="3">فواتير سياحه داخليه</option>
                   <option value="4">فواتير سياحه خارجيه</option>
                   <option value="5">فواتير سياحه دينيه</option>

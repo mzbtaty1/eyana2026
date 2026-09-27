@@ -187,7 +187,11 @@ swal("", "{{$errors->first()}}", "info");
                </p>
                <input type="file" class="form-control" name="myPoster" accept="image/jpeg,image/jpg,image/png,application/pdf"  disabled>
                 <p>
+                @if(App\Models\Invoice::ticketFileOrNull($invoice_info->invoice_ticket_file))
                 لمعاينة الملف <a href="{{$invoice_info->invoice_ticket_file}}" target="_blank">اضغط هنا</a>
+                @else
+                لا يوجد ملف مرفق
+                @endif
                 </p>
                <br>
                <h6 style="font-size: 16px;">

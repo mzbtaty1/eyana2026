@@ -13,8 +13,21 @@ use App\Models\{
     Log,
 };
 
+/**
+ * Visa types («التأشيرات», under «خطوط الطيران»; separate from airlines). Admin-only.
+ * A visa type used by visa invoices cannot be deleted or renamed -- only disabled
+ * (status 0), so historical invoices keep their visa type.
+ */
 class VisaController extends Controller
 {
+    public function __construct()
+    {
+        $this->middleware(function ($request, $next) {
+            abort_unless(Auth::user()->account_type == 2, 403);
+            return $next($request);
+        });
+    }
+
     /**
      * Display a listing of the resource.
      */
@@ -23,6 +36,7 @@ class VisaController extends Controller
         $Visas = Visa::select('*')->orderBy('id','DESC')->get();
         return view('visas.all' , [
           "visas" => $Visas,
+          "usage" => Visa::invoiceCounts(),
         ]);
     }
 
@@ -41,15 +55,17 @@ class VisaController extends Controller
     {
         $create = Visa::create([
             "visa_name" => $request->visa_name,
-            "visa_price" => $request->visa_price,
-            "visa_ext_price" => $request->visa_ext_price,
+            // visa types are names only; the old NOT NULL price columns get 0 and are not used anywhere
+            "visa_price" => 0,
+            "visa_ext_price" => 0,
+            "status" => (int) $request->status,
         ]);
-//        $save_log = Log::create([
-//            "log_txt" => "تم انشاء خط الطيران $request->Visa_name",
-//            "log_ip" => $request->ip(),
-//            "log_by" => Auth::user()->id,
-//            "log_date" => date('Y-m-d'),
-//        ]);
+        Log::create([
+            "log_txt" => "تم اضافة التأشيرة $request->visa_name",
+            "log_ip" => $request->ip(),
+            "log_by" => Auth::user()->id,
+            "log_date" => date('Y-m-d'),
+        ]);
         return redirect()->route('site.visas');
     }
 
@@ -66,19 +82,13 @@ class VisaController extends Controller
      */
     public function edit($id)
     {
-         $id = (int) $id;
-        $Visa = Visa::select('*')->where('id',$id)->get();
-        abort_if(count($Visa) == 0 , 404);
-        
-        $Visa = $Visa[0];
-        
-        
-        
-        
+        $Visa = Visa::find((int) $id);
+        abort_if(! $Visa, 404);
+
         return view('visas.edit' , [
           "visa" => $Visa,
+          "used" => $Visa->invoicesCount(),
         ]);
-        
     }
 
     /**
@@ -86,50 +96,70 @@ class VisaController extends Controller
      */
     public function update(UpdateVisaRequest $request)
     {
-        $id = (int) $request->id;
-        $Visa_name = $request->Visa_name;
-        
-        $update = Visa::select('*')->where('id',$id)->update([
-                 "visa_name" => $request->visa_name,
-            "visa_price" => $request->visa_price,
-            "visa_ext_price" => $request->visa_ext_price,
+        $Visa = Visa::find((int) $request->id);
+        abort_if(! $Visa, 404);
+
+        // invoices keep the name they were saved with: a used visa type keeps its name
+        if ($request->visa_name !== $Visa->visa_name && $Visa->invoicesCount() > 0) {
+            return Redirect::back()->withInput()->withErrors(['visa_name' => 'لا يمكن تغيير اسم تأشيرة مستخدمة في فواتير. يمكنك تعطيلها وإضافة تأشيرة جديدة.']);
+        }
+
+        $Visa->update([
+            "visa_name" => $request->visa_name,
+            "status" => (int) $request->status, // stored prices are left as they are (not used)
         ]);
-        
-//        
-//        $save_log = Log::create([
-//            "log_txt" => "تم تعديل خط الطيران $request->Visa_name",
-//            "log_ip" => $request->ip(),
-//            "log_by" => Auth::user()->id,
-//            "log_date" => date('Y-m-d'),
-//        ]);
-        
-        return redirect()->route('site.visas_edit' , $id);
-        
+        Log::create([
+            "log_txt" => "تم تعديل التأشيرة $request->visa_name",
+            "log_ip" => $request->ip(),
+            "log_by" => Auth::user()->id,
+            "log_date" => date('Y-m-d'),
+        ]);
+
+        return redirect()->route('site.visas_edit' , $Visa->id)->withErrors(['msg' => 'تم حفظ بيانات التأشيرة ' . $Visa->visa_name]);
     }
 
     /**
-     * Remove the specified resource from storage.
+     * Enable / disable a visa type (status 1 / 0).
+     */
+    public function status(Request $request, $id)
+    {
+        $Visa = Visa::find((int) $id);
+        abort_if(! $Visa, 404);
+
+        $Visa->update(["status" => $Visa->status == 1 ? 0 : 1]);
+        $txt = ($Visa->status == 1 ? "تم تفعيل التأشيرة " : "تم تعطيل التأشيرة ") . $Visa->visa_name;
+        Log::create([
+            "log_txt" => $txt,
+            "log_ip" => $request->ip(),
+            "log_by" => Auth::user()->id,
+            "log_date" => date('Y-m-d'),
+        ]);
+
+        return Redirect::back()->withErrors(['msg' => $txt]);
+    }
+
+    /**
+     * Remove the specified resource from storage -- only a visa type no invoice uses.
      */
     public function delete(Request $request , $id)
     {
-                $id = (int) $id;
-        $Visa = Visa::select('*')->where('id',$id)->get();
-        abort_if(count($Visa) == 0 , 404);
-        $Visa = $Visa[0];
-        $delete = Visa::select('*')->where('id',$id)->delete();
-        
-         $msg = "تم حذف بيانات التأشيرة " . $Visa->visa_name;
-        
-        
-        
-//         $save_log = Log::create([
-//            "log_txt" => "تم حذف بيانات خط الطيران " . $Visa->Visa_name,
-//            "log_ip" => $request->ip(),
-//            "log_by" => Auth::user()->id,
-//            "log_date" => date('Y-m-d'),
-//        ]);
-        
-//        return $msg;
+        $Visa = Visa::find((int) $id);
+        abort_if(! $Visa, 404);
+
+        $used = $Visa->invoicesCount();
+        if ($used > 0) {
+            return Redirect::back()->withErrors(['delete' => "لا يمكن حذف «{$Visa->visa_name}» لأنها مستخدمة في $used فاتورة. يمكنك تعطيلها بدلاً من حذفها."]);
+        }
+
+        $Visa->delete();
+        $msg = "تم حذف بيانات التأشيرة " . $Visa->visa_name;
+        Log::create([
+            "log_txt" => $msg,
+            "log_ip" => $request->ip(),
+            "log_by" => Auth::user()->id,
+            "log_date" => date('Y-m-d'),
+        ]);
+
         return Redirect::back()->withErrors(['msg' => $msg]);
     }
 }

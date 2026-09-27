@@ -172,7 +172,7 @@
                             data: 'es_id',
                             title: 'ES ID',
                             render: function(data, type, row) {
-                                if (!row.invoice_ticket_file) return data;
+                                if (!row.invoice_ticket_file || row.invoice_ticket_file === 'no') return data; // "no" = no file
                                 const fileUrl = `/public/storage/${row.invoice_ticket_file.replace('storage/', '')}`;
                                 return `<a href="${fileUrl}" target="_blank">${data}</a>`;
                             }

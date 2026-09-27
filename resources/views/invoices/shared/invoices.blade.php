@@ -70,9 +70,9 @@
                    
                    ?>
                   <tr>
-                     <td class="{{$bg}}" style="{{$style}}"><a href="{{asset($invoice->invoice_ticket_file)}}">
+                     <td class="{{$bg}}" style="{{$style}}">@if(App\Models\Invoice::ticketFileOrNull($invoice->invoice_ticket_file))<a href="{{asset($invoice->invoice_ticket_file)}}">
                          {{$invoice->es_id}}
-                         </a></td> 
+                         </a>@else{{$invoice->es_id}}@endif</td> 
                      <td class="{{$bg}}" style="{{$style}}">{{$invoice->invoice_date}}</td>
                      <td class="{{$bg}}" style="{{$style}}">{{$invoice->invoice_travel_date}}</td>
                      <td class="{{$bg}}" style="{{$style}}">
