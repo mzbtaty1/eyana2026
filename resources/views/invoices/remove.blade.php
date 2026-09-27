@@ -317,7 +317,13 @@ swal("", "{{$errors->first()}}", "info");
    //       var url = "http://teacher.cuoratech.com/aladmin_srp/sections/" + id + "/remove";
    var url = "{{url('')}}/invoices/" + id + "/remove/send";
 //                     alert(url);
-         window.location.href = url;
+         // POST + CSRF (deleting is no longer a GET link)
+         var form = document.createElement('form');
+         form.method = 'POST';
+         form.action = url;
+         form.innerHTML = '<input type="hidden" name="_token" value="{{ csrf_token() }}">';
+         document.body.appendChild(form);
+         form.submit();
          
      } else {
        swal("تم الغاء عملية الحذف بنجاح");

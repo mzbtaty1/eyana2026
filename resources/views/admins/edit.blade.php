@@ -22,12 +22,13 @@
       
               <form action="{{route('site.admins_save_update')}}" method="POST" autocomplete="off">
                @csrf       
+               @include('components.flash-messages')
                 <input type="hidden" name="admin_id" value="{{$admin_info->id}}">
                <p style="text-align: right;"> اسم الموظف</p>
                <input type="text" name="name" class="form-control" style="text-align:right;" value="{{$admin_info->name}}" required="" autocomplete="off">
                <br>
                 <p style="text-align: right;"> البريد الالكتروني </p>
-               <input type="email" name="email" class="form-control" style="text-align:right;" value="{{$admin_info->email}}" required="" autocomplete="off">
+               <input type="text" name="email" class="form-control" style="text-align:right;" value="{{$admin_info->email}}" required="" autocomplete="off">
                <br>
                   <p style="text-align: right;"> العمولة </p>
                <input type="text" name="commission" class="form-control" style="text-align:right;" value="{{$admin_info->commission}}" required="" autocomplete="off">

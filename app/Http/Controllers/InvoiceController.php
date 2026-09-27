@@ -543,6 +543,12 @@ class InvoiceController extends Controller
                     'i.invoice_ticket_file'
                 ]);
 
+            // an employee only ever gets their own invoices (as the main list, invoicesListData)
+            $ownOnly = !Auth::user()->isAdmin();
+            if ($ownOnly) {
+                $baseQuery->where('i.invoice_create_by', Auth::id());
+            }
+
             // Apply period filter
             $this->applyPeriodFilter($baseQuery, $periodFilter);
             
@@ -552,7 +558,7 @@ class InvoiceController extends Controller
             }
             
             // Get total records count (without any filters)
-            $totalRecords = DB::table('invoices')->count();
+            $totalRecords = DB::table('invoices')->when($ownOnly, fn ($q) => $q->where('invoice_create_by', Auth::id()))->count();
             
             // Clone query for filtered count BEFORE applying search
             $countQuery = clone $baseQuery;
@@ -866,7 +872,11 @@ class InvoiceController extends Controller
                     'message' => 'الفاتورة غير موجودة'
                 ], 404);
             }
-            
+
+            // legacy invoice management: an employee may delete only their own invoices
+            if (!Auth::user()->isAdmin() && (int) $invoice->invoice_create_by !== (int) Auth::id()) {
+                return response()->json(['success' => false, 'message' => 'غير مسموح بحذف فاتورة موظف آخر'], 403);
+            }
 
             // Counter Customer invoice: its linked payments / payouts are reversed with
             // the invoice in one transaction, or deletion is refused (nothing changed).

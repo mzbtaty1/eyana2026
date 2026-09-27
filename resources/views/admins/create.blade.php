@@ -22,6 +22,7 @@
       
               <form action="{{route('site.admins_save')}}" method="POST" autocomplete="off">
                @csrf       
+               @include('components.flash-messages')
                <p style="text-align: right;"> اسم الموظف</p>
                <input type="text" name="name" class="form-control" style="text-align:right;" value="" required="" autocomplete="off">
                <br> 

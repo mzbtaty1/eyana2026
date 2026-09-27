@@ -22,12 +22,12 @@
       
               <form action="{{route('site.my_account_saves')}}" method="POST" autocomplete="off">
                @csrf       
-                <input type="hidden" name="admin_id" value="{{Auth::user()->id}}">
+               @include('components.flash-messages')
                <p style="text-align: right;"> اسم الموظف</p>
                <input type="text" name="name" class="form-control" style="text-align:right;" value="{{Auth::user()->name}}" required="" autocomplete="off">
                <br>
                 <p style="text-align: right;"> البريد الالكتروني </p>
-               <input type="email" name="email" class="form-control" style="text-align:right;" value="{{Auth::user()->email}}" required="" autocomplete="off">
+               <input type="text" name="email" class="form-control" style="text-align:right;" value="{{Auth::user()->email}}" required="" autocomplete="off">
                <br>
                  <p style="text-align: right;"> كلمة السر (اترك كلمة السر فارغه في حالة عدم الرغبة في التغيير) </p>
                <input type="text" name="password" class="form-control" style="text-align:right;" autocomplete="off">

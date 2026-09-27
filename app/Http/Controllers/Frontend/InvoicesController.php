@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Frontend;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Gate;
+use App\Support\Permissions;
 use Auth;
 use Redirect;
 use Illuminate\Support\Carbon;
@@ -762,6 +764,7 @@ private function getCreatedBy($userId)
      
     }
     public function employee_log_view(Request $request){
+        $this->scopeEmployeeReport($request);
 //        dd($request);
         
      
@@ -821,6 +824,7 @@ private function getCreatedBy($userId)
 //    public function employee_log_print($user_id , $invoice_section = null , $date_from = null , $date_to = null , $airline_id = null , $travel_date = null , $invoice_beneficiaries = null , $vendor_id = null){
         
   public function employee_log_print(Request $request){
+        $this->scopeEmployeeReport($request);
         
 //dd($request->invoice_section);
       
@@ -913,6 +917,38 @@ private function getCreatedBy($userId)
     /**
      * Show the form for creating a new resource.
      */
+
+    /**
+     * The employee an invoice is recorded for (invoice_create_by / ledger added_by) on the
+     * flight forms (store / save_update). An employee: always the signed-in employee -- a
+     * posted added_user is never trusted. An admin: the employee chosen in the form's list
+     * (an existing user), otherwise the admin. The visa wrappers (storeVisa / saveVisaUpdate)
+     * pass an owner they already resolved with the same rule.
+     */
+    private function invoiceOwner(Request $request): int
+    {
+        if ($request->attributes->get('visa_invoice')) {
+            return (int) $request->input('added_user');
+        }
+        $chosen = (int) $request->input('added_user');
+        if (Auth::user()->isAdmin() && $chosen > 0 && User::whereKey($chosen)->exists()) {
+            return $chosen;
+        }
+        return (int) Auth::id();
+    }
+
+    /**
+     * «تقرير تذاكر وارباح الموظفين» (employee_log_view / employee_log_print): needs reports.own;
+     * without reports.all (admin) it is always the signed-in employee's own report -- a user_id
+     * in the form / URL is replaced.
+     */
+    private function scopeEmployeeReport(Request $request): void
+    {
+        abort_unless(Gate::allows(Permissions::REPORTS_OWN), 403);
+        if (!Gate::allows(Permissions::REPORTS_ALL)) {
+            $request->merge(['user_id' => (string) Auth::id()]);
+        }
+    }
 
     public function create(Request $request)
     {
@@ -1188,6 +1224,8 @@ private function getCreatedBy($userId)
         if ((int) $request->invoice_section === Visa::SECTION && !$request->attributes->get('visa_invoice')) {
             return Redirect::back()->withErrors(['msg' => 'فواتير التأشيرات تضاف من نموذج فاتورة التأشيرة فقط']);
         }
+        // the invoice's employee: never taken from a posted added_user for an employee
+        $request->merge(['added_user' => $this->invoiceOwner($request)]);
 
         if ($request->hasFile('myPoster')) {
             $imagePath = $request->file('myPoster');
@@ -1515,6 +1553,8 @@ private function getCreatedBy($userId)
             || (!$isVisaInvoice && (int) $request->invoice_section === Visa::SECTION)) {
             return Redirect::back()->withErrors(['msg' => 'فواتير التأشيرات تُعدل من نموذج فاتورة التأشيرة فقط']);
         }
+        // the invoice's employee: never taken from a posted added_user for an employee
+        $request->merge(['added_user' => $this->invoiceOwner($request)]);
         
         
         
@@ -2046,6 +2086,12 @@ private function getCreatedBy($userId)
         ]);
     }
 
+    /** Deleting an invoice: the admin, or the employee the invoice belongs to (invoice_create_by). */
+    private function mayDeleteInvoice(Invoice $invoice): bool
+    {
+        return Auth::user()->isAdmin() || (int) $invoice->invoice_create_by === (int) Auth::id();
+    }
+
     public function invoices_remove($id)
     {
         $invoice_info = Invoice::select('*')
@@ -2053,6 +2099,7 @@ private function getCreatedBy($userId)
             ->get();
         abort_if(count($invoice_info) == 0, 404);
         $invoice_info = $invoice_info[0];
+        abort_unless($this->mayDeleteInvoice($invoice_info), 403);
 
         $system_id = $invoice_info->ticket_system_id;
 
@@ -2104,6 +2151,8 @@ private function getCreatedBy($userId)
             ->get();
         abort_if(count($invoice_info) == 0, 404);
         $invoice_info = $invoice_info[0];
+        // an employee may delete only their own invoice (the rules below still apply)
+        abort_unless($this->mayDeleteInvoice($invoice_info), 403);
         
         // Counter Customer invoice: reverse its linked payments / payouts and delete it
         // in one transaction, or refuse with the reason (nothing changed).
