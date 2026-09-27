@@ -277,6 +277,19 @@ Route::middleware(['auth' , 'check_status'])->group(function(){
     
     Route::middleware('can:reports.own')->get('/profits',[ProfitsController::class , 'index'])->name('site.profits');
     
+    // «شرائح العمولات» (Employees step B): commission tier tables -- admin only (commission.settings)
+    Route::middleware('can:commission.settings')->prefix('settings/commission-tiers')->group(function () {
+        $c = \App\Http\Controllers\Frontend\CommissionTierController::class;
+        Route::get('/', [$c, 'index'])->name('site.commission_tiers');
+        Route::get('/create', [$c, 'create'])->name('site.commission_tiers_create');
+        Route::post('/', [$c, 'store'])->name('site.commission_tiers_store');
+        Route::get('/{id}', [$c, 'show'])->whereNumber('id')->name('site.commission_tiers_show');
+        Route::get('/{id}/edit', [$c, 'edit'])->whereNumber('id')->name('site.commission_tiers_edit');
+        Route::post('/{id}', [$c, 'update'])->whereNumber('id')->name('site.commission_tiers_update');
+        Route::post('/{id}/status', [$c, 'status'])->whereNumber('id')->name('site.commission_tiers_status');
+        Route::post('/{id}/delete', [$c, 'destroy'])->whereNumber('id')->name('site.commission_tiers_delete');
+    });
+
     Route::get('/my-account' , [UserController::class , 'index'])->name('site.my_account');
     Route::post('/my-account/save' , [UserController::class , 'save'])->name('site.my_account_saves');
     

@@ -535,6 +535,13 @@ $rname = Route::currentRouteName();
                                الاشعارات والتنبيهات
                                </a>
                            </li>
+                           @can('commission.settings')
+                            <li class="nav-item">
+                              <a href="{{route('site.commission_tiers')}}" class="nav-link" data-key="t-basic-tables">
+                               شرائح العمولات
+                               </a>
+                           </li>
+                           @endcan
                         </ul>
                      </div>
                   </li>
