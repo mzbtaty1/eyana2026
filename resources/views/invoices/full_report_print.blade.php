@@ -69,8 +69,8 @@
     <table class="fr-print">
         <thead>
             <tr>
-                <th>رقم الفاتورة</th><th>العملية</th><th>نوع الفاتورة</th><th>تاريخ الفاتورة</th><th>تاريخ السفر</th>
-                <th>الراكب</th><th>PNR</th><th>التذكرة</th><th>الرحلة</th><th>الطيران</th><th>العميل</th><th>المورد</th><th>الموظف</th>
+                <th>رقم الفاتورة</th><th>العملية</th><th>نوع الفاتورة</th><th>طيران / تأشيرة</th><th>تاريخ الفاتورة</th><th>تاريخ السفر</th>
+                <th>الراكب</th><th>PNR</th><th>التذكرة / الطلب</th><th>الرحلة</th><th>الطيران / التأشيرة</th><th>العميل</th><th>المورد</th><th>الموظف</th>
                 <th>الشراء</th><th>البيع</th><th>مرتجع من المورد</th><th>مسترد للعميل</th><th>الربح / الخسارة</th><th>العمولة</th>
             </tr>
         </thead>
@@ -80,9 +80,10 @@
                     <td class="fr-latin">{{ $r['es_id'] }}</td>
                     <td>{{ $r['op_label'] }}@if($r['edits']) ✎{{ $r['edits'] }}@endif</td>
                     <td>{{ $r['type_label'] }}</td>
+                    <td>{{ $r['kind_label'] }}</td>
                     <td>{{ $r['invoice_date'] }}</td>
                     <td>{{ $r['travel_date'] }}</td>
-                    <td class="fr-latin">{{ $r['passenger'] }}</td>
+                    <td class="fr-latin">{{ $r['passenger'] }}@if($r['passport'])<br><small>جواز: {{ $r['passport'] }}</small>@endif</td>
                     <td class="fr-latin">{{ $r['pnr'] }}</td>
                     <td class="fr-latin">{{ $r['ticket'] }}</td>
                     <td>{{ $r['route'] }}</td>
@@ -98,12 +99,12 @@
                     <td class="n">{{ $m($r['commission']) }}</td>
                 </tr>
             @empty
-                <tr><td colspan="19" style="text-align:center;">لا توجد نتائج</td></tr>
+                <tr><td colspan="20" style="text-align:center;">لا توجد نتائج</td></tr>
             @endforelse
         </tbody>
         <tfoot>
             <tr>
-                <td colspan="13">الإجمالي</td>
+                <td colspan="14">الإجمالي</td>
                 <td class="n">{{ $m($summary['purchase']) }}</td>
                 <td class="n">{{ $m($summary['sale']) }}</td>
                 <td class="n">{{ $m($summary['supplier_return']) }}</td>

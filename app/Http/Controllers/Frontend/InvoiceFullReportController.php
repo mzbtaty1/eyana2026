@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Frontend;
 
 use App\Exports\InvoiceFullReportExport;
 use App\Http\Controllers\Controller;
+use App\Models\Visa;
 use App\Services\InvoiceFullReport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -34,7 +35,10 @@ class InvoiceFullReportController extends Controller
                 ->orderBy('name')->get(['id', 'name']),
             'suppliers' => DB::table('suppliers')->whereIn('id', DB::table('ticket_vendors')->select('vendor_id')->distinct())
                 ->orderBy('name')->get(['id', 'name']),
-            'airlines' => DB::table('invoices')->whereRaw("TRIM(COALESCE(invoice_airline, '')) <> ''")
+            // airlines of the non-visa invoices; visa types of the visa invoices (their invoice_airline)
+            'airlines' => DB::table('invoices')->whereRaw("TRIM(COALESCE(invoice_airline, '')) <> ''")->where('invoice_section', '<>', Visa::SECTION)
+                ->distinct()->orderBy('invoice_airline')->pluck('invoice_airline'),
+            'visaTypes' => DB::table('invoices')->whereRaw("TRIM(COALESCE(invoice_airline, '')) <> ''")->where('invoice_section', Visa::SECTION)
                 ->distinct()->orderBy('invoice_airline')->pluck('invoice_airline'),
         ]);
     }
@@ -113,7 +117,7 @@ class InvoiceFullReportController extends Controller
     {
         $out = array_intersect_key($r, array_flip(['id', 'es_id', 'op', 'op_label', 'edits', 'last_edit', 'type', 'type_label',
             'invoice_date', 'travel_date', 'route', 'airline', 'section', 'customer', 'supplier', 'employee', 'rate_label',
-            'passenger', 'pnr', 'ticket']));
+            'passenger', 'pnr', 'ticket', 'passport', 'kind', 'kind_label']));
         foreach (['purchase', 'sale', 'supplier_return', 'client_refund', 'profit', 'commission'] as $k) {
             $out[$k] = round($r[$k], 2);
         }

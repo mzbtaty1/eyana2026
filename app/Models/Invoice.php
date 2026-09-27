@@ -60,6 +60,19 @@ public static function ticketFileOrNull($file): ?string
     return ($file === null || $file === '' || $file === self::NO_FILE) ? null : (string) $file;
 }
 
+/** Flight / visa classification from invoice_section (1 = flight, 2 = visa, other sections as they are). */
+public static function kind($section): string
+{
+    return (int) $section === 1 ? 'flight' : ((int) $section === Visa::SECTION ? 'visa' : 'other');
+}
+
+/** «✈️ طيران» / «🛂 تأشيرة», or the section's own name for the other sections. */
+public static function kindLabel($section): string
+{
+    return ['flight' => '✈️ طيران', 'visa' => '🛂 تأشيرة'][self::kind($section)]
+        ?? (\App\Services\InvoiceFullReport::SECTIONS[(int) $section] ?? '');
+}
+
 public function beneficiaries()
 {
     return $this->belongsTo(Supplier::class, 'invoice_beneficiaries');

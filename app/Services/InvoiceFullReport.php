@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\AccountStatement;
+use App\Models\Invoice;
+use App\Models\Visa;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -34,6 +36,13 @@ use Illuminate\Support\Facades\DB;
  * invoices they created and the shared invoices they take part in (either account)
  * or created.
  *
+ * Flight / visa (Visa step 3): invoice_section 1 = «✈️ طيران», 2 = «🛂 تأشيرة» (kind / kind_label;
+ * never reclassified). A visa row shows its visa type (kept in invoice_airline) in the airline
+ * column and no travel date, route or PNR; its ticket column is the application / visa number
+ * and it carries the passport number. The travel-date and airline filters apply to non-visa
+ * invoices only (dropped when the visa section is selected); visa_type filters visa invoices
+ * only (dropped when the flight section is selected).
+ *
  * The whole filtered set is built with a fixed number of queries (no per-invoice
  * lookups); search, sort, paging, totals, groups, Excel and print all use these
  * same rows, so they always agree.
@@ -47,11 +56,11 @@ class InvoiceFullReport
 
     const TYPES = ['normal' => 'عادية', 'shared' => 'مشتركة', 'counter' => 'عميل كونتر'];
 
-    const GROUPS = ['employee' => 'الموظف', 'airline' => 'شركة الطيران', 'customer' => 'العميل',
+    const GROUPS = ['employee' => 'الموظف', 'airline' => 'شركة الطيران / نوع التأشيرة', 'customer' => 'العميل',
         'supplier' => 'المورد', 'day' => 'اليوم', 'op' => 'نوع العملية'];
 
     /** Sortable / searchable row keys (DataTables column data names). */
-    const SORTABLE = ['es_id', 'op_label', 'type_label', 'invoice_date', 'travel_date', 'passenger', 'pnr', 'ticket',
+    const SORTABLE = ['es_id', 'op_label', 'type_label', 'kind_label', 'invoice_date', 'travel_date', 'passenger', 'pnr', 'ticket',
         'route', 'airline', 'customer', 'supplier', 'employee', 'purchase', 'sale', 'supplier_return',
         'client_refund', 'profit', 'commission'];
 
@@ -86,7 +95,14 @@ class InvoiceFullReport
             'type' => isset(self::TYPES[$input['type'] ?? '']) ? $input['type'] : null,
             'q' => trim((string) ($input['q'] ?? '')) ?: null,
             'search' => trim((string) ($input['search'] ?? '')) ?: null,
+            'visa_type' => trim((string) ($input['visa_type'] ?? '')) ?: null,
         ];
+        // flight-only filters do not apply to the visa section, the visa type not to the flight section
+        if ($this->f['section'] === Visa::SECTION) {
+            $this->f['travel_from'] = $this->f['travel_to'] = $this->f['airline'] = null;
+        } elseif ($this->f['section'] === 1) {
+            $this->f['visa_type'] = null;
+        }
         $this->ctx = $this->isAdmin() ? $this->f['employee_id'] : (int) $user->id;
     }
 
@@ -135,6 +151,9 @@ class InvoiceFullReport
             $q->whereDate('i.invoice_date', '<=', $this->f['date_to']);
         }
         // travel date: one per invoice (invoices.invoice_travel_date), shared by all its passengers
+        if ($this->f['travel_from'] || $this->f['travel_to']) {
+            $q->where('i.invoice_section', '<>', Visa::SECTION);    // flight data: never a visa invoice
+        }
         if ($this->f['travel_from']) {
             $q->whereDate('i.invoice_travel_date', '>=', $this->f['travel_from']);
         }
@@ -145,7 +164,11 @@ class InvoiceFullReport
             $q->where('i.invoice_beneficiaries', $this->f['customer_id']);
         }
         if ($this->f['airline']) {
-            $q->where('i.invoice_airline', $this->f['airline']);
+            $q->where('i.invoice_airline', $this->f['airline'])->where('i.invoice_section', '<>', Visa::SECTION);
+        }
+        if ($this->f['visa_type']) {
+            // a visa invoice keeps its visa type's name in invoice_airline
+            $q->where('i.invoice_airline', $this->f['visa_type'])->where('i.invoice_section', Visa::SECTION);
         }
         if ($this->f['section']) {
             $q->where('i.invoice_section', $this->f['section']);
@@ -179,7 +202,7 @@ class InvoiceFullReport
         $refundEsIds = array_values(array_filter($esIds, fn ($e) => str_starts_with((string) $e, 'FLY-RD')));
 
         $passengers = $systems ? DB::table('ticket_users')->whereIn('ticket_system_id', $systems)->orderBy('id')
-            ->get(['id', 'ticket_system_id', 'client_name', 'client_booking_id', 'client_ticket_id', 'client_net_pice', 'client_bought_price'])
+            ->get(['id', 'ticket_system_id', 'client_name', 'client_booking_id', 'client_ticket_id', 'client_passport_id', 'client_net_pice', 'client_bought_price'])
             ->groupBy('ticket_system_id') : collect();
         $vendors = $systems ? DB::table('ticket_vendors as tv')->leftJoin('suppliers as s', 's.id', '=', 'tv.vendor_id')
             ->whereIn('tv.ticket_system_id', $systems)->orderBy('tv.id')
@@ -200,6 +223,7 @@ class InvoiceFullReport
             $isRefund = str_starts_with((string) $inv->es_id, 'FLY-RD');
             $isShared = (int) $inv->invoice_shared === 1;
             $isCounter = CounterPayments::isCounterClient($inv->invoice_beneficiaries);
+            $isVisa = Invoice::kind($inv->invoice_section) === 'visa'; // no travel date / route / PNR
 
             // operation kind: explicit data only (number prefix, row markers), as the invoices list
             $markers = $markedRows->get($inv->es_id, collect())->map(fn ($r) => ['m' => InvoicePassengerLedger::marker($r), 'date' => (string) $r->crt_date])
@@ -251,10 +275,12 @@ class InvoiceFullReport
                 'type' => $isShared ? 'shared' : ($isCounter ? 'counter' : 'normal'),
                 'type_label' => $isShared ? 'مشتركة' . ($isCounter ? ' - كونتر' : '') : ($isCounter ? 'عميل كونتر' : 'عادية'),
                 'invoice_date' => (string) ($inv->invoice_date ?: substr((string) $inv->created_at, 0, 10)),
-                'travel_date' => (string) $inv->invoice_travel_date,
-                'route' => trim((string) $inv->from_location) !== '' || trim((string) $inv->to_location) !== ''
+                'travel_date' => $isVisa ? '' : (string) $inv->invoice_travel_date,
+                'route' => !$isVisa && (trim((string) $inv->from_location) !== '' || trim((string) $inv->to_location) !== '')
                     ? trim($inv->from_location . ' - ' . $inv->to_location) : '',
-                'airline' => trim((string) $inv->invoice_airline),
+                'airline' => trim((string) $inv->invoice_airline),          // a visa invoice: its visa type
+                'kind' => Invoice::kind($inv->invoice_section),
+                'kind_label' => Invoice::kindLabel($inv->invoice_section),
                 'section' => self::SECTIONS[(int) $inv->invoice_section] ?? '',
                 'customer_id' => (int) $inv->invoice_beneficiaries,
                 'customer' => (string) ($customers[$inv->invoice_beneficiaries] ?? ''),
@@ -268,7 +294,7 @@ class InvoiceFullReport
             ];
 
             if ($pax->isEmpty()) {
-                $pax = collect([(object) ['client_name' => '', 'client_booking_id' => '', 'client_ticket_id' => '', 'client_net_pice' => 0, 'client_bought_price' => 0]]);
+                $pax = collect([(object) ['client_name' => '', 'client_booking_id' => '', 'client_ticket_id' => '', 'client_passport_id' => '', 'client_net_pice' => 0, 'client_bought_price' => 0]]);
             }
             foreach ($pax as $i => $p) {
                 if ($isRefund) {
@@ -284,8 +310,9 @@ class InvoiceFullReport
                 }
                 $rows[] = $base + [
                     'passenger' => (string) $p->client_name,
-                    'pnr' => (string) $p->client_booking_id,
-                    'ticket' => (string) $p->client_ticket_id,
+                    'pnr' => $isVisa ? '' : (string) $p->client_booking_id,
+                    'ticket' => (string) $p->client_ticket_id,                 // visa: application / visa number
+                    'passport' => $isVisa ? (string) $p->client_passport_id : '',
                     'purchase' => $purchase,
                     'sale' => $sale,
                     'supplier_return' => $sr,
@@ -303,13 +330,14 @@ class InvoiceFullReport
         if ($this->f['q']) {
             $needle = $this->f['q'];
             $rows = $rows->filter(fn ($r) => mb_stripos($r['es_id'], $needle) !== false
-                || mb_stripos($r['pnr'], $needle) !== false || mb_stripos($r['ticket'], $needle) !== false);
+                || mb_stripos($r['pnr'], $needle) !== false || mb_stripos($r['ticket'], $needle) !== false
+                || mb_stripos($r['passport'], $needle) !== false);
         }
         if ($this->f['search']) {
             $needle = $this->f['search'];
             $rows = $rows->filter(function ($r) use ($needle) {
-                foreach (['es_id', 'op_label', 'type_label', 'invoice_date', 'travel_date', 'passenger', 'pnr', 'ticket',
-                          'route', 'airline', 'customer', 'supplier', 'employee'] as $k) {
+                foreach (['es_id', 'op_label', 'type_label', 'kind_label', 'invoice_date', 'travel_date', 'passenger', 'pnr', 'ticket',
+                          'passport', 'route', 'airline', 'customer', 'supplier', 'employee'] as $k) {
                     if (mb_stripos((string) $r[$k], $needle) !== false) {
                         return true;
                     }
@@ -393,7 +421,8 @@ class InvoiceFullReport
                     }
                     break;
                 case 'airline':
-                    $add('a' . $r['airline'], $r['airline'] !== '' ? $r['airline'] : '—', $r);
+                    // airline, or visa type (a visa type and an airline of the same name stay apart)
+                    $add('a' . $r['kind'] . '|' . $r['airline'], $r['airline'] === '' ? '—' : ($r['kind'] === 'visa' ? '🛂 ' . $r['airline'] : $r['airline']), $r);
                     break;
                 case 'customer':
                     $add('c' . $r['customer_id'], $r['customer'] !== '' ? $r['customer'] : '—', $r);
@@ -445,6 +474,9 @@ class InvoiceFullReport
         }
         if ($f['airline']) {
             $out['شركة الطيران'] = $f['airline'];
+        }
+        if ($f['visa_type']) {
+            $out['نوع التأشيرة'] = $f['visa_type'];
         }
         if ($f['section']) {
             $out['القسم'] = self::SECTIONS[$f['section']];

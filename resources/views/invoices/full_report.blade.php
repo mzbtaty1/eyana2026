@@ -43,15 +43,15 @@
                <input type="date" id="f_to" name="date_to" class="form-control form-control-sm" value="{{ $f['date_to'] }}">
             </div>
             <div class="col-6 col-md-3 col-xl-2">
-               <label class="form-label mb-1" for="f_tfrom">من تاريخ السفر</label>
+               <label class="form-label mb-1" for="f_tfrom">من تاريخ السفر (طيران)</label>
                <input type="date" id="f_tfrom" name="travel_from" class="form-control form-control-sm" value="{{ $f['travel_from'] }}">
             </div>
             <div class="col-6 col-md-3 col-xl-2">
-               <label class="form-label mb-1" for="f_tto">إلى تاريخ السفر</label>
+               <label class="form-label mb-1" for="f_tto">إلى تاريخ السفر (طيران)</label>
                <input type="date" id="f_tto" name="travel_to" class="form-control form-control-sm" value="{{ $f['travel_to'] }}">
             </div>
             <div class="col-12 col-md-6 col-xl-4">
-               <label class="form-label mb-1" for="f_q">رقم الفاتورة / PNR / رقم التذكرة</label>
+               <label class="form-label mb-1" for="f_q">رقم الفاتورة / PNR / رقم التذكرة / الطلب / الجواز</label>
                <input type="text" id="f_q" name="q" class="form-control form-control-sm" value="{{ $f['q'] }}" placeholder="مثال: FLY-A13134">
             </div>
             <div class="col-6 col-md-3 col-xl-2">
@@ -102,7 +102,7 @@
             </div>
             @endif
             <div class="col-6 col-md-3 col-xl-2">
-               <label class="form-label mb-1" for="f_airline">شركة الطيران</label>
+               <label class="form-label mb-1" for="f_airline">شركة الطيران (طيران)</label>
                <select id="f_airline" name="airline" class="form-select form-select-sm fr-search">
                   <option value="">الكل</option>
                   @foreach($airlines as $a)
@@ -111,10 +111,21 @@
                </select>
             </div>
             <div class="col-6 col-md-3 col-xl-2">
-               <label class="form-label mb-1" for="f_section">القسم</label>
+               <label class="form-label mb-1" for="f_visa_type">نوع التأشيرة (تأشيرات)</label>
+               <select id="f_visa_type" name="visa_type" class="form-select form-select-sm">
+                  <option value="">الكل</option>
+                  @foreach($visaTypes as $vt)
+                     <option value="{{ $vt }}" @selected($f['visa_type'] === $vt)>{{ $vt }}</option>
+                  @endforeach
+               </select>
+            </div>
+            <div class="col-6 col-md-3 col-xl-2">
+               <label class="form-label mb-1" for="f_section">الطيران / التأشيرات</label>
                <select id="f_section" name="section" class="form-select form-select-sm">
                   <option value="">الكل</option>
-                  @foreach(\App\Services\InvoiceFullReport::SECTIONS as $k => $label)
+                  <option value="1" @selected($f['section'] === 1)>✈️ فواتير الطيران</option>
+                  <option value="2" @selected($f['section'] === 2)>🛂 فواتير التأشيرات</option>
+                  @foreach(array_diff_key(\App\Services\InvoiceFullReport::SECTIONS, [1 => 0, 2 => 0]) as $k => $label)
                      <option value="{{ $k }}" @selected($f['section'] === $k)>{{ $label }}</option>
                   @endforeach
                </select>
@@ -132,6 +143,18 @@
             </div>
          </div>
       </form>
+      <script>
+      // flight-only filters (travel date, airline) are off for the visa section; the visa type is off for the flight section
+      (function () {
+         const sec = document.getElementById('f_section');
+         const sync = function () {
+            ['f_tfrom', 'f_tto', 'f_airline'].forEach(function (id) { const el = document.getElementById(id); if (el) { el.disabled = sec.value === '2'; } });
+            const vt = document.getElementById('f_visa_type'); if (vt) { vt.disabled = sec.value === '1'; }
+         };
+         sec.addEventListener('change', sync);
+         sync();
+      })();
+      </script>
    </div>
 </div>
 
@@ -186,13 +209,14 @@
                         <th>رقم الفاتورة</th>
                         <th>نوع العملية</th>
                         <th>نوع الفاتورة</th>
+                        <th>طيران / تأشيرة</th>
                         <th>تاريخ الفاتورة</th>
                         <th>تاريخ السفر</th>
                         <th>الراكب</th>
                         <th>PNR</th>
-                        <th>رقم التذكرة</th>
+                        <th>رقم التذكرة / الطلب</th>
                         <th>الرحلة</th>
-                        <th>شركة الطيران</th>
+                        <th>شركة الطيران / نوع التأشيرة</th>
                         <th>العميل</th>
                         <th>المورد</th>
                         <th>الموظف</th>
@@ -206,7 +230,7 @@
                   </thead>
                   <tfoot>
                      <tr>
-                        <td colspan="13">إجمالي كل النتائج (وليس الصفحة فقط)</td>
+                        <td colspan="14">إجمالي كل النتائج (وليس الصفحة فقط)</td>
                         <td data-kpi="purchase"></td>
                         <td data-kpi="sale"></td>
                         <td data-kpi="supplier_return"></td>
@@ -333,9 +357,13 @@ $(document).ready(function () {
                 return html;
             } },
             { data: 'type_label', render: textCol },
+            { data: 'kind_label', render: textCol },
             { data: 'invoice_date', render: textCol },
             { data: 'travel_date', render: textCol },
-            { data: 'passenger', render: latinCol },
+            { data: 'passenger', render: function (v, type, r) {
+                const html = latinCol(v, type);
+                return type === 'display' && r.passport ? html + '<br><small class="text-muted">جواز: <span class="fr-latin">' + esc(r.passport) + '</span></small>' : html;
+            } },
             { data: 'pnr', render: latinCol },
             { data: 'ticket', render: latinCol },
             { data: 'route', render: textCol },

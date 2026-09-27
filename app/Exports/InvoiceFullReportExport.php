@@ -12,9 +12,10 @@ use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 class InvoiceFullReportExport implements WithMultipleSheets
 {
     const DETAIL_COLUMNS = [
-        'es_id' => 'رقم الفاتورة', 'op_label' => 'نوع العملية', 'type_label' => 'نوع الفاتورة', 'invoice_date' => 'تاريخ الفاتورة',
-        'travel_date' => 'تاريخ السفر', 'passenger' => 'الراكب', 'pnr' => 'PNR', 'ticket' => 'رقم التذكرة', 'route' => 'الرحلة',
-        'airline' => 'شركة الطيران', 'customer' => 'العميل', 'supplier' => 'المورد', 'employee' => 'الموظف',
+        'es_id' => 'رقم الفاتورة', 'op_label' => 'نوع العملية', 'type_label' => 'نوع الفاتورة', 'kind_label' => 'طيران / تأشيرة',
+        'invoice_date' => 'تاريخ الفاتورة', 'travel_date' => 'تاريخ السفر', 'passenger' => 'الراكب', 'pnr' => 'PNR',
+        'ticket' => 'رقم التذكرة / الطلب', 'passport' => 'رقم الجواز', 'route' => 'الرحلة',
+        'airline' => 'شركة الطيران / نوع التأشيرة', 'customer' => 'العميل', 'supplier' => 'المورد', 'employee' => 'الموظف',
         'purchase' => 'سعر الشراء', 'sale' => 'سعر البيع', 'supplier_return' => 'مرتجع من المورد',
         'client_refund' => 'مسترد للعميل', 'profit' => 'الربح / الخسارة', 'rate_label' => 'نسبة العمولة', 'commission' => 'العمولة',
         'edits' => 'عدد التعديلات',
@@ -46,8 +47,9 @@ class InvoiceFullReportExport implements WithMultipleSheets
             $details[] = array_map(fn ($k) => is_float($r[$k]) ? round($r[$k], 2) : $r[$k], array_keys(self::DETAIL_COLUMNS));
         }
         $t = $this->report->summary();
-        $details[] = ['الإجمالي', '', '', '', '', '', '', '', '', '', '', '', '', $t['purchase'], $t['sale'], $t['supplier_return'],
-            $t['client_refund'], round($t['gross_profit'] + $t['refund_net'], 2), '', $t['commission'], ''];
+        // blanks up to the first amount column
+        $details[] = array_merge(['الإجمالي'], array_fill(0, array_search('purchase', array_keys(self::DETAIL_COLUMNS)) - 1, ''), [$t['purchase'], $t['sale'], $t['supplier_return'],
+            $t['client_refund'], round($t['gross_profit'] + $t['refund_net'], 2), '', $t['commission'], '']);
 
         $sheets = [new InvoiceFullReportSheet('الملخص', $summary, 0), new InvoiceFullReportSheet('التفاصيل', $details, 1, true)];
         foreach (InvoiceFullReport::GROUPS as $by => $label) {

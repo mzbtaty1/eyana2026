@@ -189,6 +189,12 @@ public function getInvoices3Months(Request $request)
         if (Auth::user()->account_type != 2) {
             $base->where('i.invoice_create_by', Auth::user()->id);
         }
+        // list view: flight invoices (section 1) or visa invoices (section 2) only; otherwise all
+        if ($request->input('kind') === 'flight') {
+            $base->where('i.invoice_section', 1);
+        } elseif ($request->input('kind') === 'visa') {
+            $base->where('i.invoice_section', Visa::SECTION);
+        }
         $recordsTotal = (clone $base)->count();
 
         // optional date filter on the invoice date
@@ -217,7 +223,8 @@ public function getInvoices3Months(Request $request)
                   ->orWhere('i.invoice_date', 'like', $like)
                   ->orWhere('i.invoice_travel_date', 'like', $like)
                   ->orWhere('i.from_location', 'like', $like)
-                  ->orWhere('i.to_location', 'like', $like);
+                  ->orWhere('i.to_location', 'like', $like)
+                  ->orWhere('i.invoice_airline', 'like', $like); // airline / visa type
                 if ($paxSystems || $vendorSystems) {
                     $q->orWhereIn('i.ticket_system_id', array_values(array_unique(array_merge($paxSystems, $vendorSystems))));
                 }
@@ -240,7 +247,7 @@ public function getInvoices3Months(Request $request)
         $length = $length > 0 ? min($length, 500) : 25;
         $rows = $base->select('i.id', 'i.es_id', 'i.ticket_system_id', 'i.invoice_ticket_file', 'i.invoice_date', 'i.created_at', 'i.invoice_travel_date',
                 'i.from_location', 'i.to_location', 'i.invoice_beneficiaries', 'i.invoice_money_pay', 'i.invoice_status', 'i.invoice_shared',
-                'i.invoice_account_1', 'i.invoice_account_2', 'i.invoice_create_by', 'i.invoice_section')
+                'i.invoice_account_1', 'i.invoice_account_2', 'i.invoice_create_by', 'i.invoice_section', 'i.invoice_airline')
             ->skip(max(0, (int) $request->input('start', 0)))->take($length)->get();
 
         // batched lookups for this page only
@@ -265,6 +272,8 @@ public function getInvoices3Months(Request $request)
         $data = $rows->map(function ($r) use ($vendorNames, $passengers, $supplierNames, $userNames, $refundRows, $markedRows, $counterSummaries, $sections) {
             $pax = $passengers->get($r->ticket_system_id, collect());
             $isRefund = str_starts_with((string) $r->es_id, 'FLY-RD');
+            $kind = Invoice::kind($r->invoice_section);
+            $isVisa = $kind === 'visa'; // a visa invoice has no travel date / route
             $sumNet = $pax->sum(fn ($u) => (float) ($u->client_net_pice ?? 0));
             $sumBought = $pax->sum(fn ($u) => (float) ($u->client_bought_price ?? 0));
             if ($isRefund) {
@@ -315,12 +324,15 @@ public function getInvoices3Months(Request $request)
                 'shared_owner' => $userNames[$r->invoice_account_1] ?? null,
                 'shared_seller' => $userNames[$r->invoice_account_2] ?? null,
                 'invoice_date' => $r->invoice_date ?: $r->created_at,
-                'invoice_travel_date' => $r->invoice_travel_date,
+                'invoice_travel_date' => $isVisa ? '' : $r->invoice_travel_date,
                 'vendors' => $vendorNames->get($r->ticket_system_id, collect())->pluck('name')->filter()->implode(' / '),
                 'beneficiary' => $supplierNames[$r->invoice_beneficiaries] ?? '',
                 'passengers' => $pax->map(fn ($u) => ['name' => $u->client_name, 'booking' => $u->client_booking_id, 'ticket' => $u->client_ticket_id, 'passport' => $u->client_passport_id])->values(),
                 'section' => $sections[(int) $r->invoice_section] ?? '',
-                'locations' => trim((string) $r->from_location) !== '' || trim((string) $r->to_location) !== '' ? $r->from_location . ' / ' . $r->to_location : '',
+                'kind' => $kind,                                          // flight / visa / other
+                'kind_label' => Invoice::kindLabel($r->invoice_section),
+                'carrier' => trim((string) $r->invoice_airline),          // airline, or the visa type of a visa invoice
+                'locations' => !$isVisa && (trim((string) $r->from_location) !== '' || trim((string) $r->to_location) !== '') ? $r->from_location . ' / ' . $r->to_location : '',
                 'cost' => number_format($cost, 2, '.', ''),
                 'sale' => number_format($sale, 2, '.', ''),
                 'profit' => number_format($sale - $cost, 2, '.', ''),
@@ -672,13 +684,17 @@ private function getCreatedBy($userId)
     public function air_cairo_calc(){
         return view('invoices.air_cairo_calc');
     }
-    public function index()
+    public function index(Request $request)
     {
         // The one invoice list (all invoice kinds incl. shared, operation badges,
         // Counter Customer payment status). Its rows are loaded page by page from
         // invoicesListData (site.invoices_list_data), which applies the same
         // "own invoices only" rule for non-admin users.
-        return view('invoices.ajax');
+        // «فواتير الطيران» (invoice_section 1) / «فواتير التأشيرات» (section 2): the same list and
+        // data endpoint, limited to one kind (route default 'kind'); no kind = all invoices
+        $kind = in_array($request->route('kind'), ['flight', 'visa'], true) ? $request->route('kind') : null;
+
+        return view('invoices.ajax', ['kind' => $kind]);
     }
  public function daily_report()
     {
@@ -1688,6 +1704,110 @@ private function getCreatedBy($userId)
     {
         return redirect()->route('site.invoices_reissue_create', $request->es_id);
     }
+    /**
+     * Visa Invoice re-issue form (section 2), opened by invoices_reissue_create() instead of
+     * the flight re-issue form: no travel date, route or PNR. The visa type and the
+     * applicants (name, passport, application / visa number) are carried over; cost and
+     * sale are entered fresh, as in the flight re-issue form.
+     */
+    private function reissueVisaForm(Invoice $invoice_info)
+    {
+        $suppliers = Supplier::select('*')
+            ->where('acc_type', '!=' , 3)
+            ->orderBy('id', 'DESC')
+            ->get();
+
+        return view('invoices.reissue.create_visa', [
+            "invoice_info" => $invoice_info,
+            "users" => TicketUser::where('ticket_system_id', $invoice_info->ticket_system_id)->orderBy('id')->get(),
+            "suppliers" => $suppliers,
+            "visaNames" => Visa::where('status', 1)->orderBy('visa_name')->pluck('visa_name'),
+            "vendorId" => TicketVendor::where('ticket_system_id', $invoice_info->ticket_system_id)->value('vendor_id'),
+            "isCounter" => CounterPayments::isCounterClient($invoice_info->invoice_beneficiaries),
+        ]);
+    }
+
+    /**
+     * Saves a Visa Invoice re-issue through the existing invoices_reissue_save() -- the same
+     * new FLY-RS invoice dated today, ledger rows and re-issue marker as a flight re-issue.
+     * The re-issue stays invoice_section 2 with the visa type in invoice_airline; travel
+     * date / route / PNR are stored empty ('' -- NOT NULL columns) and each applicant keeps
+     * a passport number (client_passport_id) and application / visa number (client_ticket_id).
+     * A Counter Customer invoice stays with the Counter Customer.
+     */
+    public function reissueVisaSave(Request $request)
+    {
+        $invoice = Invoice::where('id', (int) $request->input('id'))->where('invoice_section', Visa::SECTION)->first();
+        abort_if(!$invoice, 404);
+
+        // active visa types, plus the original invoice's own (it may be disabled / historical)
+        $visaNames = Visa::where('status', 1)->pluck('visa_name')->push($invoice->invoice_airline)->unique()->values()->all();
+        $account = fn () => Rule::exists('suppliers', 'id')->where(fn ($q) => $q->where('acc_type', '!=', 3));
+
+        $data = $request->validate([
+            'visa_name' => ['required', 'string', Rule::in($visaNames)],
+            'invoice_beneficiaries' => ['required', 'integer', $account()],
+            'vendor_id' => ['required', 'integer', $account()],
+            'applicants' => ['required', 'array', 'min:1'],
+            'applicants.*.name' => ['required', 'string', 'max:255'],
+            'applicants.*.passport' => ['required', 'string', 'max:50'],
+            'applicants.*.visa_number' => ['nullable', 'string', 'max:100'],
+            'applicants.*.cost' => ['required', 'numeric', 'min:0'],
+            'applicants.*.sale' => ['required', 'numeric', 'min:0'],
+            'invoice_comments' => ['nullable', 'string', 'max:1000'],
+            'myPoster' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:10240'],
+        ], [], [
+            'visa_name' => 'نوع التأشيرة',
+            'invoice_beneficiaries' => 'العميل',
+            'vendor_id' => 'المورد',
+            'applicants' => 'مقدمو الطلب',
+            'applicants.*.name' => 'اسم مقدم الطلب',
+            'applicants.*.passport' => 'رقم جواز السفر',
+            'applicants.*.visa_number' => 'رقم الطلب / التأشيرة',
+            'applicants.*.cost' => 'سعر التكلفة',
+            'applicants.*.sale' => 'سعر البيع',
+            'invoice_comments' => 'الملاحظات',
+            'myPoster' => 'المرفق',
+        ]);
+
+        if (CounterPayments::isCounterClient($invoice->invoice_beneficiaries)) {
+            $data['invoice_beneficiaries'] = $invoice->invoice_beneficiaries;
+        }
+
+        $ticketInfo = [];
+        foreach (array_values($data['applicants']) as $a) {
+            $ticketInfo[] = [
+                'name' => $a['name'],
+                'client_type' => 3,
+                'net_price' => $a['cost'],
+                'bought_price' => $a['sale'],
+                'book_id' => '',
+                'tikcet_id' => $a['visa_number'] ?? '',
+                'client_phone' => null,
+                'passport_id' => $a['passport'],
+            ];
+        }
+
+        $request->merge([
+            'invoice_section' => Visa::SECTION,
+            'invoice_airline' => $data['visa_name'],
+            'invoice_travel_date' => '',
+            'return_date' => null,
+            'from_location' => '',
+            'to_location' => '',
+            'invoice_beneficiaries' => $data['invoice_beneficiaries'],
+            'vendor_id' => $data['vendor_id'],
+            'vendor_cost' => null, // as the flight re-issue form (its vendor_cost input is disabled, never posted)
+            'invoice_comments' => $data['invoice_comments'] ?? null,
+            'invoice_currency' => $invoice->invoice_currency,
+            'invoice_draft' => $invoice->invoice_draft,
+            'ticket_info' => $ticketInfo,
+        ]);
+        $request->attributes->set('visa_invoice', true);
+
+        return DB::transaction(fn () => $this->invoices_reissue_save($request));
+    }
+
     public function invoices_reissue_create($es_id)
     {
         $invoice_info = Invoice::select('*')
@@ -1695,6 +1815,11 @@ private function getCreatedBy($userId)
             ->get();
         abort_if(count($invoice_info) == 0, 404);
         $invoice_info = $invoice_info[0];
+
+        // a visa invoice (section 2) is re-issued from the Visa re-issue form (no travel date / route / PNR)
+        if ((int) $invoice_info->invoice_section === Visa::SECTION) {
+            return $this->reissueVisaForm($invoice_info);
+        }
 
         $system_id = $invoice_info->ticket_system_id;
 
@@ -1736,6 +1861,14 @@ private function getCreatedBy($userId)
         abort_if(count($invoice_info) == 0, 404);
         $invoice_info = $invoice_info[0];
 
+        // a visa invoice (section 2) is re-issued only through the Visa re-issue form (reissueVisaSave),
+        // and the flight re-issue form cannot turn a re-issue into a visa invoice
+        $visaReissue = (bool) $request->attributes->get('visa_invoice');
+        if ($visaReissue !== ((int) $invoice_info->invoice_section === Visa::SECTION)
+            || (!$visaReissue && (int) $request->invoice_section === Visa::SECTION)) {
+            return Redirect::back()->withErrors(['msg' => 'فواتير التأشيرات يعاد إصدارها من نموذج اعادة اصدار التأشيرة فقط']);
+        }
+
         if ($request->hasFile('myPoster')) {
             $imagePath = $request->file('myPoster');
             $imageName = $imagePath->getClientOriginalName();
@@ -1774,7 +1907,8 @@ private function getCreatedBy($userId)
                 "client_booking_id" => $value['book_id'],
                 "client_ticket_id" => $value['tikcet_id'],
                 "client_phone" => $value['client_phone'],
-                //                "client_passport_id" => $value['passport_id'],
+                // passport number: visa re-issues only (flight re-issues save none, as before)
+                "client_passport_id" => $visaReissue ? ($value['passport_id'] ?? null) : null,
             ]);
         }
 

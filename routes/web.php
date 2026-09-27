@@ -96,6 +96,9 @@ Route::middleware(['auth' , 'check_status'])->group(function(){
     Route::post('/airlines/update', [AirlineController::class , 'update'])->name('site.airlines_update');
     
     Route::get('/invoices', [InvoicesController::class, 'index'])->name('site.invoices');
+    // the same list limited to flight invoices (invoice_section 1) / visa invoices (section 2)
+    Route::get('/invoices/flight', [InvoicesController::class, 'index'])->defaults('kind', 'flight')->name('site.invoices_flight');
+    Route::get('/invoices/visa', [InvoicesController::class, 'index'])->defaults('kind', 'visa')->name('site.invoices_visa');
     Route::get('/get_invoices_info', [InvoicesController::class, 'getInvoices'])->name('site.invoices_json');
     Route::get('/get_invoices_info_3months', [InvoicesController::class, 'getInvoices3Months'])->name('site.invoices_json_3months');
     // Server-side DataTables data for the main invoices list (all invoices incl. shared).
@@ -129,6 +132,8 @@ Route::middleware(['auth' , 'check_status'])->group(function(){
     Route::post('/invoices/reissue' , [InvoicesController::class , 'invoices_reissue_get'])->name('site.invoices_reissue');
     Route::get('/invoices/reissue/{id}' , [InvoicesController::class , 'invoices_reissue_create'])->name('site.invoices_reissue_create');
     Route::post('/invoices/reissue/save' , [InvoicesController::class , 'invoices_reissue_save'])->name('site.invoices_reissue_save');
+    // Visa Invoice re-issue (section 2): visa fields only, saved through invoices_reissue_save
+    Route::post('/invoices/reissue/visa/save' , [InvoicesController::class , 'reissueVisaSave'])->name('site.invoices_reissue_visa_save');
     Route::get('/invoices/create' , [InvoicesController::class , 'create'])->name('site.invoices_create');
     // same Add Invoice form, customer fixed to the Counter Customer (config eyana.counter_customer_ids)
     Route::get('/invoices/create/counter' , [InvoicesController::class , 'create'])->defaults('counter', true)->name('site.invoices_create_counter');

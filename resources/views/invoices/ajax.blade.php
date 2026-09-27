@@ -11,13 +11,29 @@
     </div>
 @endif
 
-<x-page-header title="قائمة الفواتير">
+@php
+    // «كل الفواتير» / «فواتير الطيران» (invoice_section 1) / «فواتير التأشيرات» (section 2): one list, one data endpoint
+    $kind = $kind ?? null;
+    $listTitle = ['flight' => 'فواتير الطيران', 'visa' => 'فواتير التأشيرات'][$kind] ?? 'قائمة الفواتير';
+@endphp
+<x-page-header title="{{ $listTitle }}">
    <div class="ey-action-group">
+      @if($kind === 'visa')
+      <a href="{{route('site.invoices_create_visa')}}" class="btn btn-primary"><i class="ri-file-add-line"></i><span>اضافة فاتورة تأشيرة</span></a>
+      <a href="{{route('site.invoices_create_counter_visa')}}" class="btn btn-success"><i class="ri-store-2-line"></i><span>عميل كونتر</span></a>
+      @else
       <a href="{{route('site.invoices_create')}}" class="btn btn-primary"><i class="ri-file-add-line"></i><span>اضافة فاتورة</span></a>
       <a href="{{route('site.shared_invoices_create')}}" class="btn btn-outline-dark"><i class="ri-team-line"></i><span>إضافة فاتورة مشتركة</span></a>
       <a href="{{route('site.invoices_create_counter')}}" class="btn btn-success"><i class="ri-store-2-line"></i><span>عميل كونتر</span></a>
+      @endif
    </div>
 </x-page-header>
+
+<ul class="nav nav-pills gap-1 mb-3" aria-label="نوع الفواتير">
+   <li class="nav-item"><a class="nav-link {{ $kind === 'flight' ? 'active' : '' }}" href="{{ route('site.invoices_flight') }}" @if($kind === 'flight') aria-current="page" @endif>✈️ فواتير الطيران</a></li>
+   <li class="nav-item"><a class="nav-link {{ $kind === 'visa' ? 'active' : '' }}" href="{{ route('site.invoices_visa') }}" @if($kind === 'visa') aria-current="page" @endif>🛂 فواتير التأشيرات</a></li>
+   <li class="nav-item"><a class="nav-link {{ $kind === null ? 'active' : '' }}" href="{{ route('site.invoices') }}" @if($kind === null) aria-current="page" @endif>كل الفواتير</a></li>
+</ul>
 
 <style>
     .dataTables_wrapper .dataTables_paginate .paginate_button {
@@ -90,6 +106,11 @@
     .op-badge.op-edit { background: #f0ad4e; color: #212529; }
     .op-badge.op-reissue { background: #0d6efd; color: #fff; }
     .op-badge.op-refund { background: #dc3545; color: #fff; }
+    /* flight / visa classification (invoice_section) */
+    .kind-badge { display: inline-block; padding: 1px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; border: 1px solid; }
+    .kind-badge.kind-flight { color: #0b5ed7; border-color: #9ec5fe; background: #e7f1ff; }
+    .kind-badge.kind-visa { color: #6f42c1; border-color: #c5b3e6; background: #f3eefc; }
+    .kind-badge.kind-other { color: #495057; border-color: #ced4da; background: #f8f9fa; }
 </style>
 
 <div class="row">
@@ -169,6 +190,7 @@ $(document).ready(function () {
             data: function (d) {
                 d.date_from = $('#flt_from').val();
                 d.date_to = $('#flt_to').val();
+                d.kind = @json($kind); // null = all invoices
             },
             error: function (xhr) {
                 console.error("فشل في تحميل البيانات:", xhr.responseText);
@@ -192,7 +214,10 @@ $(document).ready(function () {
             {
                 data: 'op', orderable: false,
                 render: function (data, type, row) {
-                    let html = `<span class="op-badge op-${esc(row.op)}">${esc(row.op_label)}</span>`;
+                    // flight / visa classification, with the airline or the visa type
+                    let html = `<span class="kind-badge kind-${esc(row.kind)}">${esc(row.kind_label)}</span>`
+                        + (row.carrier ? ` <small>${esc(row.carrier)}</small>` : '') + '<br>'
+                        + `<span class="op-badge op-${esc(row.op)}">${esc(row.op_label)}</span>`;
                     if (row.edits > 0) {
                         html += `<br><span class="op-badge op-edit mt-1">معدلة (${row.edits}) - آخر تعديل ${esc(row.last_edit)}</span>`;
                     }
@@ -206,19 +231,24 @@ $(document).ready(function () {
                 }
             },
             { data: 'invoice_date', render: function (data) { return esc(data || '-'); } },
-            { data: 'invoice_travel_date', render: function (data) { return esc(data); } },
+            // travel date / route: flight data (empty for visa invoices; hidden on the visa list)
+            { data: 'invoice_travel_date', visible: @json($kind !== 'visa'), render: function (data, type, row) { return row.kind === 'visa' ? '—' : esc(data); } },
             { data: 'vendors', orderable: false, render: function (data) { return esc(data); } },
             { data: 'beneficiary', orderable: false, render: function (data) { return esc(data); } },
             {
                 data: 'passengers', orderable: false,
-                render: function (data) {
-                    return (data || []).map(u => `
+                render: function (data, type, row) {
+                    // visa applicants: passport and application / visa number (no booking / ticket)
+                    return (data || []).map(u => row.kind === 'visa' ? `
+                        <strong>${esc(u.name)}</strong><br>
+                        جواز: ${esc(u.passport || '-')} | رقم الطلب: ${esc(u.ticket || '-')}<br>
+                    ` : `
                         <strong>${esc(u.name)}</strong><br>
                         حجز: ${esc(u.booking || '-')} | تذكرة: ${esc(u.ticket || '-')}<br>
                     `).join('');
                 }
             },
-            { data: 'locations', orderable: false, render: function (data) { return esc(data); } },
+            { data: 'locations', orderable: false, visible: @json($kind !== 'visa'), render: function (data) { return esc(data); } },
             { data: 'cost', orderable: false },
             { data: 'sale', orderable: false },
             { data: 'profit', orderable: false },
@@ -229,6 +259,10 @@ $(document).ready(function () {
                 data: 'passengers', orderable: false, visible: false,
                 render: function (data, type, row) {
                     const list = (key) => (data || []).map(u => esc(u[key] || '-')).join(' / ');
+                    if (row.kind === 'visa') {
+                        return `تأشيرة ${esc(row.carrier)} ${esc(row.es_id)}<br>اسماء : ${list('name')}<br>ارقام الجواز : ${list('passport')}<br>`
+                            + `ارقام الطلب / التأشيرة : ${list('ticket')}`;
+                    }
                     return `حجز الرحلة ${esc(row.es_id)}<br>اسماء : ${list('name')}<br>ارقام الحجز : ${list('booking')}<br>`
                         + `ارقام التذاكر : ${list('ticket')}<br>ارقام الجواز : ${list('passport')}`;
                 }
