@@ -462,7 +462,7 @@ $rname = Route::currentRouteName();
                               <a href="{{route('site.employee_commission_report')}}" class="nav-link" data-key="t-basic-tables">تقرير عمولات الموظفين</a>
                            </li>
                             <li class="nav-item">
-                              <a href="{{route('site.commission_payouts_mine')}}" class="nav-link" data-key="t-basic-tables">سجل صرف عمولاتي</a>
+                              <a href="{{route('site.commission_payouts_mine')}}" class="nav-link" data-key="t-basic-tables">كشف عمولاتي</a>
                            </li>
                            @endcan
                            {{-- "تكلفة اير كايرو" removed from navigation (route kept). --}}
@@ -500,7 +500,7 @@ $rname = Route::currentRouteName();
                            </li>
                            @can('finance.manage')
                            <li class="nav-item">
-                              <a href="{{route('site.commission_payouts')}}" class="nav-link" data-key="t-basic-tables">صرف عمولات الموظفين</a>
+                              <a href="{{route('site.commission_payouts')}}" class="nav-link" data-key="t-basic-tables">لوحة عمولات الموظفين</a>
                            </li>
                            @endcan
                            <li class="nav-item">

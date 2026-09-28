@@ -296,6 +296,8 @@ Route::middleware(['auth' , 'check_status'])->group(function(){
     Route::prefix('commissions')->group(function () {
         $c = \App\Http\Controllers\Frontend\CommissionPayoutController::class;
         Route::middleware('can:finance.manage')->get('/payouts', [$c, 'index'])->name('site.commission_payouts');
+        Route::middleware('can:finance.manage')->get('/payouts/print', [$c, 'print'])->name('site.commission_payouts_print');
+        Route::middleware('can:finance.manage')->get('/payouts/excel', [$c, 'excel'])->name('site.commission_payouts_excel');
         Route::middleware('can:finance.manage')->get('/payouts/preview', [$c, 'preview'])->name('site.commission_payouts_preview');
         Route::middleware('can:finance.manage')->post('/payouts', [$c, 'store'])->name('site.commission_payouts_store');
         Route::middleware('can:finance.manage')->post('/payouts/{id}/reverse', [$c, 'reverse'])->whereNumber('id')->name('site.commission_payouts_reverse');

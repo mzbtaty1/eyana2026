@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\Frontend;
 
 use App\Http\Controllers\Controller;
+use App\Exports\InvoiceFullReportSheet;
 use App\Models\{Bank, CommissionPayout, CommissionPeriod, Storage, User};
-use App\Services\CommissionPayouts;
+use App\Services\{CommissionDashboard, CommissionPayouts};
 use App\Support\Permissions;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{Auth, DB};
+use Illuminate\Support\Facades\{Auth, Gate};
 use Illuminate\Support\Str;
+use Maatwebsite\Excel\Facades\Excel;
 
 /**
  * «صرف عمولات الموظفين» (Employees step E): open an employee's commission period with the
@@ -24,20 +26,32 @@ class CommissionPayoutController extends Controller
         $this->middleware('can:' . Permissions::COMMISSION_OWN)->only('mine');
     }
 
-    /** Periods with commission, paid, remaining and status (one query for the sums). */
+    /**
+     * «لوحة العمولات» (Employees step F): every period with the commission at opening, the
+     * current Step D commission, the difference, paid, remaining, status and last payment
+     * (App\Services\CommissionDashboard); filters employee / from / to / status.
+     */
     public function index(Request $request)
     {
-        $employeeId = ctype_digit((string) $request->input('employee_id')) ? (int) $request->input('employee_id') : null;
-        $periods = CommissionPeriod::with('employee:id,name')
-            ->withSum(['payouts as active_payouts_sum_amount' => fn ($q) => $q->whereNull('reversed_at')], 'amount')
-            ->when($employeeId, fn ($q) => $q->where('employee_id', $employeeId))
-            ->orderByDesc('period_from')->orderBy('employee_id')->get();
+        $dashboard = new CommissionDashboard(Auth::user(), $request->all());
 
         return view('commission_payouts.index', [
-            'periods' => $periods,
+            'dashboard' => $dashboard,
             'employees' => User::orderBy('name')->get(['id', 'name']),
-            'employee_id' => $employeeId,
         ]);
+    }
+
+    /** The dashboard's figures, printable. */
+    public function print(Request $request)
+    {
+        return view('commission_payouts.print', ['dashboard' => new CommissionDashboard(Auth::user(), $request->all())]);
+    }
+
+    /** The dashboard's figures as an Excel sheet (the detailed report's sheet class). */
+    public function excel(Request $request)
+    {
+        $dashboard = new CommissionDashboard(Auth::user(), $request->all());
+        return Excel::download(new InvoiceFullReportSheet('عمولات الموظفين', $dashboard->table(), 1, true), 'commissions-' . date('Y-m-d-His') . '.xlsx');
     }
 
     /** The current Step D result for an employee and period, the period (if opened) and its payments. */
@@ -46,7 +60,7 @@ class CommissionPayoutController extends Controller
         $data = $request->validate($this->periodRules(), $this->messages());
         $employee = User::findOrFail((int) $data['employee_id']);
         [$from, $to] = [$data['from'], $data['to']];
-        $period = CommissionPeriod::with(['payouts.creator:id,name', 'payouts.bond:id,es_id'])
+        $period = CommissionPeriod::with(['payouts.creator:id,name', 'payouts.reverser:id,name', 'payouts.bond:id,es_id'])
             ->where('employee_id', $employee->id)->where('period_from', $from)->where('period_to', $to)->first();
 
         return view('commission_payouts.preview', [
@@ -116,14 +130,23 @@ class CommissionPayoutController extends Controller
         return view('commission_payouts.receipt', ['payout' => $payout, 'period' => $payout->period]);
     }
 
-    /** An employee's own periods and payments (read-only). */
-    public function mine()
+    /**
+     * «كشف عمولاتي» (Employees step F): the signed-in employee's periods (profit and commission
+     * at opening, current commission, paid, remaining, status) and their payments / reversals.
+     * Read-only. finance.manage (admin) may view any employee's statement; for anyone else a
+     * requested employee_id is ignored.
+     */
+    public function mine(Request $request)
     {
-        $periods = CommissionPeriod::with(['payouts.bond:id,es_id'])
-            ->withSum(['payouts as active_payouts_sum_amount' => fn ($q) => $q->whereNull('reversed_at')], 'amount')
-            ->where('employee_id', Auth::id())->orderByDesc('period_from')->get();
+        $admin = Gate::allows(Permissions::FINANCE_MANAGE);
+        $employeeId = $admin && ctype_digit((string) $request->input('employee_id')) && User::whereKey((int) $request->input('employee_id'))->exists()
+            ? (int) $request->input('employee_id') : (int) Auth::id();
 
-        return view('commission_payouts.mine', ['periods' => $periods]);
+        return view('commission_payouts.mine', [
+            'dashboard' => new CommissionDashboard(Auth::user(), ['employee_id' => $employeeId]),
+            'employee' => User::find($employeeId),
+            'employees' => $admin ? User::orderBy('name')->get(['id', 'name']) : collect(),
+        ]);
     }
 
     private function periodRules(): array

@@ -49,6 +49,11 @@ class CommissionPayout extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public function reverser()
+    {
+        return $this->belongsTo(User::class, 'reversed_by');
+    }
+
     public function isReversed(): bool
     {
         return $this->reversed_at !== null;

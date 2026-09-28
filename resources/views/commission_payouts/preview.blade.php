@@ -26,7 +26,7 @@
                      </tr>
                   </thead>
                   <tbody>
-                     @foreach(array_filter(['العمولة الحالية' => $current, 'العمولة المعتمدة عند فتح الفترة' => $snap]) as $label => $c)
+                     @foreach(array_filter(['العمولة الحالية' => $current, 'عمولة وقت الدفع (العمولة المعتمدة عند فتح الفترة)' => $snap]) as $label => $c)
                      <tr @if($differs) class="table-warning" @endif>
                         <th>{{$label}}</th>
                         <td>{{$money($c['sales'])}}</td>
@@ -47,8 +47,10 @@
             @if($differs)
             <div class="alert alert-warning" id="commission-difference">
                <i class="ri-error-warning-line"></i>
-               العمولة الحالية ({{$money($current['commission'])}}) تختلف عن العمولة المعتمدة للفترة ({{$money($period->commission_amount)}})،
-               الفرق {{$money($current['commission'] - (float) $period->commission_amount)}}. لا يتم إنشاء أي تسوية أو صرف إضافي أو استرداد تلقائيا.
+               <strong>عمولة وقت الدفع:</strong> {{$money($period->commission_amount)}} ·
+               <strong>العمولة الحالية:</strong> {{$money($current['commission'])}} ·
+               <strong>الفرق:</strong> {{$money($current['commission'] - (float) $period->commission_amount)}}.
+               العمولة الحالية تختلف عن العمولة المعتمدة للفترة؛ لا يتم إنشاء أي تسوية أو صرف إضافي أو استرداد تلقائيا.
                @if($period->paid() > 0) الصرف متوقف لهذه الفترة حتى تتم مراجعة الفرق. @endif
             </div>
             @endif
@@ -149,7 +151,7 @@
                <div class="table-responsive">
                   <table class="table table-bordered table-striped align-middle text-nowrap" id="commission-payouts">
                      <thead class="table-light">
-                        <tr><th>التاريخ</th><th>المبلغ</th><th>السند</th><th>طريقة الدفع</th><th>بواسطة</th><th>المرجع</th><th>الحالة</th><th>--</th></tr>
+                        <tr><th>التاريخ</th><th>المبلغ</th><th>السند</th><th>طريقة الدفع</th><th>بواسطة</th><th>المرجع</th><th>الحالة</th><th>العكس</th><th>--</th></tr>
                      </thead>
                      <tbody>
                         @forelse($period->payouts as $po)
@@ -161,6 +163,7 @@
                            <td>{{$po->creator->name ?? ''}}</td>
                            <td>{{$po->reference}}</td>
                            <td>@if($po->isReversed())<span class="badge bg-secondary my_badge">معكوس</span>@else<span class="badge bg-success my_badge">مصروف</span>@endif</td>
+                           <td class="small">@if($po->isReversed()){{$po->reversed_at->format('Y-m-d H:i')}} - {{$po->reverser->name ?? ''}}<br>{{$po->reversal_bond_note}}@else — @endif</td>
                            <td class="d-flex gap-1">
                               <a href="{{route('site.commission_payouts_receipt', $po->id)}}" target="_blank" class="btn btn-soft-secondary btn-sm"><i class="ri-printer-line"></i></a>
                               @if(!$po->isReversed())
@@ -172,7 +175,7 @@
                            </td>
                         </tr>
                         @empty
-                        <tr><td colspan="8" class="text-center">لا توجد عمليات صرف</td></tr>
+                        <tr><td colspan="9" class="text-center">لا توجد عمليات صرف</td></tr>
                         @endforelse
                      </tbody>
                   </table>
