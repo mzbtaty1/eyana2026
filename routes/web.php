@@ -292,6 +292,17 @@ Route::middleware(['auth' , 'check_status'])->group(function(){
         Route::post('/{id}/delete', [$c, 'destroy'])->whereNumber('id')->name('site.commission_tiers_delete');
     });
 
+    // «صرف عمولات الموظفين» (Employees step E): finance.manage (admin); an employee's own history: commission.view_own
+    Route::prefix('commissions')->group(function () {
+        $c = \App\Http\Controllers\Frontend\CommissionPayoutController::class;
+        Route::middleware('can:finance.manage')->get('/payouts', [$c, 'index'])->name('site.commission_payouts');
+        Route::middleware('can:finance.manage')->get('/payouts/preview', [$c, 'preview'])->name('site.commission_payouts_preview');
+        Route::middleware('can:finance.manage')->post('/payouts', [$c, 'store'])->name('site.commission_payouts_store');
+        Route::middleware('can:finance.manage')->post('/payouts/{id}/reverse', [$c, 'reverse'])->whereNumber('id')->name('site.commission_payouts_reverse');
+        Route::middleware('can:finance.manage')->get('/payouts/{id}/receipt', [$c, 'receipt'])->whereNumber('id')->name('site.commission_payouts_receipt');
+        Route::middleware('can:commission.view_own')->get('/my-payouts', [$c, 'mine'])->name('site.commission_payouts_mine');
+    });
+
     Route::get('/my-account' , [UserController::class , 'index'])->name('site.my_account');
     Route::post('/my-account/save' , [UserController::class , 'save'])->name('site.my_account_saves');
     

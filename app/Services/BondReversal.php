@@ -47,6 +47,61 @@ class BondReversal
         return null;
     }
 
+    /**
+     * Reverse a PAYMENT voucher (type 1) without deleting anything (Employees step E -- the
+     * commission payout reversal): the treasury (and bank) balance is restored and its ledger
+     * entry voided + reversed exactly as reverse() does, but the voucher row and its own
+     * account-statement rows are kept, and each of those rows gets an offsetting row (debit /
+     * credit swapped, same voucher number, dated today). Check problem() first.
+     * $bond must already be locked (lockForUpdate) by the caller's transaction.
+     */
+    public static function offset(Bond $bond, string $description): void
+    {
+        abort_unless((int) $bond->type === 1, 422);
+        $total = (float) $bond->amount + (float) ($bond->commission ?? 0);
+
+        $storage_info = Storage::where('id', $bond->from_account)->lockForUpdate()->first();
+        abort_if(!$storage_info, 404);
+        Storage::where('id', $bond->from_account)->update([
+            "balance" => $storage_info->balance + $total,
+        ]);
+        StorageStatement::reverseActiveEntryForBond((int) $bond->id, $description, Auth::user()->id);
+
+        if ($bond->money_way == 2 && $bond->bank_id) {
+            $bank_info = Bank::where('id', $bond->bank_id)->lockForUpdate()->first();
+            if ($bank_info) {
+                Bank::where('id', $bond->bank_id)->update([
+                    "bank_balance" => $bank_info->bank_balance + $total,
+                ]);
+                BankStatement::reverseActiveEntryForBond((int) $bond->id, $description, Auth::user()->id);
+            }
+        }
+
+        if ((string) $bond->es_id === '') {
+            return;
+        }
+        $today = date('Y-m-d');
+        foreach (AccountStatement::where('es_id', $bond->es_id)->orderBy('id')->get() as $row) {
+            AccountStatement::create([
+                "supp_client_id" => $row->supp_client_id,
+                "trans_storage" => $row->trans_storage,
+                "is_storage" => $row->is_storage,
+                "is_supp_account" => $row->is_supp_account,
+                "sub_id" => $row->sub_id,
+                "invoice_type" => $row->invoice_type,
+                "es_id" => $row->es_id,
+                "invoice_date" => $today,
+                "debit_balance" => $row->credit_balance,
+                "credit_balance" => $row->debit_balance,
+                "ledger_net_effect" => -1 * (float) $row->ledger_net_effect,
+                "transaction_txt" => $description,
+                "transaction_type" => $row->transaction_type,
+                "added_by" => Auth::user()->id,
+                "crt_date" => $today,
+            ]);
+        }
+    }
+
     /** $bond must already be locked (lockForUpdate) by the caller's transaction. */
     public static function reverse(Bond $bond, string $description): void
     {
