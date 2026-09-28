@@ -79,7 +79,7 @@ swal("", "{{$errors->first()}}", "info");
                 @endforeach
           </select>
           <p style="text-align: center;   margin-top: 8px;   font-size: 14px;">
-          نسبة المالك من ارباح التذكرة هي 5%
+          نسبة المشاركة (من الفاتورة الأصلية): {{$invoice_info->invoice_account_1_comm}}
           </p>
       </div>
       <div class="col-6">
@@ -93,7 +93,7 @@ swal("", "{{$errors->first()}}", "info");
                 @endforeach
           </select>
           <p style="text-align: center;   margin-top: 8px;   font-size: 14px;">
-                    نسبة البائع من ارباح التذكرة هي 5%
+                    نسبة المشاركة (من الفاتورة الأصلية): {{$invoice_info->invoice_account_2_comm}}
 
           </p>
       </div>

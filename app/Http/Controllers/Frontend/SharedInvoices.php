@@ -214,6 +214,28 @@ $invoices = Invoice::select('*')
         return redirect()->route('site.shared_invoices');
     }
     
+    /**
+     * A shared invoice's re-issue / refund stays shared with the original's two accounts and
+     * participation weights (copied, never taken from the form); a normal invoice uses the
+     * normal re-issue / refund. The original invoice decides, whatever link or URL was used.
+     */
+    private static function isShared($invoice): bool
+    {
+        return (int) $invoice->invoice_shared === 1;
+    }
+
+    /** The original's shared accounts and weights, as stored on its re-issue / refund. */
+    private static function sharedColumns($original): array
+    {
+        return [
+            "invoice_shared" => 1,
+            "invoice_account_1" => $original->invoice_account_1,
+            "invoice_account_1_comm" => $original->invoice_account_1_comm,
+            "invoice_account_2" => $original->invoice_account_2,
+            "invoice_account_2_comm" => $original->invoice_account_2_comm,
+        ];
+    }
+
     public function shared_invoices_reissue_create($es_id)
     {
         $invoice_info = Invoice::select('*')
@@ -221,6 +243,9 @@ $invoices = Invoice::select('*')
             ->get();
         abort_if(count($invoice_info) == 0, 404);
         $invoice_info = $invoice_info[0];
+        if (!self::isShared($invoice_info)) {
+            return redirect()->route('site.invoices_reissue_create', $invoice_info->es_id);
+        }
 
         $system_id = $invoice_info->ticket_system_id;
 
@@ -261,6 +286,9 @@ $invoices = Invoice::select('*')
             ->get();
         abort_if(count($invoice_info) == 0, 404);
         $invoice_info = $invoice_info[0];
+        if (!self::isShared($invoice_info)) {
+            return Redirect::back()->withErrors(['invoice' => 'هذه فاتورة غير مشتركة: يعاد إصدارها كفاتورة عادية فقط']);
+        }
 
         if ($request->hasFile('myPoster')) {
             $imagePath = $request->file('myPoster');
@@ -321,13 +349,8 @@ $invoices = Invoice::select('*')
             "invoice_create_by" => Auth::user()->id,
             "invoice_ticket_file" => $path,
 
-"invoice_shared" => 1,
-"invoice_account_1" => $request->invoice_account_1,
-"invoice_account_1_comm"=> 5,
-"invoice_account_2" => $request->invoice_account_2,
-"invoice_account_2_comm" => 5,
             "crt_at" => date('Y-m-d'),
-        ]);
+        ] + self::sharedColumns($invoice_info)); // the original's accounts and weights (not the form's, not a fixed 5/5)
 
         // Safety fix: es_id must be derived from this new invoice's own id,
         // not the original invoice's id, so a second reissue/refund of the
@@ -410,6 +433,9 @@ $invoices = Invoice::select('*')
             ->get();
         abort_if(count($invoice_info) == 0, 404);
         $invoice_info = $invoice_info[0];
+        if (!self::isShared($invoice_info)) {
+            return redirect()->route('site.invoices_refund', $invoice_info->es_id);
+        }
 
         $system_id = $invoice_info->ticket_system_id;
 
@@ -463,6 +489,9 @@ $invoices = Invoice::select('*')
             ->get();
         abort_if(count($invoice_info) == 0, 404);
         $invoice_info = $invoice_info[0];
+        if (!self::isShared($invoice_info)) {
+            return Redirect::back()->withErrors(['invoice' => 'هذه فاتورة غير مشتركة: يتم إلغاؤها كفاتورة عادية فقط']);
+        }
 
         // Refund mode (explicit): full = entered amounts split equally between all
         // passengers; single = entered amounts belong only to the selected passenger.
@@ -537,14 +566,9 @@ $invoices = Invoice::select('*')
             "invoice_create_by" => Auth::user()->id,
             "invoice_ticket_file" => $invoice_info->invoice_ticket_file,
 
-            "invoice_shared" => 1,
-"invoice_account_1" => $invoice_info->invoice_account_1,
-"invoice_account_1_comm"=> 5,
-"invoice_account_2" => $invoice_info->invoice_account_2,
-"invoice_account_2_comm" => 5,
             "crt_at" => date('Y-m-d'),
 
-        ]);
+        ] + self::sharedColumns($invoice_info)); // the original's accounts and weights (not a fixed 5/5)
 
         // Safety fix: es_id must be derived from this new invoice's own id,
         // not the original invoice's id, so a second reissue/refund of the

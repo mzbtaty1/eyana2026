@@ -457,6 +457,11 @@ $rname = Route::currentRouteName();
                             <li class="nav-item">
                               <a href="{{route('site.invoices_full_report')}}" class="nav-link" data-key="t-basic-tables">تقرير الفواتير التفصيلي</a>
                            </li>
+                           @can('commission.view_own')
+                            <li class="nav-item">
+                              <a href="{{route('site.employee_commission_report')}}" class="nav-link" data-key="t-basic-tables">تقرير عمولات الموظفين</a>
+                           </li>
+                           @endcan
                            {{-- "تكلفة اير كايرو" removed from navigation (route kept). --}}
                             
 <!--

@@ -1553,8 +1553,11 @@ private function getCreatedBy($userId)
             || (!$isVisaInvoice && (int) $request->invoice_section === Visa::SECTION)) {
             return Redirect::back()->withErrors(['msg' => 'فواتير التأشيرات تُعدل من نموذج فاتورة التأشيرة فقط']);
         }
-        // the invoice's employee: never taken from a posted added_user for an employee
-        $request->merge(['added_user' => $this->invoiceOwner($request)]);
+        // the invoice's employee: an admin may reassign it (the form's list, preset to the current
+        // employee); an employee's edit keeps the invoice's employee -- editing never makes the
+        // editor its owner (a posted added_user is never trusted). Visa: already resolved.
+        $request->merge(['added_user' => $isVisaInvoice || Auth::user()->isAdmin()
+            ? $this->invoiceOwner($request) : (int) $invoice_info->invoice_create_by]);
         
         
         
@@ -1856,6 +1859,11 @@ private function getCreatedBy($userId)
         abort_if(count($invoice_info) == 0, 404);
         $invoice_info = $invoice_info[0];
 
+        // a shared invoice is re-issued as a shared invoice (the original decides, not the link used)
+        if ((int) $invoice_info->invoice_shared === 1) {
+            return redirect()->route('site.shared_invoices_reissue_create', $invoice_info->es_id);
+        }
+
         // a visa invoice (section 2) is re-issued from the Visa re-issue form (no travel date / route / PNR)
         if ((int) $invoice_info->invoice_section === Visa::SECTION) {
             return $this->reissueVisaForm($invoice_info);
@@ -1900,6 +1908,11 @@ private function getCreatedBy($userId)
             ->get();
         abort_if(count($invoice_info) == 0, 404);
         $invoice_info = $invoice_info[0];
+
+        // a shared invoice is re-issued only through the shared re-issue (it keeps the shared accounts)
+        if ((int) $invoice_info->invoice_shared === 1) {
+            return Redirect::back()->withErrors(['invoice' => 'هذه فاتورة مشتركة: يعاد إصدارها كفاتورة مشتركة فقط']);
+        }
 
         // a visa invoice (section 2) is re-issued only through the Visa re-issue form (reissueVisaSave),
         // and the flight re-issue form cannot turn a re-issue into a visa invoice
@@ -2053,6 +2066,11 @@ private function getCreatedBy($userId)
             ->get();
         abort_if(count($invoice_info) == 0, 404);
         $invoice_info = $invoice_info[0];
+
+        // a shared invoice is refunded as a shared invoice (the original decides, not the link used)
+        if ((int) $invoice_info->invoice_shared === 1) {
+            return redirect()->route('site.shared_invoices_refund', $invoice_info->es_id);
+        }
 
         $system_id = $invoice_info->ticket_system_id;
 
@@ -2208,6 +2226,11 @@ private function getCreatedBy($userId)
             ->get();
         abort_if(count($invoice_info) == 0, 404);
         $invoice_info = $invoice_info[0];
+
+        // a shared invoice is refunded only through the shared refund (it keeps the shared accounts)
+        if ((int) $invoice_info->invoice_shared === 1) {
+            return Redirect::back()->withErrors(['invoice' => 'هذه فاتورة مشتركة: يتم إلغاؤها كفاتورة مشتركة فقط']);
+        }
 
         // Refund mode (explicit, never guessed):
         //  full   = cancel the whole invoice: the entered amounts are split

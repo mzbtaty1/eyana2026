@@ -31,6 +31,28 @@ class CommissionTierTable extends Model
         return (int) $this->status === 1;
     }
 
+    /**
+     * The ONE tier for a total profit (Employees step D), by the step B boundary rule:
+     * previous upper limit < profit <= upper limit, the first tier from its own lower limit
+     * (1-10,000 / 10,001-50,000: 10,000 -> first, 10,000.50 and 10,001 -> second). Above the
+     * last upper limit: the last tier. Profit <= 0 or below the first lower limit: none.
+     * Compared in cents, as the tiers were validated.
+     */
+    public function tierFor(float $profit): ?CommissionTier
+    {
+        $tiers = $this->tiers;
+        $cents = (int) round($profit * 100);
+        if ($cents <= 0 || $tiers->isEmpty() || $cents < (int) round((float) $tiers->first()->from_amount * 100)) {
+            return null;
+        }
+        foreach ($tiers as $tier) {
+            if ($tier->to_amount === null || $cents <= (int) round((float) $tier->to_amount * 100)) {
+                return $tier;
+            }
+        }
+        return $tiers->last();
+    }
+
     /** Employees assigned this table (users.commission_tier_table_id, Employees step C). */
     public function employees()
     {

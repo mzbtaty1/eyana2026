@@ -163,6 +163,8 @@ Route::middleware(['auth' , 'check_status'])->group(function(){
     Route::middleware('can:reports.own')->post('/invoices/employee-log/view' , [InvoicesController::class , 'employee_log_view'])->name('site.employee_log_view');
          
     Route::middleware('can:reports.own')->get('/invoices/employee-log/print' , [InvoicesController::class , 'employee_log_print'])->name('site.employee_log_print');
+    // «تقرير عمولات الموظفين» (Employees step D): read-only; an employee only ever sees their own
+    Route::middleware('can:commission.view_own')->get('/reports/employee-commission' , [\App\Http\Controllers\Frontend\EmployeeCommissionReportController::class , 'index'])->name('site.employee_commission_report');
     Route::middleware('can:invoices.confirm')->get('/invoices/{id}/approve' , [InvoicesController::class , 'invoices_approve'])->name('site.invoices_approve');
     Route::get('/invoices/air-cairo/calc' , [InvoicesController::class , 'air_cairo_calc'])->name('site.air_cairo_calc');
     

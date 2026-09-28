@@ -76,13 +76,14 @@ swal("", "{{$errors->first()}}", "info");
              
              
               <div class="col-sm-4 card text-center" style="padding: 14px;">
-      <a href="{{route('site.invoices_reissue_create' , $invoice->es_id)}}" class="dropdown-item">
+      {{-- a shared invoice is re-issued / refunded as shared (the server enforces it as well) --}}
+      <a href="{{route($invoice->invoice_shared == 1 ? 'site.shared_invoices_reissue_create' : 'site.invoices_reissue_create' , $invoice->es_id)}}" class="dropdown-item">
       <i class="ri-arrow-go-forward-line"></i>
                                     اعادة اصدار
                                   </a>
    </div>
                                <div class="col-sm-4 card text-center" style="padding: 14px;">
-      <a href="{{route('site.invoices_refund' , $invoice->es_id)}}" class="dropdown-item">
+      <a href="{{route($invoice->invoice_shared == 1 ? 'site.shared_invoices_refund' : 'site.invoices_refund' , $invoice->es_id)}}" class="dropdown-item">
      <i class="ri-refund-2-line"></i>
                                    الغاء الفاتورة
                                   </a>

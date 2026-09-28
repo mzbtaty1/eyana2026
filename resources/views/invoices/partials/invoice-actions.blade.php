@@ -34,14 +34,14 @@
     
     {{-- Reissue --}}
     <li>
-        <a href="{{ route('site.invoices_reissue_create', $invoice->es_id) }}" class="dropdown-item">
+        <a href="{{ route($invoice->invoice_shared == 1 ? 'site.shared_invoices_reissue_create' : 'site.invoices_reissue_create', $invoice->es_id) }}" class="dropdown-item">
             <i class="ri-arrow-go-forward-line"></i> اعادة اصدار
         </a>
     </li>
     
     {{-- Refund --}}
     <li>
-        <a href="{{ route('site.invoices_refund', $invoice->es_id) }}" class="dropdown-item">
+        <a href="{{ route($invoice->invoice_shared == 1 ? 'site.shared_invoices_refund' : 'site.invoices_refund', $invoice->es_id) }}" class="dropdown-item">
             <i class="ri-refund-2-line"></i> الغاء الفاتورة
         </a>
     </li>
