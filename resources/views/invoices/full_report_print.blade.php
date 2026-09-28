@@ -18,6 +18,8 @@
 @section('content')
 @php
     $m = fn ($v) => \App\Services\InvoiceFullReport::money($v);
+    // commission: null without a selected period
+    $c = fn ($v) => $v === null ? '—' : $m($v);
 @endphp
 
 <x-print-header :title="$by ? 'التقرير التفصيلي للفواتير - حسب ' . \App\Services\InvoiceFullReport::GROUPS[$by] : 'التقرير التفصيلي للفواتير'">
@@ -37,12 +39,13 @@
     <div>مسترد للعملاء<b>{{ $m($summary['client_refund']) }}</b></div>
     <div>صافي المرتجعات<b>{{ $m($summary['refund_net']) }}</b></div>
     <div>صافي الربح<b>{{ $m($summary['net_profit']) }}</b></div>
-    <div>إجمالي العمولة<b>{{ $m($summary['commission']) }}</b></div>
+    <div>إجمالي العمولة<b>{{ $summary['commission'] === null ? \App\Services\InvoiceFullReportWithCommission::NO_PERIOD : $m($summary['commission']) }}</b></div>
 </div>
+<p style="font-size:10px;">{{ $report->commissionNote() }}</p>
 
 @if($by)
     @if($by === 'employee')
-        <p style="font-size:10px;">الفاتورة المشتركة تظهر عند كل موظف من الموظفين المشتركين فيها (البيع والربح كاملين، والعمولة بنسبة كل موظف).</p>
+        <p style="font-size:10px;">الفاتورة المشتركة تظهر عند كل موظف من الموظفين المشتركين فيها (البيع والربح كاملين، والعمولة على نصيب كل موظف حسب نسبة المشاركة ونسبة عمولته في الفترة).</p>
     @endif
     <table class="fr-print">
         <thead>
@@ -58,7 +61,7 @@
                     <td>{{ $g['label'] }}</td>
                     <td class="n">{{ $g['invoices'] }}</td><td class="n">{{ $g['tickets'] }}</td><td class="n">{{ $g['refund_tickets'] }}</td>
                     <td class="n">{{ $m($g['sale']) }}</td><td class="n">{{ $m($g['purchase']) }}</td><td class="n">{{ $m($g['gross_profit']) }}</td>
-                    <td class="n">{{ $m($g['refund_net']) }}</td><td class="n">{{ $m($g['net_profit']) }}</td><td class="n">{{ $m($g['commission']) }}</td>
+                    <td class="n">{{ $m($g['refund_net']) }}</td><td class="n">{{ $m($g['net_profit']) }}</td><td class="n">{{ $c($g['commission']) }}</td>
                 </tr>
             @empty
                 <tr><td colspan="10" style="text-align:center;">لا توجد نتائج</td></tr>
@@ -96,7 +99,7 @@
                     <td class="n">{{ $m($r['supplier_return']) }}</td>
                     <td class="n">{{ $m($r['client_refund']) }}</td>
                     <td class="n">{{ $m($r['profit']) }}</td>
-                    <td class="n">{{ $m($r['commission']) }}</td>
+                    <td class="n">{{ $c($r['commission']) }}</td>
                 </tr>
             @empty
                 <tr><td colspan="20" style="text-align:center;">لا توجد نتائج</td></tr>
@@ -110,7 +113,7 @@
                 <td class="n">{{ $m($summary['supplier_return']) }}</td>
                 <td class="n">{{ $m($summary['client_refund']) }}</td>
                 <td class="n">{{ $m($summary['net_profit']) }}</td>
-                <td class="n">{{ $m($summary['commission']) }}</td>
+                <td class="n">{{ $c($summary['commission']) }}</td>
             </tr>
         </tfoot>
     </table>

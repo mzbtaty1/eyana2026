@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Frontend;
 use App\Exports\InvoiceFullReportExport;
 use App\Http\Controllers\Controller;
 use App\Models\Visa;
-use App\Services\InvoiceFullReport;
+use App\Services\{InvoiceFullReport, InvoiceFullReportWithCommission};
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -13,13 +13,14 @@ use Maatwebsite\Excel\Facades\Excel;
 
 /**
  * «التقرير التفصيلي للفواتير» (/invoices/full-report). Read-only; every figure
- * comes from App\Services\InvoiceFullReport.
+ * comes from App\Services\InvoiceFullReport, the commission from the employee commission
+ * rules (App\Services\InvoiceFullReportWithCommission -- shown only for a selected period).
  */
 class InvoiceFullReportController extends Controller
 {
-    protected function report(Request $request): InvoiceFullReport
+    protected function report(Request $request): InvoiceFullReportWithCommission
     {
-        return new InvoiceFullReport($request->all(), Auth::user());
+        return new InvoiceFullReportWithCommission($request->all(), Auth::user());
     }
 
     public function index(Request $request)
@@ -60,7 +61,7 @@ class InvoiceFullReportController extends Controller
     {
         $input = $request->all();
         $input['search'] = $request->input('search.value');
-        $report = new InvoiceFullReport($input, Auth::user());
+        $report = new InvoiceFullReportWithCommission($input, Auth::user());
 
         $col = (int) $request->input('order.0.column', -1);
         $key = $request->input("columns.$col.data");
@@ -77,6 +78,7 @@ class InvoiceFullReportController extends Controller
             'recordsFiltered' => $rows->count(),
             'data' => $page->map(fn ($r) => $this->display($r)),
             'summary' => $report->summary(),
+            'commission_note' => $report->commissionNote(),
         ]);
     }
 
@@ -119,7 +121,7 @@ class InvoiceFullReportController extends Controller
             'invoice_date', 'travel_date', 'route', 'airline', 'section', 'customer', 'supplier', 'employee', 'rate_label',
             'passenger', 'pnr', 'ticket', 'passport', 'kind', 'kind_label']));
         foreach (['purchase', 'sale', 'supplier_return', 'client_refund', 'profit', 'commission'] as $k) {
-            $out[$k] = round($r[$k], 2);
+            $out[$k] = $r[$k] === null ? null : round($r[$k], 2);   // commission: null without a period
         }
         return $out;
     }

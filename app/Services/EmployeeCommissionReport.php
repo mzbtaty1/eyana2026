@@ -107,6 +107,32 @@ class EmployeeCommissionReport
         return $this->results = $out;
     }
 
+    /**
+     * Each employee's effective commission rate for the period, for reports that show the
+     * commission per ticket (InvoiceFullReportWithCommission): employee id => rate % (the
+     * fixed % or the tier's rate; 0 when the period profit is 0 or less) and its label.
+     * rate x the employee's share of every row adds up to their period commission.
+     */
+    public function effectiveRates(): array
+    {
+        $out = [];
+        foreach ($this->results() as $r) {
+            $rate = $r['profit'] > 0 ? (float) $r['rate'] : 0.0;
+            $label = self::percent($rate) . '%';
+            if ($r['method'] === User::COMMISSION_TIERED) {
+                $label = 'شرائح' . ($r['tier_table'] !== null ? ' «' . $r['tier_table'] . '»' : '') . ' ' . $label;
+            }
+            $out[$r['employee_id']] = ['rate' => $rate, 'label' => $r['profit'] > 0 ? $label : $label . ' (لا ربح في الفترة)'];
+        }
+        return $out;
+    }
+
+    /** A rate / share as text, decimals kept: 10 -> "10", 12.5 -> "12.5", 33.333 -> "33.33". */
+    public static function percent(float $v): string
+    {
+        return rtrim(rtrim(number_format(round($v, 2), 2, '.', ''), '0'), '.');
+    }
+
     /** Totals of the results (every employee together). */
     public function totals(): array
     {

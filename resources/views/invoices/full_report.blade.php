@@ -158,6 +158,11 @@
    </div>
 </div>
 
+{{-- commission: by the employee commission rules, for the selected period only --}}
+<div class="alert {{ $report->commissionAvailable() ? 'alert-info' : 'alert-warning' }} py-2 small mb-2" id="frCommissionNote">
+   <i class="ri-information-line"></i> <span>{{ $report->commissionNote() }}</span>
+</div>
+
 {{-- totals of all rows matching the filters and the table search --}}
 <div class="row g-2 mb-3" id="frKpis">
    @foreach([
@@ -257,7 +262,7 @@
             </div>
             <div class="alert alert-info py-2 small d-none" id="frEmpNote">
                <i class="ri-information-line"></i>
-               الفاتورة المشتركة تظهر عند كل موظف من الموظفين المشتركين فيها (البيع والربح كاملين، والعمولة بنسبة كل موظف)، لذلك قد يزيد مجموع صفوف الموظفين عن الإجمالي العام.
+               الفاتورة المشتركة تظهر عند كل موظف من الموظفين المشتركين فيها (البيع والربح كاملين، والعمولة على نصيب كل موظف حسب نسبة المشاركة ونسبة عمولته في الفترة)، لذلك قد يزيد مجموع البيع والربح في صفوف الموظفين عن الإجمالي العام.
             </div>
             <div class="table-responsive">
                <table id="frGroups" class="table table-bordered table-striped align-middle">
@@ -299,6 +304,10 @@ $(document).ready(function () {
         return n < 0 ? '<span class="fr-neg">' + s + '</span>' : s;
     };
     const moneyCol = function (v, type) { return type === 'display' ? money(v) : v; };
+    // commission is null without a selected period
+    const noPeriod = @json(\App\Services\InvoiceFullReportWithCommission::NO_PERIOD);
+    const commission = function (v) { return v === null ? '<span class="text-muted">—</span>' : money(v); };
+    const commissionCol = function (v, type) { return type === 'display' ? commission(v) : v; };
     const textCol = function (v, type) { return type === 'display' ? esc(v) : v; };
     const latinCol = function (v, type) { return type === 'display' ? '<span class="fr-latin">' + esc(v) + '</span>' : v; };
     let search = '';
@@ -319,6 +328,7 @@ $(document).ready(function () {
         $('[data-kpi]').each(function () {
             const k = $(this).data('kpi');
             if (s[k] === undefined) { return; }
+            if (k === 'commission' && s[k] === null) { $(this).html('<small class="text-muted">' + esc(noPeriod) + '</small>'); return; }
             $(this).html(['tickets', 'invoices', 'refund_tickets'].includes(k) ? Number(s[k]).toLocaleString('en-US') : money(s[k]));
         });
     };
@@ -338,7 +348,7 @@ $(document).ready(function () {
         ajax: function (d, callback) {
             fetch(urls.data + '?' + toParams(Object.assign({}, d, filters)).toString(), { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
                 .then(function (r) { if (!r.ok) { throw new Error('HTTP ' + r.status); } return r.json(); })
-                .then(function (json) { showSummary(json.summary); callback(json); })
+                .then(function (json) { showSummary(json.summary); $('#frCommissionNote span').text(json.commission_note); callback(json); })
                 .catch(function (e) {
                     console.error('full report:', e);
                     callback({ draw: d.draw, recordsTotal: 0, recordsFiltered: 0, data: [] });
@@ -378,7 +388,7 @@ $(document).ready(function () {
             { data: 'supplier_return', render: moneyCol, className: 'text-end' },
             { data: 'client_refund', render: moneyCol, className: 'text-end' },
             { data: 'profit', render: moneyCol, className: 'text-end' },
-            { data: 'commission', render: moneyCol, className: 'text-end' },
+            { data: 'commission', render: commissionCol, className: 'text-end' },
         ],
         pageLength: 25,
         lengthMenu: [10, 25, 50, 100, 250, 500],
@@ -427,7 +437,8 @@ $(document).ready(function () {
                 $('#frGroups tbody').html(json.groups.map(function (g) {
                     return '<tr><td>' + esc(g.label) + (g.shared_tickets ? ' <small class="text-muted">(' + g.shared_tickets + ' تذكرة مشتركة)</small>' : '') + '</td>'
                         + '<td>' + g.invoices + '</td><td>' + g.tickets + '</td><td>' + g.refund_tickets + '</td>'
-                        + ['sale', 'purchase', 'gross_profit', 'refund_net', 'net_profit', 'commission'].map(function (k) { return '<td class="text-end">' + money(g[k]) + '</td>'; }).join('')
+                        + ['sale', 'purchase', 'gross_profit', 'refund_net', 'net_profit'].map(function (k) { return '<td class="text-end">' + money(g[k]) + '</td>'; }).join('')
+                        + '<td class="text-end">' + commission(g.commission) + '</td>'
                         + '</tr>';
                 }).join(''));
             })

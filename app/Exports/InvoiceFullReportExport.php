@@ -2,12 +2,13 @@
 
 namespace App\Exports;
 
-use App\Services\InvoiceFullReport;
+use App\Services\{InvoiceFullReport, InvoiceFullReportWithCommission};
 use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 
 /**
  * Excel of «التقرير التفصيلي للفواتير»: summary, every ticket row, and one sheet per
- * grouping -- all for the current filters, from the same rows as the screen.
+ * grouping -- all for the current filters, from the same rows as the screen (commission by
+ * the employee commission rules; without a selected period, no commission).
  */
 class InvoiceFullReportExport implements WithMultipleSheets
 {
@@ -33,13 +34,17 @@ class InvoiceFullReportExport implements WithMultipleSheets
 
     public function sheets(): array
     {
+        $noPeriod = InvoiceFullReportWithCommission::NO_PERIOD;
         $summary = [['التقرير التفصيلي للفواتير'], ['تاريخ الاستخراج', now()->format('Y-m-d H:i')]];
         foreach ($this->report->filterLabels() as $label => $value) {
             $summary[] = [$label, $value];
         }
         $summary[] = [];
         foreach ($this->report->summary() as $k => $v) {
-            $summary[] = [self::TOTAL_COLUMNS[$k], $v];
+            $summary[] = [self::TOTAL_COLUMNS[$k], $v ?? $noPeriod];
+        }
+        if ($this->report instanceof InvoiceFullReportWithCommission) {   // the screen's report (the controller)
+            $summary[] = ['العمولة', $this->report->commissionNote()];
         }
 
         $details = [array_values(self::DETAIL_COLUMNS)];
@@ -49,13 +54,13 @@ class InvoiceFullReportExport implements WithMultipleSheets
         $t = $this->report->summary();
         // blanks up to the first amount column
         $details[] = array_merge(['الإجمالي'], array_fill(0, array_search('purchase', array_keys(self::DETAIL_COLUMNS)) - 1, ''), [$t['purchase'], $t['sale'], $t['supplier_return'],
-            $t['client_refund'], round($t['gross_profit'] + $t['refund_net'], 2), '', $t['commission'], '']);
+            $t['client_refund'], round($t['gross_profit'] + $t['refund_net'], 2), '', $t['commission'] ?? $noPeriod, '']);
 
         $sheets = [new InvoiceFullReportSheet('الملخص', $summary, 0), new InvoiceFullReportSheet('التفاصيل', $details, 1, true)];
         foreach (InvoiceFullReport::GROUPS as $by => $label) {
             $rows = [array_merge([$label], array_values(self::TOTAL_COLUMNS))];
             foreach ($this->report->groups($by) as $g) {
-                $rows[] = array_merge([$g['label']], array_map(fn ($k) => $g[$k], array_keys(self::TOTAL_COLUMNS)));
+                $rows[] = array_merge([$g['label']], array_map(fn ($k) => $g[$k] ?? '', array_keys(self::TOTAL_COLUMNS)));
             }
             $sheets[] = new InvoiceFullReportSheet('حسب ' . $label, $rows, 1);
         }
