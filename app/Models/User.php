@@ -28,6 +28,8 @@ class User extends Authenticatable
         'status',
         'account_type',
         'commission',
+        'commission_method',
+        'commission_tier_table_id',
     ];
 
     /**
@@ -48,7 +50,36 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
+        'commission_tier_table_id' => 'integer',
     ];
+
+    /** Commission methods (Employees step C): the fixed users.commission %, or a tier table. */
+    const COMMISSION_FIXED = 'fixed';
+    const COMMISSION_TIERED = 'tiered';
+    const COMMISSION_METHODS = [
+        self::COMMISSION_FIXED => 'نسبة ثابتة',
+        self::COMMISSION_TIERED => 'شرائح العمولات',
+    ];
+
+    /** The assigned commission tier table (tiered method; may since have been deactivated). */
+    public function commissionTierTable()
+    {
+        return $this->belongsTo(CommissionTierTable::class, 'commission_tier_table_id');
+    }
+
+    public function usesTieredCommission(): bool
+    {
+        return $this->commission_method === self::COMMISSION_TIERED;
+    }
+
+    /**
+     * The fixed commission % from users.commission, which older rows store as text such as
+     * "10" or "10%" (read as 10). The stored value itself is never rewritten.
+     */
+    public static function normalizeCommission($value): string
+    {
+        return trim(rtrim(trim((string) $value), '%'));
+    }
 
     /** Admin («محاسب / مسئول», account_type 2): has every ability. */
     public function isAdmin(): bool

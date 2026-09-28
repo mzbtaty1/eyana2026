@@ -22,7 +22,8 @@
                      <th data-ordering="false">اسم الموظف</th>
                      <th data-ordering="false">البريد الالكتروني</th>
                      <th data-ordering="false">نوع الحساب - الحالة</th>
-                     <th data-ordering="false">نسبة العمولة</th>
+                     <th data-ordering="false">طريقة العمولة</th>
+                     <th data-ordering="false">العمولة</th>
                      <th data-ordering="false">--</th>
                   </tr>
                </thead>
@@ -47,7 +48,18 @@
                           @endif
                           
                       </td>
-                      <td>{{$admin->commission}}%</td>
+                      @if($admin->usesTieredCommission())
+                      <td><span class="badge bg-info my_badge">شرائح</span></td>
+                      <td>
+                          {{ $admin->commissionTierTable->name ?? '--' }}
+                          @if($admin->commissionTierTable && !$admin->commissionTierTable->isActive())
+                          <span class="badge bg-warning my_badge">معطل</span>
+                          @endif
+                      </td>
+                      @else
+                      <td><span class="badge bg-light text-dark my_badge">نسبة ثابتة</span></td>
+                      <td>{{ \App\Models\User::normalizeCommission($admin->commission) }}%</td>
+                      @endif
                      <td>
                         <a href="{{route('site.admins_edit' , $admin->id)}}">
                         <button class="btn btn-soft-secondary btn-sm dropdown" type="button" style="font-size: 16px;">

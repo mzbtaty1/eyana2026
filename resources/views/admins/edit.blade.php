@@ -30,9 +30,7 @@
                 <p style="text-align: right;"> البريد الالكتروني </p>
                <input type="text" name="email" class="form-control" style="text-align:right;" value="{{$admin_info->email}}" required="" autocomplete="off">
                <br>
-                  <p style="text-align: right;"> العمولة </p>
-               <input type="text" name="commission" class="form-control" style="text-align:right;" value="{{$admin_info->commission}}" required="" autocomplete="off">
-               <br>
+               @include('admins._commission', ['user' => $admin_info])
                   <p style="text-align: right;"> الحالة </p>
               
                   <select class="form-select" name="status" required>

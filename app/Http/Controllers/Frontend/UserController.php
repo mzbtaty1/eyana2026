@@ -8,6 +8,7 @@ use Auth;
 use Illuminate\Validation\Rule;
 use App\Support\Permissions;
 use App\Models\User;
+use App\Models\CommissionTierTable;
 use App\Models\Password;
 use App\Http\Requests\StorePasswordRequest;
 use App\Http\Requests\UpdatePasswordEntryRequest;
@@ -87,7 +88,7 @@ public function password_save  (StorePasswordRequest $request)
      */
     public function admins()
     {
-        $admins = User::select('*')->get();
+        $admins = User::select('*')->with('commissionTierTable')->get();
         return view('admins.all' , ['admins' => $admins]);
     }
 public function admins_edit($id)
@@ -96,7 +97,14 @@ public function admins_edit($id)
     abort_if(count($admins) == 0 ,404);
 
     $admin_info = $admins[0];
-        return view('admins.edit' , ['admin_info' => $admin_info]);
+        return view('admins.edit' , ['admin_info' => $admin_info, 'tier_tables' => $this->activeTierTables(),
+            'current_tier_table' => $admin_info->commissionTierTable]);
+    }
+
+    /** Tier tables offered for assignment: active ones only. */
+    private function activeTierTables()
+    {
+        return CommissionTierTable::where('status', 1)->orderBy('name')->get(['id', 'name']);
     }
 
     /**
@@ -121,11 +129,59 @@ public function admins_edit($id)
         return [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'max:255', Rule::unique('users', 'email')->ignore($id)],
-            'commission' => ['required', 'string', 'max:20'],
             'status' => ['required', 'in:0,1'],
             'account_type' => ['required', 'in:1,2'],
             'password' => [$create ? 'required' : 'nullable', 'string', 'max:255'],
+            // commission settings (Employees step C): fixed -> the % (0..100) in users.commission;
+            // tiered -> an existing, ACTIVE tier table. The other method's field is not validated.
+            'commission_method' => ['required', Rule::in(array_keys(User::COMMISSION_METHODS))],
+            'commission' => ['exclude_unless:commission_method,' . User::COMMISSION_FIXED, 'required', 'numeric', 'regex:/^\d{1,3}(\.\d{1,2})?$/', 'min:0', 'max:100'],
+            'commission_tier_table_id' => ['exclude_unless:commission_method,' . User::COMMISSION_TIERED, 'required', 'integer',
+                Rule::exists('commission_tier_tables', 'id')->where('status', 1)],
         ];
+    }
+
+    private function userMessages(): array
+    {
+        return [
+            'commission_method.*' => 'اختر طريقة احتساب العمولة',
+            'commission.required' => 'أدخل نسبة العمولة الثابتة',
+            'commission.*' => 'نسبة العمولة يجب أن تكون رقما من 0 إلى 100',
+            'commission_tier_table_id.required' => 'اختر جدول شرائح العمولات',
+            'commission_tier_table_id.*' => 'جدول شرائح العمولات غير موجود أو غير فعال -- اختر جدولا فعالا',
+        ];
+    }
+
+    /**
+     * Before validation: a request without commission_method (an older form) keeps the user's
+     * method (a new user: fixed), and a fixed % typed as "10%" is read as 10.
+     */
+    private function prepareCommission(Request $request, ?User $user): void
+    {
+        $request->merge(['commission_method' => $request->filled('commission_method')
+            ? $request->input('commission_method') : ($user->commission_method ?? User::COMMISSION_FIXED)]);
+        if ($request->filled('commission')) {
+            $request->merge(['commission' => User::normalizeCommission($request->input('commission'))]);
+        }
+    }
+
+    /**
+     * The users columns for the validated commission settings. Fixed: the % and no tier table;
+     * an unchanged % keeps its stored text (e.g. "10%"). Tiered: the table, and users.commission
+     * is left as it is (kept for backward compatibility; a new user gets "0").
+     */
+    private function commissionColumns(array $data, ?User $user): array
+    {
+        if ($data['commission_method'] === User::COMMISSION_TIERED) {
+            return ['commission_method' => User::COMMISSION_TIERED, 'commission_tier_table_id' => (int) $data['commission_tier_table_id']]
+                + ($user ? [] : ['commission' => '0']);
+        }
+
+        $stored = $user ? User::normalizeCommission($user->commission) : null;
+        $unchanged = is_numeric($stored) && (float) $stored === (float) $data['commission'];
+
+        return ['commission_method' => User::COMMISSION_FIXED, 'commission_tier_table_id' => null,
+            'commission' => $unchanged ? $user->commission : $data['commission']];
     }
 
     /**
@@ -136,16 +192,16 @@ public function admins_edit($id)
     public function admins_save_update(Request $request){
         $admin_info = User::find((int) $request->admin_id);
         abort_if(!$admin_info, 404);
-        $data = $request->validate($this->userRules($admin_info->id, false));
+        $this->prepareCommission($request, $admin_info);
+        $data = $request->validate($this->userRules($admin_info->id, false), $this->userMessages());
         $self = (int) $admin_info->id === (int) Auth::id();
 
         User::where('id', $admin_info->id)->update([
             "name" => $data['name'],
             "email" => $data['email'],
-            "commission" => $data['commission'],
             "status" => $self ? $admin_info->status : $data['status'],
             "account_type" => $self ? $admin_info->account_type : $data['account_type'],
-        ]);
+        ] + $this->commissionColumns($data, $admin_info));
 
         if (!empty($data['password'])) {
             User::where('id', $admin_info->id)->update([
@@ -161,26 +217,27 @@ public function admins_edit($id)
     }
 
     public function admins_create(){
-        return view('admins.create');
+        return view('admins.create', ['tier_tables' => $this->activeTierTables()]);
     }
     public function admins_save(Request $request){
-        $data = $request->validate($this->userRules(null, true));
+        $this->prepareCommission($request, null);
+        $data = $request->validate($this->userRules(null, true), $this->userMessages());
         User::create([
             "name" => $data['name'],
             "email" => $data['email'],
-            "commission" => $data['commission'],
             "status" => $data['status'],
             "account_type" => $data['account_type'],
             "password" => \Hash::make($data['password']),
             "user_id" => "FX_" . rand(),
-        ]);
+        ] + $this->commissionColumns($data, null));
 
         return redirect()->route('site.admins');
     }
 
     /**
      * «حسابي»: self-service. Always the signed-in user (a posted admin_id is ignored), and
-     * only name, email and password -- never account type, commission, status or permissions.
+     * only name, email and password -- never account type, commission (%, method or tier
+     * table), status or permissions.
      */
     public function save(Request $request)
     {
