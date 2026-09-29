@@ -451,7 +451,7 @@ class TourismBookingTest extends TestCase
 
         // editing / deactivating the program never touches the booking
         $this->actingAs($this->admin)->post(route('site.tourism_programs_update', $program->id), ['name' => 'TEST Hurghada 4D/3N', 'items' => [
-            ['service_type' => 'hotel', 'description' => 'Other hotel', 'pricing' => 'per_unit', 'nights' => 3, 'unit_cost' => 1, 'unit_price' => 2],
+            ['service_type' => 'hotel', 'description' => 'Other hotel', 'pricing' => 'per_unit', 'nights' => 3, 'rooms' => 1, 'unit_cost' => 1, 'unit_price' => 2],
         ]])->assertSessionHasNoErrors();
         $this->actingAs($this->admin)->post(route('site.tourism_programs_status', $program->id))->assertSessionHasNoErrors();
         $this->assertSame(0, (int) $program->fresh()->status);

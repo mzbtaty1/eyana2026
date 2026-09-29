@@ -72,13 +72,13 @@
                   <div class="col-12 mb-3"><label class="form-label">ملاحظات</label><textarea class="form-control" name="notes" rows="2">{{$h('notes')}}</textarea></div>
                </div>
 
-               <h6 class="mt-2">الخدمات <small class="text-muted">(الفندق / القرية: التكلفة والبيع للغرفة في الليلة، والإجمالي = الغرف × الليالي. باقي الخدمات: الكمية × سعر الوحدة)</small></h6>
+               <h6 class="mt-2">الخدمات <small class="text-muted">(تظهر حقول كل نوع فقط. الفندق / القرية: السعر للغرفة في الليلة والكمية = الغرف × الليالي. الانتقالات: السيارات / الرحلات، الرحلات والداي يوز: الأفراد / التذاكر، وغيرها: الكمية × سعر الوحدة)</small></h6>
                <div class="table-responsive">
                   <table class="table table-bordered align-middle" id="tb-items">
                      <thead class="table-light text-nowrap">
                         <tr>
-                           <th>النوع</th><th>الوصف</th><th>المورد</th><th>من / دخول</th><th>إلى / خروج</th><th>ليالي</th><th>غرف</th><th>نوع الغرفة</th>
-                           <th>بالغ / طفل</th><th>الكمية</th><th>تكلفة الوحدة</th><th>بيع الوحدة</th><th>إجمالي التكلفة</th><th>إجمالي البيع</th><th>الربح</th><th></th>
+                           <th>النوع</th><th>الوصف</th><th>المورد</th><th>التفاصيل (حسب النوع)</th><th>الكمية</th>
+                           <th>تكلفة الوحدة</th><th>بيع الوحدة</th><th>إجمالي التكلفة</th><th>إجمالي البيع</th><th>الربح</th><th></th>
                         </tr>
                      </thead>
                      <tbody>
@@ -88,7 +88,7 @@
                      </tbody>
                      <tfoot class="table-light fw-bold">
                         <tr>
-                           <td colspan="12"><div class="ey-action-group"><button type="button" class="btn btn-soft-success" id="tb-add-item"><i class="ri-add-line"></i><span>إضافة خدمة</span></button></div></td>
+                           <td colspan="7"><div class="ey-action-group"><button type="button" class="btn btn-soft-success" id="tb-add-item"><i class="ri-add-line"></i><span>إضافة خدمة</span></button></div></td>
                            <td id="tb-sum-cost">0</td><td id="tb-sum-sale">0</td><td id="tb-sum-profit">0</td><td></td>
                         </tr>
                      </tfoot>
@@ -144,6 +144,7 @@
 </template>
 
 <script src="{{asset('assets/dselect.js')}}"></script>
+@include('tourism._service_type_js')
 <script>
 (function () {
    var itemIndex = {{ count($items) + 100 }}, pIndex = {{ count($passengers) + 100 }};
@@ -153,19 +154,23 @@
 
    dselect(document.querySelector('#customer_id'), { search: true });
    document.querySelectorAll('#tb-items .tb-item[data-locked="0"] .tb-supplier').forEach(function (s) { dselect(s, { search: true }); });
+   document.querySelectorAll('#tb-items .tb-item').forEach(function (tr) { tr.dataset.type = tr.querySelector('.tb-type').value; });
 
-   // one row: hotel -> nights from the dates, quantity = rooms x nights (the server calculates the same)
+   // one row, by its type (the server calculates the same and is authoritative):
+   // hotel -> nights = check-out - check-in, quantity = rooms x nights (read-only);
+   // any other type -> the quantity as entered
    function calcRow(tr) {
+      var locked = tr.dataset.locked === '1';
       var hotel = tr.querySelector('.tb-type').value === 'hotel';
-      var qty = tr.querySelector('.tb-qty'), nights = tr.querySelector('.tb-nights'), rooms = tr.querySelector('.tb-rooms');
+      var qty = tr.querySelector('.tb-qty');
       if (hotel) {
-         var s = tr.querySelector('.tb-start').value, e = tr.querySelector('.tb-end').value;
-         if (s && e) { nights.value = Math.max(0, Math.round((new Date(e) - new Date(s)) / 86400000)); }
-         qty.value = num(rooms.value) * num(nights.value);
+         var s = tr.querySelector('.tb-in').value, e = tr.querySelector('.tb-out').value;
+         var nights = s && e ? Math.max(0, Math.round((Date.parse(e) - Date.parse(s)) / 86400000)) : 0;
+         tr.querySelector('.tb-nights').value = s && e ? nights : '';
+         qty.value = num(tr.querySelector('.tb-rooms').value) * nights;
       }
-      qty.readOnly = hotel || tr.dataset.locked === '1';
-      nights.readOnly = hotel || tr.dataset.locked === '1';
-      rooms.required = hotel;
+      qty.readOnly = hotel || locked;
+      tr.querySelector('.tb-rooms').required = hotel && !locked;
       var cost = r2(num(qty.value) * num(tr.querySelector('.tb-cost').value));
       var sale = r2(num(qty.value) * num(tr.querySelector('.tb-price').value));
       tr.querySelector('.tb-total-cost').textContent = fmt(cost);
@@ -185,11 +190,22 @@
       document.getElementById('tb-loss').style.display = s < c ? '' : 'none';
    }
    document.getElementById('tb-items').addEventListener('input', calcAll);
-   document.getElementById('tb-items').addEventListener('change', calcAll);
+   document.getElementById('tb-items').addEventListener('change', function (e) {
+      // a type change: only that type's fields, the others emptied; a quantity carried over from
+      // a hotel's rooms x nights means nothing for another type -> back to 1
+      if (e.target.classList.contains('tb-type')) {
+         var tr = e.target.closest('tr');
+         var wasHotel = tr.dataset.type === 'hotel';   // the row's type before this change
+         tr.dataset.type = window.tourismServiceType(tr, true);
+         if (wasHotel && e.target.value !== 'hotel') { tr.querySelector('.tb-qty').value = 1; }
+      }
+      calcAll();
+   });
    document.getElementById('tb-add-item').addEventListener('click', function () {
       var html = document.getElementById('tb-item-tpl').innerHTML.replace(/__I__/g, itemIndex++);
       var body = document.querySelector('#tb-items tbody');
       body.insertAdjacentHTML('beforeend', html);
+      body.lastElementChild.dataset.type = window.tourismServiceType(body.lastElementChild, false);
       dselect(body.lastElementChild.querySelector('.tb-supplier'), { search: true });
       calcAll();
    });

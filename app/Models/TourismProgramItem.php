@@ -14,7 +14,7 @@ class TourismProgramItem extends Model
     const PRICING = ['per_unit' => 'للوحدة', 'per_person' => 'للفرد'];
 
     protected $fillable = ['program_id', 'service_type', 'description', 'supplier_id', 'day_no', 'nights', 'rooms',
-        'room_type', 'pricing', 'quantity', 'unit_cost', 'unit_price', 'notes', 'sort'];
+        'room_type', 'route_from', 'route_to', 'pricing', 'quantity', 'unit_cost', 'unit_price', 'notes', 'sort'];
 
     public function program()
     {

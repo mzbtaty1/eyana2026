@@ -49,7 +49,7 @@ class TourismCommissionTest extends TestCase
         $supplier ??= $this->account();
         $max = (int) TourismBooking::max('id');
         $this->actingAs($owner)->post(route('site.tourism_bookings_store'), ['customer_id' => $customer->id, 'adults' => 2, 'children' => 0,
-            'items' => [['service_type' => 'transport', 'description' => 'TEST BUS', 'supplier_id' => $supplier->id, 'quantity' => 1,
+            'items' => [['service_type' => 'transport', 'description' => 'TEST BUS', 'start_date' => '2031-07-01', 'supplier_id' => $supplier->id, 'quantity' => 1,
                 'unit_cost' => $cost, 'unit_price' => $sale]]])->assertSessionHasNoErrors();
         $b = TourismBooking::where('id', '>', $max)->firstOrFail();
         $this->actingAs($this->admin)->post(route('site.tourism_bookings_confirm', $b->id))->assertSessionHasNoErrors();
@@ -109,7 +109,7 @@ class TourismCommissionTest extends TestCase
 
         $this->travelTo('2031-07-10 10:00:00');                         // July: price +1000
         $this->actingAs($this->admin)->post(route('site.tourism_bookings_update', $b->id), ['customer_id' => $b->customer_id, 'adults' => 2, 'children' => 0,
-            'items' => [['id' => $item->id, 'service_type' => 'transport', 'description' => 'TEST BUS', 'supplier_id' => $item->supplier_id,
+            'items' => [['id' => $item->id, 'service_type' => 'transport', 'description' => 'TEST BUS', 'start_date' => '2031-07-01', 'supplier_id' => $item->supplier_id,
                 'quantity' => 1, 'unit_cost' => 8000, 'unit_price' => 11000]]])->assertSessionHasNoErrors();
 
         $this->travelTo('2031-08-10 10:00:00');                         // August: cancelled, 500 kept from the customer, 300 still owed

@@ -182,7 +182,7 @@ class TourismBookings
         foreach ($program->items as $pi) {
             $from = $start ? Carbon::parse($start)->addDays(max(1, (int) ($pi->day_no ?: 1)) - 1) : null;
             $hotel = $pi->service_type === TourismBookingItem::HOTEL;
-            $rows[] = [
+            $rows[] = TourismBookingItem::normalize([
                 'id' => null,
                 'source_program_item_id' => $pi->id,
                 'service_type' => $pi->service_type,
@@ -193,14 +193,17 @@ class TourismBookings
                 'nights' => $pi->nights,
                 'rooms' => $pi->rooms,
                 'room_type' => $pi->room_type,
+                'route_from' => $pi->route_from,
+                'route_to' => $pi->route_to,
                 'adults' => $adults,
                 'children' => $children,
-                'quantity' => $pi->pricing === 'per_person' ? max(1, $adults + $children) : (float) $pi->quantity,
+                'quantity' => $hotel ? (int) $pi->rooms * (int) $pi->nights
+                    : ($pi->pricing === 'per_person' ? max(1, $adults + $children) : (float) $pi->quantity),
                 'unit_cost' => (float) $pi->unit_cost,
                 'unit_price' => (float) $pi->unit_price,
                 'notes' => $pi->notes,
                 'status' => TourismBookingItem::ACTIVE,
-            ];
+            ]);
         }
         return $rows;
     }
@@ -235,19 +238,24 @@ class TourismBookings
     {
         $keep = [];
         foreach (array_values($items) as $i => $row) {
+            // only the fields of its type are kept; the amounts are calculated here (by its type)
+            $row = TourismBookingItem::normalize($row);
             $calc = TourismBookingItem::calculate($row);
-            $hotel = ($row['service_type'] ?? '') === TourismBookingItem::HOTEL;
+            $int = fn ($k) => ($row[$k] ?? '') !== '' && $row[$k] !== null ? (int) $row[$k] : null;
+            $str = fn ($k) => ($row[$k] ?? '') !== '' ? $row[$k] : null;
             $attrs = [
                 'service_type' => $row['service_type'],
                 'description' => $row['description'],
                 'supplier_id' => (int) $row['supplier_id'],
-                'start_date' => $row['start_date'] ?? null,
-                'end_date' => $row['end_date'] ?? null,
+                'start_date' => $str('start_date'),
+                'end_date' => $str('end_date'),
                 'nights' => $calc['nights'],
-                'rooms' => $hotel ? (int) $row['rooms'] : (($row['rooms'] ?? '') !== '' ? (int) $row['rooms'] : null),
-                'room_type' => $row['room_type'] ?? null,
-                'adults' => ($row['adults'] ?? '') !== '' ? (int) $row['adults'] : null,
-                'children' => ($row['children'] ?? '') !== '' ? (int) $row['children'] : null,
+                'rooms' => $int('rooms'),
+                'room_type' => $str('room_type'),
+                'route_from' => $str('route_from'),
+                'route_to' => $str('route_to'),
+                'adults' => $int('adults'),
+                'children' => $int('children'),
                 'quantity' => $calc['quantity'],
                 'unit_cost' => round((float) $row['unit_cost'], 2),
                 'unit_price' => round((float) $row['unit_price'], 2),

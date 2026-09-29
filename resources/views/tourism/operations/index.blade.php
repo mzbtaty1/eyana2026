@@ -55,7 +55,7 @@
       <table class="{{ $print ? 'tb-print' : 'table table-bordered table-striped align-middle' }}">
          <thead class="table-light">
             <tr>
-               <th>{{ $hotel ? 'الفندق / القرية' : 'المورد' }}</th><th>الخدمة</th><th>{{ $hotel ? 'دخول' : 'التاريخ' }}</th>@if($hotel)<th>خروج</th><th>ليالي</th><th>غرف</th><th>نوع الغرفة</th>@endif
+               <th>{{ $hotel ? 'الفندق / القرية' : 'المورد' }}</th><th>الخدمة</th><th>{{ $hotel ? 'دخول' : 'التاريخ' }}</th>@if($hotel)<th>خروج</th><th>ليالي</th><th>غرف</th><th>نوع الغرفة</th>@else<th>من ← إلى</th><th>العدد</th>@endif
                <th>الحجز</th><th>الاسم / الهاتف</th><th>بالغ / طفل</th><th>الأفراد</th>
             </tr>
          </thead>
@@ -66,7 +66,7 @@
                <td>{{ $it->supplier->name ?? '' }}</td>
                <td>{{ $it->description }}@if($it->notes)<br><small>{{ $it->notes }}</small>@endif</td>
                <td>{{ $it->start_date?->format('Y-m-d') }}</td>
-               @if($hotel)<td>{{ $it->end_date?->format('Y-m-d') }}</td><td>{{ $it->nights }}</td><td>{{ $it->rooms }}</td><td>{{ $it->room_type }}</td>@endif
+               @if($hotel)<td>{{ $it->end_date?->format('Y-m-d') }}</td><td>{{ $it->nights }}</td><td>{{ $it->rooms }}</td><td>{{ $it->room_type }}</td>@else<td>{{ $it->detailsText() }}</td><td>{{ $it->quantityText() }}</td>@endif
                <td>{{ $b->booking_no }}@if($b->program)<br><small>{{ $b->program->name }}</small>@endif</td>
                <td>{{ $b->contact_name ?: ($b->customer->name ?? '') }}<br><small>{{ $b->contact_phone }}</small></td>
                <td>{{ $it->adults ?? $b->adults }} / {{ $it->children ?? $b->children }}</td>
@@ -77,7 +77,7 @@
                </td>
             </tr>
             @empty
-            <tr><td colspan="{{ $hotel ? 11 : 7 }}" style="text-align:center">لا توجد خدمات</td></tr>
+            <tr><td colspan="{{ $hotel ? 11 : 9 }}" style="text-align:center">لا توجد خدمات</td></tr>
             @endforelse
          </tbody>
       </table>

@@ -96,8 +96,10 @@ class TourismProgramsController extends Controller
             'items.*.supplier_id' => ['nullable', 'integer', Rule::exists('suppliers', 'id')->where(fn ($q) => $q->where('acc_type', '!=', 3))],
             'items.*.day_no' => ['nullable', 'integer', 'min:1', 'max:365'],
             'items.*.nights' => ['nullable', 'integer', 'min:1', 'max:365', 'required_if:items.*.service_type,hotel'],
-            'items.*.rooms' => ['nullable', 'integer', 'min:1', 'max:999'],
+            'items.*.rooms' => ['nullable', 'integer', 'min:1', 'max:999', 'required_if:items.*.service_type,hotel'],
             'items.*.room_type' => ['nullable', 'string', 'max:100'],
+            'items.*.route_from' => ['nullable', 'string', 'max:255'],
+            'items.*.route_to' => ['nullable', 'string', 'max:255'],
             'items.*.pricing' => ['required', Rule::in(array_keys(TourismProgramItem::PRICING))],
             'items.*.quantity' => ['nullable', 'numeric', 'gt:0', 'max:99999'],
             'items.*.unit_cost' => ['required', 'numeric', 'min:0', 'max:99999999'],
@@ -108,6 +110,7 @@ class TourismProgramsController extends Controller
             'items.required' => 'أضف خدمة واحدة على الأقل',
             'items.*.description.*' => 'أدخل وصف كل خدمة',
             'items.*.nights.required_if' => 'أدخل عدد الليالي لكل فندق / قرية',
+            'items.*.rooms.required_if' => 'أدخل عدد الغرف لكل فندق / قرية',
             'items.*.unit_cost.*' => 'أدخل سعر تكلفة صحيح',
             'items.*.unit_price.*' => 'أدخل سعر بيع صحيح',
         ]);
@@ -122,6 +125,9 @@ class TourismProgramsController extends Controller
     private function saveItems(TourismProgram $program, array $items): void
     {
         foreach (array_values($items) as $i => $row) {
+            // only the fields of its type are kept (TourismBookingItem::FIELDS); a hotel is priced per room-night
+            $row = TourismBookingItem::normalize($row);
+            $hotel = $row['service_type'] === TourismBookingItem::HOTEL;
             $program->items()->create([
                 'service_type' => $row['service_type'],
                 'description' => $row['description'],
@@ -130,7 +136,9 @@ class TourismProgramsController extends Controller
                 'nights' => $row['nights'] ?? null,
                 'rooms' => $row['rooms'] ?? null,
                 'room_type' => $row['room_type'] ?? null,
-                'pricing' => $row['pricing'],
+                'route_from' => $row['route_from'] ?? null,
+                'route_to' => $row['route_to'] ?? null,
+                'pricing' => $hotel ? 'per_unit' : $row['pricing'],
                 'quantity' => ($row['quantity'] ?? '') !== '' ? $row['quantity'] : 1,
                 'unit_cost' => $row['unit_cost'],
                 'unit_price' => $row['unit_price'],

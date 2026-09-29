@@ -28,26 +28,25 @@
 </div>
 
 <table class="tb-print">
-    <thead><tr><th>الخدمة</th><th>من</th><th>إلى</th><th>التفاصيل</th><th>الإجمالي</th></tr></thead>
+    <thead><tr><th>الخدمة</th><th>التاريخ</th><th>التفاصيل</th><th>الإجمالي</th></tr></thead>
     <tbody>
         @foreach($active as $it)
         <tr>
             <td>{{ \App\Models\TourismBookingItem::typeLabel($it->service_type) }}: {{ $it->description }}</td>
-            <td>{{ $it->start_date?->format('Y-m-d') }}</td>
-            <td>{{ $it->end_date?->format('Y-m-d') }}</td>
-            <td>@if($it->isHotel()){{ $it->rooms }} غرفة × {{ $it->nights }} ليلة {{ $it->room_type }}@else{{ rtrim(rtrim(number_format((float) $it->quantity, 2, '.', ''), '0'), '.') }}@endif</td>
+            <td>{{ $it->dateText() }}</td>
+            <td>{{ $it->detailsText() ?: $it->quantityText() }}</td>
             <td class="n">{{ $money($it->total_sale) }}</td>
         </tr>
         @endforeach
         @foreach($booking->items->where('status', 'cancelled')->filter(fn ($i) => (float) $i->cancel_fee > 0) as $it)
-        <tr><td colspan="4">رسوم إلغاء: {{ $it->title() }}</td><td class="n">{{ $money($it->cancel_fee) }}</td></tr>
+        <tr><td colspan="3">رسوم إلغاء: {{ $it->title() }}</td><td class="n">{{ $money($it->cancel_fee) }}</td></tr>
         @endforeach
     </tbody>
     <tfoot>
-        <tr><th colspan="4">الإجمالي</th><td class="n"><b>{{ $money($sale) }}</b></td></tr>
+        <tr><th colspan="3">الإجمالي</th><td class="n"><b>{{ $money($sale) }}</b></td></tr>
         @unless($booking->isDraft())
-        <tr><th colspan="4">المدفوع</th><td class="n">{{ $money($summary['customer_paid']) }}</td></tr>
-        <tr><th colspan="4">{{ $summary['customer_remaining'] < 0 ? 'مستحق للعميل' : 'المتبقي' }}</th><td class="n"><b>{{ $money(abs($summary['customer_remaining'])) }}</b></td></tr>
+        <tr><th colspan="3">المدفوع</th><td class="n">{{ $money($summary['customer_paid']) }}</td></tr>
+        <tr><th colspan="3">{{ $summary['customer_remaining'] < 0 ? 'مستحق للعميل' : 'المتبقي' }}</th><td class="n"><b>{{ $money(abs($summary['customer_remaining'])) }}</b></td></tr>
         @endunless
     </tfoot>
 </table>

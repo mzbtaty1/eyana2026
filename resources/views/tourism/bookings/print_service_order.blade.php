@@ -26,25 +26,21 @@
 </div>
 
 <table class="tb-print">
-    <thead><tr><th>الخدمة</th><th>من / دخول</th><th>إلى / خروج</th><th>ليالي</th><th>غرف</th><th>نوع الغرفة</th><th>بالغ / طفل</th><th>الكمية</th><th>التكلفة</th></tr></thead>
+    <thead><tr><th>الخدمة</th><th>التاريخ</th><th>التفاصيل</th><th>الكمية</th><th>التكلفة</th></tr></thead>
     <tbody>
         @forelse($items as $it)
         <tr>
             <td>{{ \App\Models\TourismBookingItem::typeLabel($it->service_type) }}: {{ $it->description }}@if($it->notes)<br><small>{{ $it->notes }}</small>@endif</td>
-            <td>{{ $it->start_date?->format('Y-m-d') }}</td>
-            <td>{{ $it->end_date?->format('Y-m-d') }}</td>
-            <td>{{ $it->nights }}</td>
-            <td>{{ $it->rooms }}</td>
-            <td>{{ $it->room_type }}</td>
-            <td>{{ $it->adults }}{{ $it->children !== null ? ' / ' . $it->children : '' }}</td>
-            <td>{{ rtrim(rtrim(number_format((float) $it->quantity, 2, '.', ''), '0'), '.') }}</td>
+            <td>{{ $it->dateText() }}</td>
+            <td>{{ $it->detailsText() }}</td>
+            <td>{{ $it->quantityText() }}</td>
             <td class="n">{{ $money($it->total_cost) }}</td>
         </tr>
         @empty
-        <tr><td colspan="9" style="text-align:center">لا توجد خدمات فعالة لهذا المورد</td></tr>
+        <tr><td colspan="5" style="text-align:center">لا توجد خدمات فعالة لهذا المورد</td></tr>
         @endforelse
     </tbody>
-    <tfoot><tr><th colspan="8">الإجمالي</th><td class="n"><b>{{ $money($items->sum('total_cost')) }}</b></td></tr></tfoot>
+    <tfoot><tr><th colspan="4">الإجمالي</th><td class="n"><b>{{ $money($items->sum('total_cost')) }}</b></td></tr></tfoot>
 </table>
 
 @if($booking->passengers->isNotEmpty())

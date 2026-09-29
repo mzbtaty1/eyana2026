@@ -24,10 +24,10 @@
                   <div class="col-12 mb-3"><label class="form-label">الوصف</label><textarea class="form-control" name="description" rows="2">{{$v('description')}}</textarea></div>
                </div>
 
-               <h6>خدمات البرنامج <small class="text-muted">(الفندق: عدد الليالي والغرف، والسعر للغرفة في الليلة. غيره: «للفرد» = الكمية بعدد أفراد الحجز)</small></h6>
+               <h6>خدمات البرنامج <small class="text-muted">(تظهر حقول كل نوع فقط. الفندق: الليالي والغرف والسعر للغرفة في الليلة. الانتقالات: من / إلى. غيرها: «للفرد» = الكمية بعدد أفراد الحجز)</small></h6>
                <div class="table-responsive">
                   <table class="table table-bordered align-middle" id="tp-items">
-                     <thead class="table-light text-nowrap"><tr><th>النوع</th><th>الوصف</th><th>المورد الافتراضي</th><th>اليوم</th><th>ليالي</th><th>غرف</th><th>نوع الغرفة</th><th>التسعير</th><th>الكمية</th><th>تكلفة الوحدة</th><th>بيع الوحدة</th><th></th></tr></thead>
+                     <thead class="table-light text-nowrap"><tr><th>النوع</th><th>الوصف</th><th>المورد الافتراضي</th><th>اليوم / التفاصيل (حسب النوع)</th><th>الكمية</th><th>تكلفة الوحدة</th><th>بيع الوحدة</th><th></th></tr></thead>
                      <tbody>
                         @foreach(array_values($items) as $i => $it)
                            @include('tourism.programs._item_row', ['i' => $i, 'it' => $it])
@@ -46,6 +46,7 @@
 </div>
 <template id="tp-tpl">@include('tourism.programs._item_row', ['i' => '__I__', 'it' => []])</template>
 <script src="{{asset('assets/dselect.js')}}"></script>
+@include('tourism._service_type_js')
 <script>
 (function () {
    var idx = {{ count($items) + 100 }};
@@ -53,7 +54,12 @@
    document.getElementById('tp-add').addEventListener('click', function () {
       var body = document.querySelector('#tp-items tbody');
       body.insertAdjacentHTML('beforeend', document.getElementById('tp-tpl').innerHTML.replace(/__I__/g, idx++));
+      window.tourismServiceType(body.lastElementChild, false);
       dselect(body.lastElementChild.querySelector('.tp-supplier'), { search: true });
+   });
+   // a type change: only that type's fields (the others emptied)
+   document.getElementById('tp-items').addEventListener('change', function (e) {
+      if (e.target.classList.contains('tb-type')) { window.tourismServiceType(e.target.closest('tr'), true); }
    });
    document.getElementById('tp-items').addEventListener('click', function (e) {
       var b = e.target.closest('.tp-remove');

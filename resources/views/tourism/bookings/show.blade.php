@@ -124,7 +124,7 @@
             <div class="table-responsive mb-3">
                <table class="table table-bordered table-striped align-middle text-nowrap">
                   <thead class="table-light">
-                     <tr><th>النوع</th><th>الوصف</th><th>المورد</th><th>من</th><th>إلى</th><th>ليالي</th><th>غرف</th><th>نوع الغرفة</th><th>بالغ / طفل</th><th>الكمية</th><th>التكلفة</th><th>البيع</th><th>الربح</th><th>الحالة</th><th>--</th></tr>
+                     <tr><th>النوع</th><th>الوصف</th><th>المورد</th><th>التاريخ</th><th>التفاصيل</th><th>الكمية</th><th>التكلفة</th><th>البيع</th><th>الربح</th><th>الحالة</th><th>--</th></tr>
                   </thead>
                   <tbody>
                      @foreach($booking->items as $it)
@@ -132,13 +132,9 @@
                         <td>{{\App\Models\TourismBookingItem::typeLabel($it->service_type)}}</td>
                         <td>{{$it->description}}@if($it->notes)<div class="text-muted fs-11">{{$it->notes}}</div>@endif</td>
                         <td>{{$it->supplier->name ?? ''}}</td>
-                        <td>{{$it->start_date?->format('Y-m-d')}}</td>
-                        <td>{{$it->end_date?->format('Y-m-d')}}</td>
-                        <td>{{$it->nights}}</td>
-                        <td>{{$it->rooms}}</td>
-                        <td>{{$it->room_type}}</td>
-                        <td>{{$it->adults}}{{$it->children !== null ? ' / ' . $it->children : ''}}</td>
-                        <td>{{rtrim(rtrim(number_format((float) $it->quantity, 2, '.', ''), '0'), '.')}}</td>
+                        <td>{{$it->dateText() ?: '—'}}</td>
+                        <td class="text-wrap">{{$it->detailsText() ?: '—'}}</td>
+                        <td>{{$it->quantityText()}}</td>
                         <td>{{$money($it->total_cost)}}<div class="text-muted fs-11">{{$money($it->unit_cost)}} للوحدة</div></td>
                         <td>{{$money($it->total_sale)}}<div class="text-muted fs-11">{{$money($it->unit_price)}} للوحدة</div></td>
                         <td><strong>{{$money($it->total_sale - $it->total_cost)}}</strong></td>
@@ -160,7 +156,7 @@
                      @if($it->isActive() && $booking->isConfirmed())
                      @can('tourism.cancel')
                      <tr class="collapse" id="tb-cancel-item-{{$it->id}}">
-                        <td colspan="15">
+                        <td colspan="11">
                            <form method="POST" action="{{route('site.tourism_bookings_cancel_item', [$booking->id, $it->id])}}" class="row g-2 align-items-end" onsubmit="return confirm('إلغاء هذه الخدمة؟')">
                               @csrf
                               <div class="col-md-3"><label class="form-label mb-1">غرامة المورد (تكلفة تبقى علينا)</label><input type="number" step="0.01" min="0" max="{{$it->total_cost}}" class="form-control" name="cancel_cost" value="0"></div>
