@@ -265,6 +265,8 @@
                   <td>
                      @if($m->invoice)
                      <a href="{{route('site.invoice_info', $m->invoice)}}" title="عرض الفاتورة">{{$m->row->es_id}}</a>
+                     @elseif($m->booking)
+                     <a href="{{route('site.tourism_bookings_show', $m->booking)}}" title="عرض حجز السياحة">{{$m->row->es_id}}</a>
                      @elseif($m->bond)
                      <a href="{{route('site.bonds_edit', $m->bond)}}" title="فتح السند (صفحة السند)">{{$m->row->es_id}}</a>
                      @else

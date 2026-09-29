@@ -305,6 +305,40 @@ Route::middleware(['auth' , 'check_status'])->group(function(){
         Route::middleware('can:commission.view_own')->get('/my-payouts', [$c, 'mine'])->name('site.commission_payouts_mine');
     });
 
+    // Internal tourism («السياحة الداخلية»): bookings, programs, report, operation lists
+    Route::prefix('tourism')->group(function () {
+        $b = \App\Http\Controllers\Frontend\TourismBookingsController::class;
+        Route::middleware('can:tourism.view')->get('/bookings', [$b, 'index'])->name('site.tourism_bookings');
+        Route::middleware('can:tourism.create')->get('/bookings/create', [$b, 'create'])->name('site.tourism_bookings_create');
+        Route::middleware('can:tourism.create')->post('/bookings', [$b, 'store'])->name('site.tourism_bookings_store');
+        Route::middleware('can:tourism.view')->get('/bookings/{id}', [$b, 'show'])->whereNumber('id')->name('site.tourism_bookings_show');
+        Route::middleware('can:tourism.edit')->get('/bookings/{id}/edit', [$b, 'edit'])->whereNumber('id')->name('site.tourism_bookings_edit');
+        Route::middleware('can:tourism.edit')->post('/bookings/{id}', [$b, 'update'])->whereNumber('id')->name('site.tourism_bookings_update');
+        Route::middleware('can:tourism.edit')->post('/bookings/{id}/delete', [$b, 'destroy'])->whereNumber('id')->name('site.tourism_bookings_delete');
+        Route::middleware('can:tourism.confirm')->post('/bookings/{id}/confirm', [$b, 'confirm'])->whereNumber('id')->name('site.tourism_bookings_confirm');
+        Route::middleware('can:tourism.cancel')->post('/bookings/{id}/items/{itemId}/cancel', [$b, 'cancelItem'])->whereNumber(['id', 'itemId'])->name('site.tourism_bookings_cancel_item');
+        Route::middleware('can:tourism.cancel')->post('/bookings/{id}/cancel', [$b, 'cancel'])->whereNumber('id')->name('site.tourism_bookings_cancel');
+        Route::middleware('can:tourism.view')->post('/bookings/{id}/receive', [$b, 'receive'])->whereNumber('id')->name('site.tourism_bookings_receive');
+        Route::middleware('can:finance.manage')->post('/bookings/{id}/refund', [$b, 'refund'])->whereNumber('id')->name('site.tourism_bookings_refund');
+        Route::middleware('can:finance.manage')->post('/bookings/{id}/pay-supplier', [$b, 'paySupplier'])->whereNumber('id')->name('site.tourism_bookings_pay_supplier');
+        Route::middleware('can:finance.manage')->post('/bookings/{id}/vouchers/{bondId}/reverse', [$b, 'reverseVoucher'])->whereNumber(['id', 'bondId'])->name('site.tourism_bookings_reverse_voucher');
+        Route::middleware('can:tourism.view')->get('/bookings/{id}/print/{doc}', [$b, 'print'])->whereNumber('id')->name('site.tourism_bookings_print');
+
+        $p = \App\Http\Controllers\Frontend\TourismProgramsController::class;   // tourism.programs (controller)
+        Route::get('/programs', [$p, 'index'])->name('site.tourism_programs');
+        Route::get('/programs/create', [$p, 'create'])->name('site.tourism_programs_create');
+        Route::post('/programs', [$p, 'store'])->name('site.tourism_programs_store');
+        Route::get('/programs/{id}/edit', [$p, 'edit'])->whereNumber('id')->name('site.tourism_programs_edit');
+        Route::post('/programs/{id}', [$p, 'update'])->whereNumber('id')->name('site.tourism_programs_update');
+        Route::post('/programs/{id}/status', [$p, 'status'])->whereNumber('id')->name('site.tourism_programs_status');
+
+        $r = \App\Http\Controllers\Frontend\TourismReportController::class;
+        Route::middleware('can:reports.own')->get('/report', [$r, 'index'])->name('site.tourism_report');
+        Route::middleware('can:reports.own')->get('/report/print', [$r, 'print'])->name('site.tourism_report_print');
+        Route::middleware('can:reports.own')->get('/report/excel', [$r, 'excel'])->name('site.tourism_report_excel');
+        Route::middleware('can:tourism.view')->get('/operations/{type}', [$r, 'operations'])->name('site.tourism_operations');
+    });
+
     Route::get('/my-account' , [UserController::class , 'index'])->name('site.my_account');
     Route::post('/my-account/save' , [UserController::class , 'save'])->name('site.my_account_saves');
     

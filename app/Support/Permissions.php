@@ -30,6 +30,15 @@ final class Permissions
     // reports on every employee (admin only)
     const REPORTS_ALL = 'reports.all';
 
+    // internal tourism: bookings (own ones) for employees; the rest by default for admins
+    const TOURISM_VIEW = 'tourism.view';
+    const TOURISM_CREATE = 'tourism.create';
+    const TOURISM_EDIT = 'tourism.edit';             // own draft bookings (a confirmed booking also needs tourism.confirm)
+    const TOURISM_VIEW_ALL = 'tourism.view_all';     // every employee's bookings (else own only)
+    const TOURISM_CONFIRM = 'tourism.confirm';       // confirm (posts the ledger) and edit a confirmed booking
+    const TOURISM_CANCEL = 'tourism.cancel';         // cancel a service / the whole booking
+    const TOURISM_PROGRAMS = 'tourism.programs';     // programs (templates)
+
     /** Every ability, with its label. */
     const ALL = [
         self::EMPLOYEES_MANAGE => 'إدارة الموظفين',
@@ -43,6 +52,13 @@ final class Permissions
         self::REPORTS_OWN => 'تقارير مبيعاته وأرباحه',
         self::COMMISSION_OWN => 'تقرير عمولته',
         self::REPORTS_ALL => 'تقارير كل الموظفين',
+        self::TOURISM_VIEW => 'عرض حجوزات السياحة',
+        self::TOURISM_CREATE => 'إضافة حجوزات سياحة',
+        self::TOURISM_EDIT => 'تعديل حجوزات السياحة',
+        self::TOURISM_VIEW_ALL => 'عرض حجوزات كل الموظفين',
+        self::TOURISM_CONFIRM => 'تأكيد حجوزات السياحة',
+        self::TOURISM_CANCEL => 'إلغاء حجوزات السياحة',
+        self::TOURISM_PROGRAMS => 'البرامج السياحية',
     ];
 
     /** Abilities an employee has today (default until per-employee permissions exist). */
@@ -52,6 +68,9 @@ final class Permissions
         self::INVOICES_EDIT,
         self::REPORTS_OWN,
         self::COMMISSION_OWN,
+        self::TOURISM_VIEW,
+        self::TOURISM_CREATE,
+        self::TOURISM_EDIT,
     ];
 
     /** Abilities that can never be granted to an employee (admin only). */

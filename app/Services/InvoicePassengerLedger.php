@@ -31,6 +31,9 @@ use RuntimeException;
  * are shown from the passengers' current amounts, as before.
  * Invoice payments (transaction_type 4) carry {"kind": "payment", "method":
  * "cash"|"bank", "bank_id", "bank_name", "bond_id"} (see CounterPayments).
+ * Internal tourism bookings (TRB-, no invoice) post type-1 rows too, marked
+ * {"kind": "tourism", "op": "confirm"|"adjust"|"cancel", "booking_id", "lines": [...]}
+ * (see TourismLedger): rowKind() 'tourism', never a ticket sale.
  *
  * Date rule: an edit never changes the original rows; it adds adjustment rows
  * dated TODAY with each passenger's difference. Refunds (incl. a full refund of the
@@ -247,6 +250,9 @@ class InvoicePassengerLedger
         }
         $m = self::marker($row);
         $kind = $m['kind'] ?? null;
+        if ($kind === 'tourism' || str_starts_with((string) $row->es_id, 'TRB-')) {
+            return 'tourism';
+        }
         if ($kind === 'edit') {
             return 'edit';
         }
@@ -289,6 +295,8 @@ class InvoicePassengerLedger
         $shared = $invoice && (int) ($invoice->invoice_shared ?? 0) === 1 ? ' مشتركة' : '';
         $firstName = $m['lines'][0]['name'] ?? '';
         switch ($kind) {
+            case 'tourism':
+                return ['adjust' => 'تعديل حجز سياحة', 'cancel' => 'إلغاء حجز/خدمة سياحة'][$m['op'] ?? ''] ?? 'حجز سياحة داخلية';
             case 'edit':
                 return 'تعديل تذكرة' . $shared . (($m['scope'] ?? '') === 'passenger' && $firstName !== '' ? ' - ' . $firstName : '');
             case 'reissue':

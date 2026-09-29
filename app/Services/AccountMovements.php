@@ -13,7 +13,8 @@ use App\Models\{AccountStatement, Bank, Bond, Collector, Invoice, User};
  * existing rules only:
  *
  *   ticket rows (transaction_type 1)  InvoicePassengerLedger::rowKind(): sale | reissue |
- *                                     edit | refund (marker, else FLY-RS / FLY-RD prefix)
+ *                                     edit | refund (marker, else FLY-RS / FLY-RD prefix) |
+ *                                     tourism (internal tourism booking TRB-, no invoice)
  *   payment voucher  «سند دفع»        transaction_type 2, invoice_type 9
  *   receipt voucher  «سند قبض»        transaction_type 2, invoice_type 10
  *   invoice payment  «سداد فاتورة»    transaction_type 4 (Counter Customer payments)
@@ -35,6 +36,7 @@ class AccountMovements
         'reissue' => ['إعادة إصدار', 'مدين: للحساب كعميل · دائن: للحساب كمورد'],
         'edit' => ['تعديلات فواتير', 'فروق تعديل فواتير قائمة'],
         'refund' => ['مرتجعات', 'مدين: مرتجع لنا من المورد · دائن: مسترد للعميل'],
+        'tourism' => ['حجوزات سياحة داخلية', 'مدين: بيع للحساب كعميل · دائن: خدمات منه كمورد (مع التعديلات والإلغاءات)'],
         'payment' => ['سندات دفع', 'مبالغ دفعناها للحساب'],
         'receipt' => ['سندات قبض', 'مبالغ قبضناها من الحساب'],
         'invoice_payment' => ['سداد فواتير', 'سداد على فواتير عميل الكونتر'],
@@ -133,9 +135,11 @@ class AccountMovements
                 'row' => $r,
                 'kind' => $kind,
                 'label' => $ticket ? InvoicePassengerLedger::kindLabel($r, $invoice) : self::ROW_LABELS[$kind],
-                'section' => $invoice && (int) $r->transaction_type === 1 ? (InvoiceFullReport::SECTIONS[(int) $invoice->invoice_section] ?? null) : null,
+                'section' => $invoice && (int) $r->transaction_type === 1 ? (InvoiceFullReport::SECTIONS[(int) $invoice->invoice_section] ?? null)
+                    : ($kind === 'tourism' ? InvoiceFullReport::SECTIONS[3] : null),
                 'balance_after' => $after[$i] / 100,
                 'invoice' => $invoice ? (int) $invoice->id : null,
+                'booking' => $kind === 'tourism' ? (InvoicePassengerLedger::marker($r)['booking_id'] ?? null) : null,
                 'bond' => (int) $r->transaction_type === 2 && isset($bonds[$r->es_id]) ? (int) $bonds[$r->es_id] : null,
                 'employee' => $users[$r->added_by] ?? null,
             ];

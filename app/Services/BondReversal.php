@@ -53,27 +53,35 @@ class BondReversal
      * entry voided + reversed exactly as reverse() does, but the voucher row and its own
      * account-statement rows are kept, and each of those rows gets an offsetting row (debit /
      * credit swapped, same voucher number, dated today). Check problem() first.
+     * A RECEIPT voucher (type 2 -- internal tourism customer receipts) is offset the same way,
+     * with the amounts of reverse()'s receipt branch: the treasury (and bank) balance goes
+     * down by the amount (receipts never carry a bank fee).
      * $bond must already be locked (lockForUpdate) by the caller's transaction.
      */
     public static function offset(Bond $bond, string $description): void
     {
-        abort_unless((int) $bond->type === 1, 422);
-        $total = (float) $bond->amount + (float) ($bond->commission ?? 0);
+        abort_unless(in_array((int) $bond->type, [1, 2], true), 422);
 
-        $storage_info = Storage::where('id', $bond->from_account)->lockForUpdate()->first();
-        abort_if(!$storage_info, 404);
-        Storage::where('id', $bond->from_account)->update([
-            "balance" => $storage_info->balance + $total,
-        ]);
-        StorageStatement::reverseActiveEntryForBond((int) $bond->id, $description, Auth::user()->id);
+        if ((int) $bond->type === 2) {
+            self::offsetReceiptMoney($bond, $description);
+        } else {
+            $total = (float) $bond->amount + (float) ($bond->commission ?? 0);
 
-        if ($bond->money_way == 2 && $bond->bank_id) {
-            $bank_info = Bank::where('id', $bond->bank_id)->lockForUpdate()->first();
-            if ($bank_info) {
-                Bank::where('id', $bond->bank_id)->update([
-                    "bank_balance" => $bank_info->bank_balance + $total,
-                ]);
-                BankStatement::reverseActiveEntryForBond((int) $bond->id, $description, Auth::user()->id);
+            $storage_info = Storage::where('id', $bond->from_account)->lockForUpdate()->first();
+            abort_if(!$storage_info, 404);
+            Storage::where('id', $bond->from_account)->update([
+                "balance" => $storage_info->balance + $total,
+            ]);
+            StorageStatement::reverseActiveEntryForBond((int) $bond->id, $description, Auth::user()->id);
+
+            if ($bond->money_way == 2 && $bond->bank_id) {
+                $bank_info = Bank::where('id', $bond->bank_id)->lockForUpdate()->first();
+                if ($bank_info) {
+                    Bank::where('id', $bond->bank_id)->update([
+                        "bank_balance" => $bank_info->bank_balance + $total,
+                    ]);
+                    BankStatement::reverseActiveEntryForBond((int) $bond->id, $description, Auth::user()->id);
+                }
             }
         }
 
@@ -99,6 +107,29 @@ class BondReversal
                 "added_by" => Auth::user()->id,
                 "crt_date" => $today,
             ]);
+        }
+    }
+
+    /** offset() of a receipt voucher: the money half, as reverse()'s receipt branch. */
+    private static function offsetReceiptMoney(Bond $bond, string $description): void
+    {
+        $amount = (float) $bond->amount;
+
+        $storage_info = Storage::where('id', $bond->to_account)->lockForUpdate()->first();
+        abort_if(!$storage_info, 404);
+        Storage::where('id', $bond->to_account)->update([
+            "balance" => $storage_info->balance - $amount,
+        ]);
+        StorageStatement::reverseActiveEntryForBond((int) $bond->id, $description, Auth::user()->id);
+
+        if ($bond->money_way == 2 && $bond->bank_id) {
+            $bank_info = Bank::where('id', $bond->bank_id)->lockForUpdate()->first();
+            if ($bank_info) {
+                Bank::where('id', $bond->bank_id)->update([
+                    "bank_balance" => $bank_info->bank_balance - $amount,
+                ]);
+                BankStatement::reverseActiveEntryForBond((int) $bond->id, $description, Auth::user()->id);
+            }
         }
     }
 

@@ -478,3 +478,105 @@ h6, .h6 { font-weight: 600; }
         flex: 1 1 auto;
     }
 }
+
+/* ==========================================================================
+   Action areas that hold more than plain links (additions, used by the
+   internal tourism screens; existing markup is unaffected):
+   - .ey-action-group may also contain a POST form or a dropdown with one
+     button: that button gets the group's exact size and alignment.
+   - .ey-row-actions: compact (btn-sm) actions in a table cell, on one line.
+   - .ey-filter-actions: the submit / clear buttons of a filter bar, the
+     height of the form controls next to them, never wrapping.
+   ========================================================================== */
+
+.ey-action-group > form,
+.ey-action-group > .btn-group {
+    display: flex;
+    margin: 0;
+}
+
+.ey-action-group > form > .btn,
+.ey-action-group > .btn-group > .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    min-height: 38px;
+    padding: 0.5rem 1rem;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.ey-action-group > form > .btn > i,
+.ey-action-group > .btn-group > .btn > i {
+    font-size: 1rem;
+    line-height: 1;
+}
+
+@media (max-width: 575.98px) {
+    .ey-action-group > form,
+    .ey-action-group > .btn-group {
+        flex: 1 1 auto;
+    }
+
+    .ey-action-group > form > .btn,
+    .ey-action-group > .btn-group > .btn {
+        flex: 1 1 auto;
+    }
+}
+
+.ey-row-actions {
+    display: inline-flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.35rem;
+    white-space: nowrap;
+}
+
+.ey-row-actions > form {
+    display: inline-flex;
+    margin: 0;
+}
+
+.ey-row-actions .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+    min-height: 31px;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.ey-row-actions .btn > i {
+    font-size: 0.95rem;
+    line-height: 1;
+}
+
+.ey-row-actions .btn.btn-sm:has(> i:only-child) {
+    margin-inline-end: 0;
+}
+
+.ey-filter-actions {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 0.5rem;
+}
+
+.ey-filter-actions > .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    min-height: 38px;
+    padding: 0.5rem 1rem;
+    line-height: 1.2;
+    white-space: nowrap;
+    flex: 1 1 auto;
+}
+
+.ey-filter-actions > .btn > i {
+    font-size: 1rem;
+    line-height: 1;
+}

@@ -475,6 +475,29 @@ $rname = Route::currentRouteName();
                         </ul>
                      </div>
                   </li>
+                  @can('tourism.view')
+                  <li class="nav-item">
+                     <a class="nav-link menu-link collapsed" href="#sidebarTourism" data-bs-toggle="collapse" role="button" aria-expanded="false" aria-controls="sidebarTourism">
+                     <i class="ri-hotel-line"></i><span>السياحة الداخلية</span>
+                     </a>
+                     <div class="menu-dropdown collapse" id="sidebarTourism">
+                        <ul class="nav nav-sm flex-column">
+                           <li class="nav-item"><a href="{{route('site.tourism_bookings')}}" class="nav-link">حجوزات السياحة</a></li>
+                           @can('tourism.create')
+                           <li class="nav-item"><a href="{{route('site.tourism_bookings_create')}}" class="nav-link">حجز جديد</a></li>
+                           @endcan
+                           @can('tourism.programs')
+                           <li class="nav-item"><a href="{{route('site.tourism_programs')}}" class="nav-link">البرامج السياحية</a></li>
+                           @endcan
+                           <li class="nav-item"><a href="{{route('site.tourism_operations', 'hotel')}}" class="nav-link">كشف التسكين</a></li>
+                           <li class="nav-item"><a href="{{route('site.tourism_operations', 'transport')}}" class="nav-link">كشف الانتقالات</a></li>
+                           @can('reports.own')
+                           <li class="nav-item"><a href="{{route('site.tourism_report')}}" class="nav-link">تقرير السياحة الداخلية</a></li>
+                           @endcan
+                        </ul>
+                     </div>
+                  </li>
+                  @endcan
                   {{-- Marketing section hidden from navigation (routes, pages and data kept). --}}
                   <li class="nav-item">
                      <a class="nav-link menu-link collapsed" href="#sidebarSafeArea" data-bs-toggle="collapse" role="button" aria-expanded="false" aria-controls="sidebarSafeArea">

@@ -69,8 +69,14 @@
                         <td>{{$r['employee']}}</td>
                         <td>{{$report->from}}</td>
                         <td>{{$report->to}}</td>
-                        <td>{{$money($r['sales'])}}</td>
-                        <td>{{$money($r['cost'])}}</td>
+                        <td>
+                           {{$money($r['sales'])}}
+                           @if($r['tourism_bookings'])<div class="text-muted fs-11">منها سياحة داخلية {{$money($r['tourism_sales'])}} ({{$r['tourism_bookings']}} حجز)</div>@endif
+                        </td>
+                        <td>
+                           {{$money($r['cost'])}}
+                           @if($r['tourism_bookings'])<div class="text-muted fs-11">منها سياحة داخلية {{$money($r['tourism_cost'])}}</div>@endif
+                        </td>
                         <td>{{$money($r['refund_net'])}}</td>
                         <td><strong>{{$money($r['profit'])}}</strong></td>
                         <td>{{$r['method_label']}}</td>

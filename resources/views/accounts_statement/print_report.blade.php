@@ -451,7 +451,7 @@ if($st == 0){
                 </td>
 
                 <td>
-                    @if($AccountStatement->transaction_type == 1 && $ticket_info)
+                    @if($AccountStatement->transaction_type == 1 && ($ticket_info || str_starts_with((string) $AccountStatement->es_id, 'TRB-')))
                         {{App\Services\InvoicePassengerLedger::displayDate($AccountStatement, $ticket_info)}}
                     @else
                         {{$AccountStatement->created_at}}

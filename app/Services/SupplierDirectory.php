@@ -13,7 +13,9 @@ use Illuminate\Support\Facades\DB;
  *
  *   role           'supplier' -- supplier on at least one invoice (ticket_vendors linked
  *                  to an invoice); 'customer' -- customer (invoice_beneficiaries) on at
- *                  least one invoice; 'both'; null -- no invoices
+ *                  least one invoice; 'both'; null -- no invoices. Internal tourism counts
+ *                  too: a service's supplier (tourism_booking_items) is a supplier, a
+ *                  booking's customer (tourism_bookings) a customer
  *   total_debit / total_credit
  *                  sums of the account's statement rows (is_storage != 1), all time
  *   balance        debit - credit of the account's statement rows (is_storage != 1), all
@@ -75,19 +77,36 @@ class SupplierDirectory
             ->groupBy('invoice_beneficiaries')
             ->pluck('n', 'account_id');
 
-        return $accounts->map(function ($a) use ($totals, $lastActivity, $asSupplier, $asCustomer) {
+        $tourismSupplier = DB::table('tourism_booking_items')
+            ->whereIn('supplier_id', $ids)
+            ->selectRaw('supplier_id as account_id, COUNT(DISTINCT booking_id) as n')
+            ->groupBy('supplier_id')
+            ->pluck('n', 'account_id');
+
+        $tourismCustomer = DB::table('tourism_bookings')
+            ->whereIn('customer_id', $ids)
+            ->selectRaw('customer_id as account_id, COUNT(*) as n')
+            ->groupBy('customer_id')
+            ->pluck('n', 'account_id');
+
+        return $accounts->map(function ($a) use ($totals, $lastActivity, $asSupplier, $asCustomer, $tourismSupplier, $tourismCustomer) {
             $t = $totals->get($a->id);
             $asSup = (int) ($asSupplier[$a->id] ?? 0);
             $asCus = (int) ($asCustomer[$a->id] ?? 0);
+            $tourSup = (int) ($tourismSupplier[$a->id] ?? 0);
+            $tourCus = (int) ($tourismCustomer[$a->id] ?? 0);
             $balance = round(($t->total_debit ?? 0) - ($t->total_credit ?? 0), 2);
 
             return (object) [
                 'account' => $a,
                 'system' => $a->isSystemAccount(),
                 'phones' => array_values(array_filter([self::phone($a->phone_1), self::phone($a->phone_2)])),
-                'role' => $asSup && $asCus ? 'both' : ($asSup ? 'supplier' : ($asCus ? 'customer' : null)),
+                'role' => ($asSup || $tourSup) && ($asCus || $tourCus) ? 'both'
+                    : ($asSup || $tourSup ? 'supplier' : ($asCus || $tourCus ? 'customer' : null)),
                 'invoices_as_supplier' => $asSup,
                 'invoices_as_customer' => $asCus,
+                'tourism_as_supplier' => $tourSup,
+                'tourism_as_customer' => $tourCus,
                 'total_debit' => (float) ($t->total_debit ?? 0),
                 'total_credit' => (float) ($t->total_credit ?? 0),
                 'balance' => $balance == 0 ? 0.0 : $balance, // no "-0"

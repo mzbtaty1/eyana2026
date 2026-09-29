@@ -155,7 +155,8 @@ class AccountatExport implements FromView, WithEvents, WithTitle
                 'type' => $this->typeLabel($AccountStatement, $ticket_info),
                 // edit / re-issue / refund rows are highlighted (see registerEvents)
                 'op' => InvoicePassengerLedger::rowKind($AccountStatement),
-                'date' => $isTicket ? InvoicePassengerLedger::displayDate($AccountStatement, $ticket_info) : (string) $AccountStatement->created_at,
+                'date' => $isTicket || ($AccountStatement->transaction_type == 1 && str_starts_with((string) $AccountStatement->es_id, 'TRB-'))
+                    ? InvoicePassengerLedger::displayDate($AccountStatement, $ticket_info) : (string) $AccountStatement->created_at,
                 'airline' => $isTicket ? (string) $ticket_info->invoice_airline : '',
                 'route' => $isTicket ? trim($ticket_info->from_location . ' - ' . $ticket_info->to_location) : '',
                 'travel_date' => $isTicket ? (string) $ticket_info->invoice_travel_date : '',

@@ -11,6 +11,7 @@ use App\Http\Requests\StoreBondRequest;
 use App\Http\Requests\UpdateBondRequest;
 use App\Services\CounterPayments;
 use App\Services\BondReversal;
+use App\Services\ReceiptBond;
 use App\Services\PaymentBond;
 use App\Models\{
     Supplier,
@@ -248,130 +249,21 @@ $date = $request->crt_date2;
 // Canonical lock order (matches save()'s other branch, delete() and
 // save_update()): Storage before Bank, to avoid ABBA deadlocks between
 // concurrent requests that touch the same storage+bank pair.
-DB::transaction(function () use ($request, $path, $type_slctd, $storage_id, $sub_id, $supp_id, $amount, $money_way, $bank_id, $collector_info, $transaction_info, $date) {
-
-              $storage_info = Storage::where('id',$storage_id)->lockForUpdate()->first();
-        abort_if(!$storage_info, 404);
-
-        Storage::where('id',$storage_id)->update([
-            "balance" => $storage_info->balance + $amount,
+DB::transaction(function () use ($path, $storage_id, $sub_id, $supp_id, $amount, $money_way, $bank_id, $collector_info, $transaction_info, $date) {
+        // The receipt voucher's entries (treasury / bank balances, voucher, account statement,
+        // treasury and bank ledgers) -- extracted unchanged into App\Services\ReceiptBond.
+        ReceiptBond::create([
+            'storage_id' => $storage_id,
+            'sub_id' => $sub_id,
+            'supp_id' => $supp_id,
+            'amount' => $amount,
+            'money_way' => $money_way,
+            'bank_id' => $bank_id,
+            'collector_info' => $collector_info,
+            'info' => $transaction_info,
+            'date' => $date,
+            'file_path' => $path,
         ]);
-
-if ($request->money_way2 == 2) {
-    // dd(50);
-    $bank = Bank::where('id', $request->bank_id2)->lockForUpdate()->first();
-
-    if ($bank) { // التأكد من أن البنك موجود
-        $bank->increment('bank_balance', $amount);
-
-        // dd('none');
-    }else{
-        // dd('nBank');
-    }
-}
-
-
-
-
-
-        $createBond = Bond::create([
-           "file_path" => $path,
-           "type" => $type_slctd,
-           "system_id" => \Str::random(8),
-            "sub_id" => $sub_id,
-           "from_account" => $supp_id,
-           "from_type" => "supplier",
-           "to_account" => $storage_id,
-           "to_type" => "storage",
-           "amount" => $amount,
-           "info" => $transaction_info,      
-           "money_way" => $money_way,
-           "bank_id" => $bank_id,
-           "collector_info" => $collector_info,
-           "crt_date" => $date, 
-           "created_by" => Auth::user()->id,
-
-        ]);  
-        
-         $update_es_id = Bond::select('*')
-            ->where('id', $createBond->id)
-            ->update([
-                "es_id" => "FLY-BD" . $createBond->id,
-            ]);
-        
-        
-        
-            $supplier = Supplier::where('id',$supp_id)->first();
-        abort_if(!$supplier, 404);
-
-
-        $storage_log = AccountStatement::create([
-            "supp_client_id" => $storage_id,
-            "is_storage" => 1,
-            "trans_storage" => 1,
-            "invoice_type" => 10,
-            "sub_id" => $sub_id,
-            "es_id" => "FLY-BD" . $createBond->id,
-            "invoice_date" => $date,
-            "debit_balance" => $amount,
-            "credit_balance" => 0,
-            "ledger_net_effect" => $amount,
-            "transaction_txt" => "سند قبض من حساب $supplier->name لصالح خزينة $storage_info->name",
-            "transaction_type" => 2,
-            "added_by" => Auth::user()->id,
-            "crt_date" => date('Y-m-d'),
-        ]);
-        
-           
-        $storage_log2 = AccountStatement::create([
-            "supp_client_id" => $supp_id,
-            "trans_storage" => 1,
-            "invoice_type" => 10,
-            "sub_id" => $sub_id,
-            "es_id" => "FLY-BD" . $createBond->id,
-            "invoice_date" => $date,
-            "debit_balance" => 0,
-            "credit_balance" => $amount,
-            "ledger_net_effect" => -$amount,
-            "transaction_txt" => "سند قبض من حساب $supplier->name لصالح خزينة $storage_info->name",
-            "transaction_type" => 2,
-            "added_by" => Auth::user()->id,
-            "crt_date" => date('Y-m-d'),
-        ]);
-
-        // P3 storage ledger: one credit entry per receipt bond -- every
-        // receipt bond touches Storage regardless of money_way. Receipt
-        // bonds never carry a commission, so credit = amount.
-        StorageStatement::record([
-            'storage_id' => (int) $storage_id,
-            'bond_id' => $createBond->id,
-            'entry_type' => 'bond',
-            'transaction_date' => $date,
-            'description' => "سند قبض رقم FLY-BD{$createBond->id} لصالح خزينة {$storage_info->name} من حساب $supplier->name",
-            'reference' => $createBond->es_id,
-            'debit' => 0,
-            'credit' => $amount,
-            'commission' => 0,
-            'created_by' => Auth::user()->id,
-        ]);
-
-        // P2 bank ledger: one credit entry per receipt bond that actually
-        // moved money into a bank/e-wallet. Receipt bonds never carry a
-        // commission (unchanged from existing behavior), so credit = amount.
-        if ($request->money_way2 == 2 && $bank) {
-            BankStatement::record([
-                'bank_id' => (int) $request->bank_id2,
-                'bond_id' => $createBond->id,
-                'entry_type' => 'bond',
-                'transaction_date' => $date,
-                'description' => "سند قبض رقم FLY-BD{$createBond->id} لصالح بنك {$bank->bank_name} من حساب $supplier->name",
-                'reference' => $createBond->es_id,
-                'debit' => 0,
-                'credit' => $amount,
-                'commission' => 0,
-                'created_by' => Auth::user()->id,
-            ]);
-        }
         });
 
 
@@ -398,6 +290,10 @@ if ($request->money_way2 == 2) {
         // a commission payout's voucher: reversed only from «صرف عمولات الموظفين»
         if (CommissionPayout::where('bond_id', $id)->exists()) {
             return Redirect::back()->withErrors(['bond' => 'هذا السند خاص بصرف عمولة موظف: لا يمكن حذفه أو تعديله من هنا، ويتم عكسه من شاشة صرف عمولات الموظفين.']);
+        }
+        // an internal tourism booking's voucher: reversed only from the booking's page
+        if (Bond::where('id', $id)->whereNotNull('tourism_booking_id')->exists()) {
+            return Redirect::back()->withErrors(['bond' => 'هذا السند مرتبط بحجز سياحة داخلية: لا يمكن حذفه أو تعديله من هنا، ويتم عكسه من صفحة الحجز.']);
         }
 
         // P2 safety fix: lock the Bond row plus whichever Storage/Bank rows
@@ -433,6 +329,10 @@ if ($request->money_way2 == 2) {
         // a commission payout's voucher: reversed only from «صرف عمولات الموظفين»
         if (CommissionPayout::where('bond_id', $id)->exists()) {
             return Redirect::back()->withErrors(['bond' => 'هذا السند خاص بصرف عمولة موظف: لا يمكن حذفه أو تعديله من هنا، ويتم عكسه من شاشة صرف عمولات الموظفين.']);
+        }
+        // an internal tourism booking's voucher: reversed only from the booking's page
+        if (Bond::where('id', $id)->whereNotNull('tourism_booking_id')->exists()) {
+            return Redirect::back()->withErrors(['bond' => 'هذا السند مرتبط بحجز سياحة داخلية: لا يمكن حذفه أو تعديله من هنا، ويتم عكسه من صفحة الحجز.']);
         }
         $check_bond = Bond::select('*')->where('id',$id)->get();
         abort_if(count($check_bond) == 0 , 404);
@@ -474,6 +374,10 @@ if ($request->money_way2 == 2) {
         // a commission payout's voucher: reversed only from «صرف عمولات الموظفين»
         if (CommissionPayout::where('bond_id', $id)->exists()) {
             return Redirect::back()->withErrors(['bond' => 'هذا السند خاص بصرف عمولة موظف: لا يمكن حذفه أو تعديله من هنا، ويتم عكسه من شاشة صرف عمولات الموظفين.']);
+        }
+        // an internal tourism booking's voucher: reversed only from the booking's page
+        if (Bond::where('id', $id)->whereNotNull('tourism_booking_id')->exists()) {
+            return Redirect::back()->withErrors(['bond' => 'هذا السند مرتبط بحجز سياحة داخلية: لا يمكن حذفه أو تعديله من هنا، ويتم عكسه من صفحة الحجز.']);
         }
           $check_bond = Bond::select('*')->where('id',$id)->get();
         abort_if(count($check_bond) == 0 , 404);

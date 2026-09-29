@@ -17,6 +17,11 @@ use Illuminate\Support\Facades\Gate;
  * its own operation, on its own date, recorded for the employee who made it.
  *   Total profit = sales - cost + refund net
  *
+ * Internal tourism bookings are a second source of the same sales / cost: the ledger rows of the
+ * owner's (created_by, 100%) bookings dated in the period -- confirmation, each adjustment and
+ * cancellation on its own date (TourismLedger::employeeTotals). Flight / visa rows are unchanged;
+ * tourism_bookings / tourism_sales / tourism_cost show the tourism part.
+ *
  * Who a row counts for: a normal invoice -- its employee (invoice_create_by), 100%. A shared
  * invoice (also its re-issues / refunds, which keep the two accounts) is split between its two
  * accounts by their stored rates read as relative weights: 7/3 -> 70% / 30%, 5/5 and 50/50 ->
@@ -74,6 +79,18 @@ class EmployeeCommissionReport
                 unset($s);
             }
         }
+        // internal tourism: the owner's (created_by, 100%) booking movements dated in the period,
+        // from the ledger (TourismLedger::employeeTotals) -- the same sales / cost, commission rules
+        foreach (TourismLedger::employeeTotals($this->from, $this->to, $this->employeeId) as $uid => $t) {
+            $s = &$sums[$uid];
+            $s ??= ['sales' => 0.0, 'cost' => 0.0, 'refund_net' => 0.0, 'invoices' => []];
+            $s['sales'] += $t['sale'];
+            $s['cost'] += $t['cost'];
+            $s['tourism_sales'] = ($s['tourism_sales'] ?? 0.0) + $t['sale'];
+            $s['tourism_cost'] = ($s['tourism_cost'] ?? 0.0) + $t['cost'];
+            $s['tourism_bookings'] = count($t['bookings']);
+            unset($s);
+        }
         if ($this->employeeId !== null) {
             $sums += [$this->employeeId => ['sales' => 0.0, 'cost' => 0.0, 'refund_net' => 0.0, 'invoices' => []]];
         }
@@ -98,6 +115,10 @@ class EmployeeCommissionReport
                 'cost' => $cost,
                 'refund_net' => $refundNet,
                 'profit' => $profit,
+                // the internal tourism part of sales / cost (already included in them)
+                'tourism_bookings' => (int) ($s['tourism_bookings'] ?? 0),
+                'tourism_sales' => round($s['tourism_sales'] ?? 0, 2),
+                'tourism_cost' => round($s['tourism_cost'] ?? 0, 2),
             ] + $commission + [
                 'net_company_profit' => round($profit - $commission['commission'], 2),
             ];

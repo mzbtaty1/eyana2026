@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Services\CounterPayments;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 
 class Supplier extends Model
 {
@@ -70,6 +71,8 @@ class Supplier extends Model
      * supp_client_id with storage ids, so is_storage rows are not its own),
      * except a zero opening-balance row; invoices where it is the customer;
      * invoices where it is the supplier (ticket_vendors linked to an invoice);
+     * internal tourism bookings where it is the customer or a service's supplier
+     * (any status, drafts included) and tourism programs where it is a default supplier;
      * payment / receipt vouchers to or from it.
      */
     public function deletionBlockers(): array
@@ -103,6 +106,20 @@ class Supplier extends Model
             ->count();
         if ($asVendor) {
             $out[] = "$asVendor فاتورة كمورد";
+        }
+
+        // internal tourism (a draft booking has no ledger rows yet, so it is checked on its own)
+        $tourismCustomer = DB::table('tourism_bookings')->where('customer_id', $id)->count();
+        if ($tourismCustomer) {
+            $out[] = "$tourismCustomer حجز سياحة كعميل";
+        }
+        $tourismSupplier = DB::table('tourism_booking_items')->where('supplier_id', $id)->distinct()->count('booking_id');
+        if ($tourismSupplier) {
+            $out[] = "$tourismSupplier حجز سياحة كمورد خدمة";
+        }
+        $tourismProgram = DB::table('tourism_program_items')->where('supplier_id', $id)->distinct()->count('program_id');
+        if ($tourismProgram) {
+            $out[] = "$tourismProgram برنامج سياحي كمورد افتراضي";
         }
 
         $bonds = Bond::where(function ($q) use ($id) {

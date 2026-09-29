@@ -233,15 +233,18 @@ $total_cumulative_balance += $AccountStatement->cumulative_balance;
                               $type = "أخرى";
                           }
                           ?>
-                         @if($AccountStatement->transaction_type == 1)
-                         تذاكر / 
+                         <?php $isTourism = $AccountStatement->transaction_type == 1 && str_starts_with((string) $AccountStatement->es_id, 'TRB-'); ?>
+                         @if($isTourism)
+                         {{App\Services\InvoicePassengerLedger::kindLabel($AccountStatement)}} /
+                         @elseif($AccountStatement->transaction_type == 1)
+                         تذاكر /
                          @endif
                       {{$type}}
                       </td>
-                     <td style="text-align: right;">{{$ticket_info->invoice_date}}</td>
+                     <td style="text-align: right;">{{$isTourism ? $AccountStatement->crt_date : $ticket_info->invoice_date}}</td>
                      <td>
                          <div class="ey-trip-info">
-                         @if($AccountStatement->transaction_type == 1)
+                         @if($AccountStatement->transaction_type == 1 && !$isTourism)
                              <div><b>حجز الرحلة:</b> {{$AccountStatement->transaction_txt}}</div>
                              <div><b>خط الطيران:</b> <span class="ey-ltr">{{$ticket_info->invoice_airline}}</span></div>
                              <div><b>المسافر:</b>
